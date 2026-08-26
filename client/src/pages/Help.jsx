@@ -90,6 +90,13 @@ const PAGES = [
     ],
   },
   {
+    title: 'Reports',
+    items: [
+      ['Exports', 'Download any month or year as CSV or Excel (.xlsx). Excel workbooks include a transactions sheet plus summaries. Exports always show original statement amounts and currencies.'],
+      ['Month-end history', 'When a month closes, it is snapshotted automatically — frozen forever, even if you later edit or delete its transactions. The chart tracks how your plan versus reality looked at each month\u2019s end.'],
+    ],
+  },
+  {
     title: 'AI Chat',
     items: [
       ['Finance tab (read-only)', 'Ask about your data. The AI can only run read-only SELECT queries — it cannot change anything.'],

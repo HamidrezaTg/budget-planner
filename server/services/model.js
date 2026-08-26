@@ -454,3 +454,55 @@ export function monthView(month) {
   };
   return { ...result, ...insightsForMonth(month, result) };
 }
+
+// Scheduled reports: capture any closed months that have activity but no
+// snapshot yet. Idempotent and frozen — snapshots are never rewritten.
+const MAX_CAPTURE_PER_RUN = 36;
+
+export function ensureMonthlyReports() {
+  const cur = currentMonth();
+  if (cur <= '0000-00') return 0;
+  const missing = db
+    .prepare(
+      `SELECT DISTINCT substr(date,1,7) AS m FROM transactions t
+       WHERE substr(date,1,7) < ? AND NOT EXISTS (
+         SELECT 1 FROM monthly_reports r WHERE r.month = substr(t.date,1,7))
+       ORDER BY m LIMIT ?`
+    )
+    .all(cur, MAX_CAPTURE_PER_RUN)
+    .map((r) => r.m);
+  if (missing.length === 0) return 0;
+
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO monthly_reports
+       (month, income, expenses, planned, result, transfer_to_revolut, transaction_count, by_category)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  let captured = 0;
+  for (const m of missing) {
+    const v = monthView(m);
+    const n = db.prepare('SELECT COUNT(*) AS c FROM transactions WHERE substr(date,1,7) = ?').get(m).c;
+    const byCategory = v.rows
+      .filter((r) => r.actual > 0 || r.planned > 0)
+      .map((r) => ({ name: r.name, planned: r.planned, actual: r.actual }));
+    insert.run(
+      m,
+      v.income,
+      -v.actual_total,
+      v.planned_total,
+      v.month_result,
+      v.transfer_to_revolut,
+      n,
+      JSON.stringify(byCategory)
+    );
+    captured++;
+  }
+  return captured;
+}
+
+export function monthlyReportHistory(limit = 60) {
+  return db
+    .prepare('SELECT * FROM monthly_reports ORDER BY month DESC LIMIT ?')
+    .all(limit)
+    .map((r) => ({ ...r, by_category: JSON.parse(r.by_category || '[]') }));
+}

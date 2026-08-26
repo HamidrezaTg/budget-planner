@@ -158,6 +158,25 @@ is reported in the display currency chosen under Appearance:
   old base) — refetch afterwards.
 - CSV exports always contain the original statement amounts and currency codes.
 
+## Reports
+
+Monthly and yearly overviews: totals, per-category breakdowns, income vs expenses
+chart, and CSV/XLSX downloads. Exports keep the original statement amounts and
+currency codes.
+
+- **Month-end history** — closed months are automatically snapshotted the first time
+  you open the app after they end. Snapshots are frozen forever: later edits or
+  deletions never rewrite them, so the chart shows budget accuracy as it actually was.
+  Months appear only if they had activity.
+- **Excel exports** — monthly workbook contains a Transactions sheet and a Summary
+  sheet; yearly workbook contains Months and By-category sheets.
+
+### Scheduled reports
+
+The month-end snapshots above are the scheduler: nothing to configure, no external
+service, nothing leaves this machine. They exist so that restated numbers can never
+hide what actually happened.
+
 ## Categories
 
 - **Categorization rules** — keyword rules are learned from manual assignments.

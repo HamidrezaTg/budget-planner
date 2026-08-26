@@ -254,6 +254,21 @@ CREATE TABLE IF NOT EXISTS fx_rates (
   PRIMARY KEY (month, currency)
 );
 
+-- Scheduled reports: automatic month-end snapshots. Captured once, lazily,
+-- the first time the app is viewed after a month closes — then frozen so
+-- later edits/deletions never rewrite financial history.
+CREATE TABLE IF NOT EXISTS monthly_reports (
+  month TEXT PRIMARY KEY,                    -- YYYY-MM, always a closed month
+  captured_at TEXT NOT NULL DEFAULT (datetime('now')),
+  income REAL NOT NULL DEFAULT 0,
+  expenses REAL NOT NULL DEFAULT 0,          -- converted, negative
+  planned REAL NOT NULL DEFAULT 0,
+  result REAL NOT NULL DEFAULT 0,            -- planned minus spend; +=under
+  transfer_to_revolut REAL NOT NULL DEFAULT 0,
+  transaction_count INTEGER NOT NULL DEFAULT 0,
+  by_category TEXT NOT NULL DEFAULT '[]'     -- JSON [{name,planned,actual}]
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

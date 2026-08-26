@@ -1,8 +1,78 @@
 import { Router } from 'express';
+import XLSX from 'xlsx';
 import { db } from '../db.js';
-import { monthView, currentMonth, addMonths } from '../services/model.js';
+import { monthView, currentMonth, addMonths, ensureMonthlyReports, monthlyReportHistory } from '../services/model.js';
 
 const router = Router();
+
+// ------------------------------------------------------------ scheduled snapshots
+router.get('/history', (_req, res) => {
+  const captured = ensureMonthlyReports();
+  res.json({ captured, rows: monthlyReportHistory() });
+});
+
+// ------------------------------------------------------------ excel exports
+function sendXlsx(res, filename, sheets) {
+  // raw amounts + currency codes (same policy as CSV: conversion is a
+  // reporting concern; statements stay raw)
+  const wb = XLSX.utils.book_new();
+  for (const { name, rows } of sheets) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name.slice(0, 31));
+  }
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buf);
+}
+
+router.get('/export/monthly/:month.xlsx', (req, res) => {
+  const month = req.params.month;
+  if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'month must be YYYY-MM' });
+  const txs = db
+    .prepare(
+      `SELECT t.date AS Date, t.description AS Description, t.amount AS Amount, t.currency AS Currency,
+              COALESCE(c.name,'Uncategorized') AS Category
+       FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+       WHERE substr(t.date,1,7) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) ORDER BY t.date`
+    )
+    .all(month);
+  const view = monthView(month);
+  const summary = view.rows
+    .filter((r) => r.actual > 0 || r.planned > 0)
+    .map((r) => ({ Category: r.name, Planned: r.planned, Actual: r.actual, Difference: r.difference }));
+  summary.unshift({ Category: 'TOTAL', Planned: view.planned_total, Actual: view.actual_total, Difference: view.month_result });
+  sendXlsx(res, `report-${month}.xlsx`, [
+    { name: 'Transactions', rows: txs },
+    { name: 'Summary', rows: summary },
+  ]);
+});
+
+router.get('/export/yearly/:year.xlsx', (req, res) => {
+  const year = req.params.year;
+  if (!/^\d{4}$/.test(year)) return res.status(400).json({ error: 'year must be YYYY' });
+  const months = db
+    .prepare(
+      `SELECT substr(t.date,1,7) AS Month,
+              COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END),0) AS Income,
+              COALESCE(SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END),0) AS Expenses
+       FROM transactions t WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)
+       GROUP BY substr(t.date,1,7)`
+    )
+    .all(year);
+  const byCategory = db
+    .prepare(
+      `SELECT COALESCE(c.name, 'Uncategorized') AS Category,
+              SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END) AS Spent
+       FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+       WHERE substr(t.date,1,4) = ? AND t.amount < 0 AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)
+       GROUP BY c.id ORDER BY Spent`
+    )
+    .all(year);
+  sendXlsx(res, `report-${year}.xlsx`, [
+    { name: 'Months', rows: months },
+    { name: 'By category', rows: byCategory },
+  ]);
+});
 
 router.get('/monthly/:month', (req, res) => {
   const month = req.params.month;

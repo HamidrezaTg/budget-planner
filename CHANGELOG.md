@@ -3,6 +3,16 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.5.0] — 2026-08-26
+
+### Added
+- **Scheduled month-end reports** — closed months with activity are snapshotted
+  automatically (lazily, on first view; no external scheduler). Snapshots are frozen:
+  later edits/deletions never rewrite history. Reports page gains a Month-end history
+  chart + table of income/spend/planned/result per month.
+- **Excel exports** — monthly workbook (Transactions + Summary sheets) and yearly
+  workbook (Months + By category); raw statement amounts/currency codes, matching CSV.
+
 ## [3.4.0] — 2026-08-26
 
 ### Added

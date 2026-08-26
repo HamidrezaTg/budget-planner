@@ -26,10 +26,21 @@ import Recurring from './pages/Recurring.jsx';
 export default function App() {
   const [status, setStatus] = useState(null);
   const [me, setMe] = useState(null);
+  const [offline, setOffline] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
-    api.get('/auth/status').then(setStatus).catch(() => setStatus({ passwordSet: false }));
-  }, []);
+    setOffline(false);
+    api.get('/auth/status')
+      .then(setStatus)
+      .catch(() => {
+        // Server unreachable (stopped, restarting, or offline). Never show the
+        // first-run setup screen in this case — it would look like all
+        // accounts vanished.
+        setStatus(null);
+        setOffline(true);
+      });
+  }, [retry]);
 
   useEffect(() => {
     if (status?.passwordSet) {
@@ -41,6 +52,26 @@ export default function App() {
         .catch(() => {});
     }
   }, [status?.passwordSet]);
+
+  if (offline) {
+    return (
+      <div className="login-wrap">
+        <div className="card login-card">
+          <h1>Budget Planner</h1>
+          <p className="muted">
+            The planner server is not reachable. The page you see was served from the
+            offline cache — your data is untouched.
+          </p>
+          <p className="muted tiny">
+            Start it from the project folder with <code>npm start</code>, then retry.
+          </p>
+          <button className="btn primary" onClick={() => setRetry((r) => r + 1)}>
+            Retry connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!status) return <div className="loading">Loading…</div>;
 
