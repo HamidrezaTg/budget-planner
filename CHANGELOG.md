@@ -3,6 +3,22 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.2.0] — 2026-08-26
+
+### Added
+- **Dashboard insights** — generated alerts for review backlog, over-budget
+  categories, current-month spending pace, fund-goal risk, and recurring items due
+  within seven days
+- **Installable PWA** — app manifest, branded icon, and network-first app-shell
+  service worker; financial API responses are never cached
+- **Advanced categorization rules** — description, absolute amount range, account,
+  transaction type, priority, and a read-only rule tester
+
+### Fixed
+- Existing user databases now receive migrations for v3 feature columns.
+- Recurring-form errors use the in-app toast instead of a browser alert.
+- Fund goals can be created as well as edited from the Funds page.
+
 ## [2.0.0] — 2026-08-26
 
 The complete rebuild of the original single-user planner into a multi-user,

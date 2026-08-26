@@ -334,12 +334,32 @@ code {
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
 .page-head h1 { margin: 0 0 4px; }
 .month-nav { display: flex; gap: 2px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 3px 6px; }
+.notification-pill { display: inline-flex; align-items: center; gap: 6px; color: var(--orange); font-size: 12px; font-weight: 650; text-decoration: none; margin-left: 8px; padding: 5px 9px; border-radius: 999px; background: rgba(233, 162, 59, 0.12); }
+.notification-pill:hover { background: rgba(233, 162, 59, 0.2); }
+.notification-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 3px rgba(233, 162, 59, 0.14); }
 .month-nav .btn { border: none; background: transparent; padding: 6px 10px; }
 .month-nav strong { font-size: 13.5px; padding: 0 6px; min-width: 110px; text-align: center; }
 
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin-bottom: 14px; }
 .panel-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; gap: 10px; }
 .panel-head .eyebrow { margin-bottom: 4px; }
+.insight-section { margin: 0 0 18px; }
+.section-kicker { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 0 2px 10px; }
+.section-kicker .eyebrow { margin-bottom: 2px; }
+.section-kicker h2 { margin: 0; }
+.insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.insight-card { display: flex; gap: 11px; min-height: 116px; padding: 14px; border: 1px solid var(--line); border-left: 3px solid var(--blue); border-radius: var(--radius-sm); background: var(--card); }
+.insight-card.warning { border-left-color: var(--orange); }
+.insight-card.danger { border-left-color: var(--red); }
+.insight-card.info { border-left-color: var(--blue); }
+.insight-mark { display: grid; place-items: center; width: 23px; height: 23px; flex: 0 0 23px; border-radius: 50%; color: var(--blue); background: rgba(49, 87, 213, 0.12); font-family: var(--font-mono); font-weight: 700; }
+.insight-card.warning .insight-mark { color: var(--orange); background: rgba(233, 162, 59, 0.14); }
+.insight-card.danger .insight-mark { color: var(--red); background: rgba(239, 107, 110, 0.14); }
+.insight-copy { min-width: 0; }
+.insight-copy strong { display: block; font-size: 13px; line-height: 1.3; }
+.insight-copy p { margin: 5px 0 9px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.insight-copy a { color: var(--blue); font-size: 12px; font-weight: 650; text-decoration: none; }
+.insight-copy a:hover { text-decoration: underline; }
 .text-button {
   background: none; border: none; color: var(--blue);
   font-family: inherit; font-size: 13px; font-weight: 550; cursor: pointer; padding: 2px;

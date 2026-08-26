@@ -89,23 +89,23 @@ export default function Funds() {
                           setAmounts((p) => ({ ...p, ['g' + f.id]: String(f.goal.target_amount), ['gd' + f.id]: f.goal.target_date ?? '' }));
                         }}
                       >✎</button>
-                      {(amounts['g' + f.id] !== undefined || amounts['gd' + f.id] !== undefined) && (
-                        <div className="goal-edit">
-                          <input type="number" step="0.01" placeholder="Target €" style={{ width: 90 }}
-                            value={amounts['g' + f.id] ?? ''}
-                            onChange={(e) => setAmounts((p) => ({ ...p, ['g' + f.id]: e.target.value }))} />
-                          <input type="month" style={{ width: 130 }}
-                            value={amounts['gd' + f.id] ?? ''}
-                            onChange={(e) => setAmounts((p) => ({ ...p, ['gd' + f.id]: e.target.value }))} />
-                          <button className="btn small primary" onClick={() => setGoal(f)}>Save</button>
-                        </div>
-                      )}
                     </>
-                  ) : (
+                  ) : null}
+                  {(amounts['g' + f.id] !== undefined || amounts['gd' + f.id] !== undefined) ? (
+                    <div className="goal-edit">
+                      <input type="number" step="0.01" placeholder="Target €" style={{ width: 90 }}
+                        value={amounts['g' + f.id] ?? ''}
+                        onChange={(e) => setAmounts((p) => ({ ...p, ['g' + f.id]: e.target.value }))} />
+                      <input type="month" style={{ width: 130 }}
+                        value={amounts['gd' + f.id] ?? ''}
+                        onChange={(e) => setAmounts((p) => ({ ...p, ['gd' + f.id]: e.target.value }))} />
+                      <button className="btn small primary" onClick={() => setGoal(f)}>Save</button>
+                    </div>
+                  ) : !f.goal ? (
                     <button className="btn ghost small" onClick={() => setAmounts((p) => ({ ...p, ['g' + f.id]: '', ['gd' + f.id]: '' }))}>
                       + Set goal
                     </button>
-                  )}
+                  ) : null}
                 </td>
                 <td className="num">
                   <input

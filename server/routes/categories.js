@@ -55,6 +55,7 @@ router.patch('/:id', (req, res) => {
   if (b.is_active === false && row.is_active) {
     db.prepare('DELETE FROM budget_lines WHERE category_id = ?').run(row.id);
     db.prepare('DELETE FROM category_rules WHERE category_id = ?').run(row.id);
+    db.prepare('DELETE FROM category_automation_rules WHERE category_id = ?').run(row.id);
     db.prepare(
       'UPDATE commitments SET monthly_amount = 0 WHERE category_id = ? AND end_month IS NULL'
     ).run(row.id);

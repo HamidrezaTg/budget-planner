@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { learnRule, categorize } from '../services/categorizer.js';
+import { learnRule, categorizeTransaction, createAutomationRule } from '../services/categorizer.js';
 
 const router = Router();
 
@@ -118,8 +118,7 @@ router.post('/:id/unsplit', (req, res) => {
 
 // Rules management
 router.get('/rules/all', (_req, res) => {
-  res.json(
-    db
+  const keywordRules = db
       .prepare(
         `SELECT r.*, c.name AS category_name,
                 (SELECT COUNT(*) FROM transactions t WHERE LOWER(t.description) LIKE '%' || r.keyword || '%') AS matches
@@ -127,7 +126,22 @@ router.get('/rules/all', (_req, res) => {
          ORDER BY r.keyword`
       )
       .all()
-  );
+      .map((r) => ({ ...r, rule_type: 'keyword' }));
+  const automationRules = db
+    .prepare(
+      `SELECT r.*, c.name AS category_name,
+              (SELECT COUNT(*) FROM transactions t
+               WHERE (r.description_contains IS NULL OR LOWER(t.description) LIKE '%' || LOWER(r.description_contains) || '%')
+                 AND (r.amount_min IS NULL OR ABS(t.amount) >= r.amount_min)
+                 AND (r.amount_max IS NULL OR ABS(t.amount) <= r.amount_max)
+                 AND (r.account_id IS NULL OR t.account_id = r.account_id)
+                 AND (r.tx_type IS NULL OR LOWER(COALESCE(t.tx_type, '')) = LOWER(r.tx_type))) AS matches
+       FROM category_automation_rules r JOIN categories c ON c.id = r.category_id
+       ORDER BY r.priority DESC, r.id`
+    )
+    .all()
+    .map((r) => ({ ...r, rule_type: 'advanced' }));
+  res.json([...automationRules, ...keywordRules]);
 });
 
 router.post('/rules', (req, res) => {
@@ -138,8 +152,42 @@ router.post('/rules', (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/rules/advanced', (req, res) => {
+  const b = req.body ?? {};
+  const hasCondition = [b.description_contains, b.amount_min, b.amount_max, b.account_id, b.tx_type]
+    .some((value) => value !== undefined && value !== null && String(value).trim() !== '');
+  if (!b.category_id || !hasCondition)
+    return res.status(400).json({ error: 'At least one condition and a category are required' });
+  if (b.amount_min !== '' && b.amount_min != null && !Number.isFinite(Number(b.amount_min)))
+    return res.status(400).json({ error: 'Minimum amount must be numeric' });
+  if (b.amount_max !== '' && b.amount_max != null && !Number.isFinite(Number(b.amount_max)))
+    return res.status(400).json({ error: 'Maximum amount must be numeric' });
+  if (b.amount_min !== '' && b.amount_max !== '' && b.amount_min != null && b.amount_max != null && Number(b.amount_min) > Number(b.amount_max))
+    return res.status(400).json({ error: 'Minimum amount cannot exceed maximum amount' });
+  if (!db.prepare('SELECT id FROM categories WHERE id = ?').get(b.category_id))
+    return res.status(400).json({ error: 'Unknown category' });
+  res.json(createAutomationRule(b));
+});
+
+router.post('/rules/test', (req, res) => {
+  const result = categorizeTransaction({
+    description: req.body?.description || '',
+    amount: Number(req.body?.amount) || 0,
+    account_id: req.body?.account_id || null,
+    tx_type: req.body?.tx_type || '',
+  });
+  res.json(result
+    ? { category_id: result.category_id, category_name: result.category_name || null, rule: result.rule }
+    : { category_id: null, category_name: null, rule: null });
+});
+
 router.delete('/rules/:id', (req, res) => {
   db.prepare('DELETE FROM category_rules WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+router.delete('/rules/advanced/:id', (req, res) => {
+  db.prepare('DELETE FROM category_automation_rules WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 

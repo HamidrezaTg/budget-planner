@@ -19,7 +19,7 @@ same content while using the app.
 | Section | Pages |
 |---|---|
 | Overview | Dashboard, Projection, Reports |
-| Money in & out | Import, Transactions, Budgets, Income |
+| Money in & out | Import, Transactions, Recurring, Budgets, Income |
 | Planning | Funds, Commitments, Balances, Categories |
 | Assistant | AI Chat, Settings, Help |
 
@@ -39,6 +39,10 @@ The month at a glance. Use **← / Today / →** to change months — every figu
   Positive = under budget overall.
 - **Warnings** — categories without an account (their spending vanishes from account
   totals) and transactions still needing review.
+- **Insights** — generated cards flag transactions needing review, categories over plan,
+  spending ahead of the current month's pace, fund goals needing higher contributions,
+  and recurring items due within seven days. The action on each card opens the relevant
+  page; the alert count beside the month selector counts the current cards.
 - **Group tables** — one table per block (Housing, Food, …). *Difference* =
   planned − actual per category.
 
@@ -68,6 +72,8 @@ The month at a glance. Use **← / Today / →** to change months — every figu
   pending row.
 - **Apply all** / **Apply ≥80%** — accept every suggestion, or only confident ones.
   Applied suggestions become learned rules too.
+- **Split** — divide one purchase across two or more categories. The parts must add up
+  to the original amount. **Unsplit** removes the parts and restores the original.
 
 ## Budgets
 
@@ -127,6 +133,12 @@ Supported: OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, Mistral, Together AI,
 Ollama (local, no key), LM Studio (local, no key), Custom.
 
 ## Categories
+
+- **Categorization rules** — keyword rules are learned from manual assignments.
+- **Advanced rule** — combine description, absolute amount range, account, transaction
+  type, and priority. Rules with higher priority are checked first.
+- **Rule tester** — preview the category for a sample transaction. Testing never writes
+  data.
 
 Group, account, standing plan, active/retired. **Retire** clears the plan and rules
 so retired categories can't silently collect money. Rules list shows learned keyword

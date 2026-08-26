@@ -230,6 +230,111 @@ function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
+function daysInMonth(month) {
+  const [year, mo] = month.split('-').map(Number);
+  return new Date(year, mo, 0).getDate();
+}
+
+function recurringDueWithinDays() {
+  const now = new Date();
+  const due = [];
+  const recurrences = db.prepare('SELECT * FROM recurrences WHERE active = 1').all();
+
+  for (let offset = 0; offset <= 7; offset++) {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    for (const r of recurrences) {
+      const day = Math.min(r.day_of_month, daysInMonth(month));
+      if (day !== date.getDate() || r.last_posted_month === month) continue;
+      due.push({ id: r.id, name: r.name, amount: r.amount, month, day });
+    }
+  }
+  return due;
+}
+
+function insightsForMonth(month, view) {
+  const insights = [];
+
+  if (view.warnings.needs_review > 0) {
+    insights.push({
+      kind: 'review',
+      severity: 'warning',
+      title: 'Transactions need attention',
+      message: `${view.warnings.needs_review} transaction${view.warnings.needs_review === 1 ? '' : 's'} still need a category.`,
+      link: '/transactions?review=1',
+      action: 'Review transactions',
+    });
+  }
+
+  view.rows
+    .filter((r) => r.planned > 0 && r.actual > r.planned)
+    .sort((a, b) => (b.actual - b.planned) - (a.actual - a.planned))
+    .slice(0, 4)
+    .forEach((r) => {
+      insights.push({
+        kind: 'over-budget',
+        severity: 'danger',
+        title: `${r.name} is over budget`,
+        message: `${eur(r.actual - r.planned)} over its ${eur(r.planned)} plan.`,
+        link: '/budgets',
+        action: 'Open budgets',
+      });
+    });
+
+  if (month === currentMonth() && view.planned_total > 0) {
+    const now = new Date();
+    const elapsed = now.getDate() / daysInMonth(month);
+    const spent = view.actual_total / view.planned_total;
+    if (spent > elapsed + 0.1 && view.actual_total > 0) {
+      insights.push({
+        kind: 'pace',
+        severity: 'warning',
+        title: 'Spending is running ahead',
+        message: `${Math.round(spent * 100)}% of the plan used with ${Math.round(elapsed * 100)}% of the month elapsed.`,
+        link: '/',
+        action: 'View dashboard',
+      });
+    }
+  }
+
+  db.prepare('SELECT * FROM funds WHERE target_amount IS NOT NULL AND target_date IS NOT NULL')
+    .all()
+    .forEach((fund) => {
+      if (fund.target_date < month) return;
+      const balance = fundBalanceAt(fund, month);
+      const monthsLeft = monthsBetween(month, fund.target_date) + 1;
+      const monthlyNeed = Math.max(0, (fund.target_amount - balance) / Math.max(1, monthsLeft));
+      if (monthlyNeed > fund.monthly_contribution + 0.01) {
+        insights.push({
+          kind: 'fund-goal',
+          severity: 'warning',
+          title: `${fund.name} needs a higher contribution`,
+          message: `${eur(monthlyNeed)} per month needed to reach ${eur(fund.target_amount)} by ${fund.target_date}.`,
+          link: '/funds',
+          action: 'Open funds',
+        });
+      }
+    });
+
+  const due = month === currentMonth() ? recurringDueWithinDays() : [];
+  if (due.length > 0) {
+    insights.push({
+      kind: 'upcoming',
+      severity: 'info',
+      title: `${due.length} recurring item${due.length === 1 ? '' : 's'} due soon`,
+      message: due.map((r) => r.name).join(', '),
+      link: '/recurring',
+      action: 'Open recurring',
+    });
+  }
+
+  return { insights, notification_count: insights.length };
+}
+
+function eur(n) {
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n ?? 0);
+}
+
 // Full picture for one month (dashboard / reports)
 export function monthView(month) {
   const cats = getAllCategories();
@@ -275,7 +380,7 @@ export function monthView(month) {
     .all()
     .map((f) => ({ ...f, balance: round2(fundBalanceAt(f, month)) }));
 
-  return {
+  const result = {
     month,
     groups,
     rows,
@@ -294,4 +399,5 @@ export function monthView(month) {
     funds,
     warnings: { untagged_categories: untagged, needs_review: needsReview },
   };
+  return { ...result, ...insightsForMonth(month, result) };
 }

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { api, eur } from '../api.js';
+import { useDialogs } from '../components/Dialog.jsx';
 
 export default function Recurring() {
   const [data, setData] = useState(null);
   const [meta, setMeta] = useState({ accounts: [], groups: [] });
   const [cats, setCats] = useState([]);
   const [form, setForm] = useState({ name: '', amount: '', day_of_month: '1', account_id: '', category_id: '', auto_post: false });
+  const { toast } = useDialogs();
 
   const load = () => api.get('/recurrences').then(setData);
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function Recurring() {
       setForm({ name: '', amount: '', day_of_month: '1', account_id: '', category_id: '', auto_post: false });
       load();
     } catch (err) {
-      alert(err.message);
+      toast(err.message, 'error');
     }
   };
 

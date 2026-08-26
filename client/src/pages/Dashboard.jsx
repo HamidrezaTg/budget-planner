@@ -67,6 +67,12 @@ export default function Dashboard() {
               {monthLabel(currentMonth()).split(' ')[0]}
             </button>
           )}
+          {data.notification_count > 0 && (
+            <a className="notification-pill" href="#insights" aria-label={`${data.notification_count} dashboard alerts`}>
+              <span className="notification-dot" />
+              {data.notification_count} alert{data.notification_count === 1 ? '' : 's'}
+            </a>
+          )}
         </div>
       </div>
 
@@ -121,6 +127,32 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+      )}
+
+      {data.insights?.length > 0 && (
+        <section id="insights" className="insight-section" aria-label="Budget insights">
+          <div className="section-kicker">
+            <div>
+              <p className="eyebrow">Worth a look</p>
+              <h2>Insights</h2>
+            </div>
+            <span className="muted">Generated from your plan and activity</span>
+          </div>
+          <div className="insight-grid">
+            {data.insights.map((insight, i) => (
+              <div key={`${insight.kind}-${i}`} className={`insight-card ${insight.severity}`}>
+                <div className="insight-mark" aria-hidden="true">
+                  {insight.severity === 'danger' ? '!' : insight.severity === 'warning' ? '△' : '·'}
+                </div>
+                <div className="insight-copy">
+                  <strong>{insight.title}</strong>
+                  <p>{insight.message}</p>
+                  <Link to={insight.link}>{insight.action} <span aria-hidden="true">→</span></Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {isCurrent && upcoming?.length > 0 && (

@@ -207,6 +207,19 @@ CREATE TABLE IF NOT EXISTS category_rules (
   category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS category_automation_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  description_contains TEXT,
+  amount_min REAL,
+  amount_max REAL,
+  account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+  tx_type TEXT,
+  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  priority INTEGER NOT NULL DEFAULT 0,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS recurrences (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -233,7 +246,7 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
 );
 `);
 
-// migrations for databases created before the split feature
+// migrations for databases created before the v3 money-engine features
 for (const col of ['split_group TEXT', 'split_of INTEGER REFERENCES transactions(id) ON DELETE CASCADE']) {
   try {
     db.exec(`ALTER TABLE transactions ADD COLUMN ${col}`);
@@ -244,6 +257,8 @@ try {
 } catch {}
 try {
   db.exec('ALTER TABLE funds ADD COLUMN target_amount REAL');
+} catch {}
+try {
   db.exec('ALTER TABLE funds ADD COLUMN target_date TEXT');
 } catch {}
 
