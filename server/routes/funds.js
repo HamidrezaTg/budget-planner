@@ -4,7 +4,7 @@ import { fundBalanceAt, currentMonth, addMonths, monthsBetween } from '../servic
 
 const router = Router();
 
-// Funds with balances + recent movements. `month` = reference point for balances.
+// Funds with balances, goals and recent movements. `month` = balance reference.
 router.get('/', (req, res) => {
   const month = /^\d{4}-\d{2}$/.test(req.query.month ?? '') ? req.query.month : currentMonth();
   const funds = db
@@ -21,12 +21,35 @@ router.get('/', (req, res) => {
       const withdrawn = db
         .prepare(`SELECT COALESCE(SUM(amount),0) AS s FROM fund_movements WHERE fund_id=? AND kind='withdrawal' AND month<=?`)
         .get(f.id, month).s;
+      const balance = Math.round(fundBalanceAt(f, month) * 100) / 100;
+
+      // goal math: how much per month is still needed to hit the target on time?
+      let goal = null;
+      if (f.target_amount != null && f.target_amount > 0) {
+        const remaining = Math.max(0, f.target_amount - balance);
+        const monthsLeft = f.target_date ? Math.max(0, monthsBetween(month, f.target_date)) : null;
+        goal = {
+          target_amount: f.target_amount,
+          target_date: f.target_date ?? null,
+          remaining: Math.round(remaining * 100) / 100,
+          progress: Math.min(100, Math.round((balance / f.target_amount) * 1000) / 10),
+          months_left: monthsLeft,
+          monthly_needed:
+            monthsLeft === null ? null : monthsLeft === 0 ? remaining : Math.round((remaining / monthsLeft) * 100) / 100,
+          on_track:
+            monthsLeft === null
+              ? null
+              : f.monthly_contribution >= remaining / Math.max(monthsLeft, 1) - 0.01,
+        };
+      }
+
       return {
         ...f,
-        balance: Math.round(fundBalanceAt(f, month) * 100) / 100,
+        balance,
         contributed_so_far: Math.round((scheduled + f.opening_balance) * 100) / 100,
         withdrawn_so_far: Math.round(-withdrawn * 100) / 100,
-        negative: fundBalanceAt(f, month) < 0,
+        negative: balance < 0,
+        goal,
       };
     });
 
@@ -55,19 +78,21 @@ router.post('/:id/movement', (req, res) => {
   res.json({ ok: true });
 });
 
-// Edit fund configuration
+// Edit fund configuration (including goal target)
 router.patch('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM funds WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Fund not found' });
   const b = req.body ?? {};
   db.prepare(
-    'UPDATE funds SET name=?, monthly_contribution=?, start_month=?, opening_balance=?, category_id=? WHERE id=?'
+    'UPDATE funds SET name=?, monthly_contribution=?, start_month=?, opening_balance=?, category_id=?, target_amount=?, target_date=? WHERE id=?'
   ).run(
     b.name ?? row.name,
     Number(b.monthly_contribution ?? row.monthly_contribution) || 0,
     b.start_month ?? row.start_month,
     Number(b.opening_balance ?? row.opening_balance) || 0,
     b.category_id ?? row.category_id,
+    b.target_amount !== undefined ? (b.target_amount === null ? null : Number(b.target_amount) || null) : row.target_amount,
+    b.target_date !== undefined ? (b.target_date || null) : row.target_date,
     req.params.id
   );
   res.json(db.prepare('SELECT * FROM funds WHERE id = ?').get(row.id));

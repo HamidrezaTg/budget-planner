@@ -26,6 +26,18 @@ export default function Funds() {
     load();
   };
 
+  const setGoal = async (f) => {
+    const amt = amounts['g' + f.id];
+    const date = amounts['gd' + f.id];
+    if (amt === undefined && date === undefined) return;
+    await api.patch(`/funds/${f.id}`, {
+      target_amount: amt === '' ? null : Number(amt),
+      target_date: date || null,
+    });
+    setAmounts((p) => ({ ...p, ['g' + f.id]: undefined, ['gd' + f.id]: undefined }));
+    load();
+  };
+
   return (
     <div>
       <h1>Sinking funds <span className="muted h-count">(balances at {data.month})</span></h1>
@@ -39,7 +51,7 @@ export default function Funds() {
         <table>
           <thead>
             <tr>
-              <th>Fund</th><th className="num">Balance</th><th className="num">Monthly contribution</th>
+              <th>Fund</th><th className="num">Balance</th><th>Goal</th><th className="num">Monthly contribution</th>
               <th style={{ minWidth: 250 }}>Move money</th><th></th>
             </tr>
           </thead>
@@ -53,6 +65,47 @@ export default function Funds() {
                 </td>
                 <td className={`num ${f.negative ? 'bad' : f.balance > 0 ? 'income' : ''}`}>
                   {eur(f.balance)}
+                </td>
+                <td style={{ minWidth: 190 }}>
+                  {f.goal ? (
+                    <>
+                      <div className="goal-line">
+                        <div className="bar-track" style={{ flex: 1 }}>
+                          <div className="bar" style={{ width: `${f.goal.progress}%`, background: 'var(--blue)' }} />
+                        </div>
+                        <span className="muted tiny">{f.goal.progress}%</span>
+                      </div>
+                      <span className="muted tiny">
+                        {eur(f.goal.remaining)} to go
+                        {f.goal.target_date && ` · by ${f.goal.target_date}`}
+                        {f.goal.monthly_needed != null && f.goal.remaining > 0 && (
+                          <> · needs {eur(f.goal.monthly_needed)}/mo{' '}
+                            {f.goal.on_track ? <span className="good">(on track)</span> : <span className="bad">(behind)</span>}
+                          </>
+                        )}
+                      </span>
+                      <button className="btn ghost tiny-btn" title="Edit goal"
+                        onClick={() => {
+                          setAmounts((p) => ({ ...p, ['g' + f.id]: String(f.goal.target_amount), ['gd' + f.id]: f.goal.target_date ?? '' }));
+                        }}
+                      >✎</button>
+                      {(amounts['g' + f.id] !== undefined || amounts['gd' + f.id] !== undefined) && (
+                        <div className="goal-edit">
+                          <input type="number" step="0.01" placeholder="Target €" style={{ width: 90 }}
+                            value={amounts['g' + f.id] ?? ''}
+                            onChange={(e) => setAmounts((p) => ({ ...p, ['g' + f.id]: e.target.value }))} />
+                          <input type="month" style={{ width: 130 }}
+                            value={amounts['gd' + f.id] ?? ''}
+                            onChange={(e) => setAmounts((p) => ({ ...p, ['gd' + f.id]: e.target.value }))} />
+                          <button className="btn small primary" onClick={() => setGoal(f)}>Save</button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <button className="btn ghost small" onClick={() => setAmounts((p) => ({ ...p, ['g' + f.id]: '', ['gd' + f.id]: '' }))}>
+                      + Set goal
+                    </button>
+                  )}
                 </td>
                 <td className="num">
                   <input

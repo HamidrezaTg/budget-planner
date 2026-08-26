@@ -141,7 +141,9 @@ CREATE TABLE IF NOT EXISTS funds (
   monthly_contribution REAL NOT NULL DEFAULT 0,
   start_month TEXT NOT NULL,
   opening_balance REAL NOT NULL DEFAULT 0,
-  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL
+  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+  target_amount REAL,
+  target_date TEXT                            -- YYYY-MM, optional
 );
 
 CREATE TABLE IF NOT EXISTS fund_movements (
