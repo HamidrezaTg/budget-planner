@@ -25,10 +25,20 @@ Development mode with hot reload: `npm run dev`.
 
 ### One-line install (works while the repo is private)
 
-1. Create a **fine-grained personal access token**: GitHub → Settings → Developer
-   settings → Fine-grained tokens → *Generate* → repository access: `budget-planner` →
-   permission **Contents: read-only**.
-2. Run (replace the token in **both** places):
+**Option A — GitHub CLI login (recommended, no token management):**
+
+```bash
+# on the server, once:
+sudo apt install gh && gh auth login
+# then install:
+bash -c "$(curl -fsSL -H "Authorization: token $(gh auth token)" \
+  https://raw.githubusercontent.com/HamidrezaTg/budget-planner/main/scripts/install.sh)"
+```
+
+The installer picks up your `gh` login automatically.
+
+**Option B — fine-grained token** (GitHub → Settings → Developer settings →
+Fine-grained tokens → `budget-planner`, **Contents: read-only**):
 
 ```bash
 GH_TOKEN=github_pat_xxxx bash -c "$(curl -fsSL \
@@ -38,8 +48,8 @@ GH_TOKEN=github_pat_xxxx bash -c "$(curl -fsSL \
 
 The installer downloads the latest server `.deb` from GitHub Releases, checks
 Node.js ≥ 22 (offers to install it), and installs the service. Add `-- --client`
-to install the desktop client instead. Once the repo goes public, the token can
-be dropped from both places.
+to install the desktop client instead. Once the repo goes public, drop the token
+from both places.
 
 ### Manual install
 
