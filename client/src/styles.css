@@ -700,3 +700,13 @@ select.missing { color: var(--orange); border-color: rgba(233, 162, 59, 0.45); }
 /* ---------- split editor ---------- */
 .split-row { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; margin-bottom: 8px; align-items: center; }
 .split-summary { display: flex; justify-content: space-between; align-items: center; margin: 10px 0 4px; font-family: var(--font-mono); font-size: 13px; }
+
+/* ---------- attachments ---------- */
+.clip-btn { min-width: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; }
+.clip-btn.has-attachments { color: var(--blue); background: rgba(49, 87, 213, 0.1); }
+.att-list { max-height: 260px; overflow-y: auto; margin: 10px 0; border-top: 1px solid var(--line-soft); }
+.att-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 2px; border-bottom: 1px solid var(--line-soft); }
+.att-main { min-width: 0; }
+.att-main strong { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-main small { font-size: 11px; }
+.file-btn { position: relative; overflow: hidden; cursor: pointer; }

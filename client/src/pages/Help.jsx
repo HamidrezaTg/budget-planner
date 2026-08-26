@@ -9,6 +9,8 @@ const PAGES = [
       ['Planned / Actual spend', 'What you budgeted vs. what actually happened. Actual is net of refunds — a return reduces the spend of its category.'],
       ['Month result', 'One figure for the whole month: planned minus actual, covering all seven groups including Savings.'],
       ['Warnings', 'Untagged categories (spending on them reaches no account total) and transactions that still need a category.'],
+      ['Insights', 'Generated cards: review backlog, categories over budget, spending ahead of the month\u2019s pace, fund goals behind or overdue, and recurring items due within seven days. They never change your data — the link opens the relevant page.'],
+      ['Alerts pill', 'The count beside the month selector is the number of current insight cards.'],
       ['Category tables', 'Grouped by block (Housing, Food, …). Difference = planned − actual. Positive means under budget.'],
       ['← / Today / →', 'Move between months. All figures on the page follow the selected month.'],
     ],
@@ -30,6 +32,8 @@ const PAGES = [
       ['Assign category…', 'Pick a category for an unknown transaction — choosing one automatically creates a keyword rule, so the same merchant is categorized instantly next time (and old unmatched rows with the same name are fixed retroactively).'],
       ['Suggest categories with AI', 'The AI proposes a category + confidence for every pending transaction.'],
       ['Apply all / Apply ≥80%', 'Accept all suggestions, or only confident ones (80%+). Applied suggestions become learned rules too.'],
+      ['Split', 'Divide one purchase across two or more categories (e.g. groceries + household). Parts must add up to the original. The original stops counting anywhere; only the parts do. Unsplit restores it.'],
+      ['Paperclip / attachments', 'Attach receipts and documents to any transaction (PDF, PNG, JPEG, WebP, CSV; max 10 MB). Files live in data/uploads and stay on this machine.'],
     ],
   },
   {
@@ -38,6 +42,7 @@ const PAGES = [
       ['Standing plan', 'The normal monthly amount for a category. Used by every month unless overridden.'],
       ['Plan for <month>', 'A one-month override. The ↺ button removes it and falls back to the standing plan.'],
       ['Account column', 'Which account the category is paid from. Every category should have one — untagged spending disappears from account totals (the dashboard warns you).'],
+      ['Roll over underspend', 'When enabled for a category, last month\u2019s unused plan carries into this month — but only if that month had actual activity in the category. Overspend never carries negative.'],
     ],
   },
   {
@@ -45,6 +50,14 @@ const PAGES = [
     items: [
       ['Usual', 'The recurring amount used by the projection for months without an actual entry.'],
       ['Enter actual', 'The real income for that month. Actual income must be entered, never assumed — this is a deliberate rule of the system.'],
+    ],
+  },
+  {
+    title: 'Recurring',
+    items: [
+      ['What they are', 'Expected monthly transactions — rent, subscriptions, salary. Define them once with name, signed amount, day of month (1–28), account and category.'],
+      ['Upcoming panel', 'Shows the next occurrences for this and next month; post one early with "Post now", or let it auto-post on its day. Duplicate posts are blocked automatically.'],
+      ['Auto / manual toggle', 'Auto items post themselves when due. Pause hides an item from upcoming without deleting it.'],
     ],
   },
   {
@@ -97,6 +110,8 @@ const PAGES = [
       ['Account & group', 'Every category belongs to one group (budget block) and one account.'],
       ['Retire', 'Retiring a category clears its plan and rules so nothing phantom survives. Reactivate any time.'],
       ['Categorization rules', 'Learned automatically when you assign categories; you can also add keyword rules manually.'],
+      ['Advanced rules', 'Combine conditions: description contains, absolute amount range, account, transaction type, priority. Higher priority wins. Retiring a category removes its rules too.'],
+      ['Rule tester', 'Type a sample description/amount/type and see which rule would fire. Testing never writes anything.'],
     ],
   },
   {

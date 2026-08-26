@@ -16,6 +16,9 @@ export default function Transactions() {
   const [splitTx, setSplitTx] = useState(null);
   const [splitParts, setSplitParts] = useState([]);
   const [splitError, setSplitError] = useState('');
+  const [attTx, setAttTx] = useState(null);
+  const [attList, setAttList] = useState(null);
+  const [attError, setAttError] = useState('');
   const { confirm } = useDialogs();
 
   const load = () => {
@@ -92,6 +95,47 @@ export default function Transactions() {
     await api.post(`/transactions/${tx.id}/unsplit`);
     load();
   };
+
+  const openAttachments = (tx) => {
+    setAttTx(tx);
+    setAttError('');
+    api.get(`/attachments?transaction_id=${tx.id}`)
+      .then((d) => setAttList(d.attachments))
+      .catch((e) => { setAttList([]); setAttError(e.message); });
+  };
+
+  const refreshAttachments = () => {
+    api.get(`/attachments?transaction_id=${attTx.id}`).then((d) => setAttList(d.attachments));
+    load();
+  };
+
+  const uploadAttachment = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAttError('');
+    try {
+      await api.upload('/attachments', file, { transaction_id: attTx.id });
+      refreshAttachments();
+    } catch (err) {
+      setAttError(err.message);
+    }
+  };
+
+  const deleteAttachment = async (att) => {
+    const ok = await confirm({
+      title: 'Delete attachment?',
+      message: att.original_name,
+      danger: true,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    await api.del(`/attachments/${att.id}`);
+    refreshAttachments();
+  };
+
+  const formatSize = (n) =>
+    n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`;
 
   const applyMany = async (minConfidence) => {
     const list = suggestions.filter((s) => s.confidence >= minConfidence);
@@ -176,6 +220,16 @@ export default function Transactions() {
                       part of {tx.split_parent_desc}
                     </span>
                   )}
+                  <button
+                    className={`btn ghost small clip-btn${tx.attachment_count > 0 ? ' has-attachments' : ''}`}
+                    title={tx.attachment_count > 0 ? `${tx.attachment_count} attachment(s)` : 'Add attachments'}
+                    onClick={() => openAttachments(tx)}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                    </svg>
+                    {tx.attachment_count > 0 ? tx.attachment_count : ''}
+                  </button>
                 </td>
                 <td className={tx.amount >= 0 ? 'income' : 'expense'}>{eur(tx.amount)}</td>
                 <td>
@@ -268,6 +322,46 @@ export default function Transactions() {
             <div className="modal-actions">
               <button className="btn ghost" onClick={() => setSplitTx(null)}>Cancel</button>
               <button className="btn primary" onClick={submitSplit}>Save split</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {attTx && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setAttTx(null)}>
+          <div className="modal-card" style={{ width: 520 }}>
+            <h3 className="modal-title">Attachments — {attTx.description}</h3>
+            <p className="modal-message">
+              <b className={attTx.amount >= 0 ? 'income' : 'expense'}>{eur(attTx.amount)}</b> on {attTx.date} ·
+              PDF, PNG, JPEG, WebP or CSV up to 10 MB.
+            </p>
+            {attList === null ? (
+              <div className="muted" style={{ margin: '10px 0' }}>Loading…</div>
+            ) : attList.length === 0 ? (
+              <div className="muted" style={{ margin: '10px 0' }}>No attachments yet.</div>
+            ) : (
+              <div className="att-list">
+                {attList.map((a) => (
+                  <div key={a.id} className="att-row">
+                    <div className="att-main">
+                      <strong>{a.original_name}</strong>
+                      <small className="muted">{formatSize(a.size)} · {a.created_at.slice(0, 10)}</small>
+                    </div>
+                    <div className="env-actions">
+                      <a className="btn small" href={`/api/attachments/${a.id}/file`}>Download</a>
+                      <button className="btn danger small" onClick={() => deleteAttachment(a)}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {attError && <div className="error" style={{ margin: '8px 0' }}>{attError}</div>}
+            <div className="modal-actions">
+              <label className="btn primary file-btn">
+                Add file…
+                <input type="file" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,.csv" onChange={uploadAttachment} />
+              </label>
+              <button className="btn ghost" onClick={() => setAttTx(null)}>Close</button>
             </div>
           </div>
         </div>

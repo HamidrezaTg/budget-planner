@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { api, eur } from '../api.js';
+import { useDialogs } from '../components/Dialog.jsx';
 
 export default function Funds() {
   const [data, setData] = useState(null);
   const [amounts, setAmounts] = useState({});
   const [msg, setMsg] = useState('');
+  const { toast } = useDialogs();
 
   const load = () => api.get('/funds').then(setData);
   useEffect(() => { load(); }, []);
@@ -30,8 +32,12 @@ export default function Funds() {
     const amt = amounts['g' + f.id];
     const date = amounts['gd' + f.id];
     if (amt === undefined && date === undefined) return;
+    if (!Number(amt) || Number(amt) <= 0) {
+      toast('Enter a positive target amount first.', 'error');
+      return;
+    }
     await api.patch(`/funds/${f.id}`, {
-      target_amount: amt === '' ? null : Number(amt),
+      target_amount: Number(amt),
       target_date: date || null,
     });
     setAmounts((p) => ({ ...p, ['g' + f.id]: undefined, ['gd' + f.id]: undefined }));

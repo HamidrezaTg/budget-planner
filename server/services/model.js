@@ -16,6 +16,13 @@ export function monthsBetween(a, b) {
   return (y2 - y1) * 12 + (m2 - m1);
 }
 
+// Months remaining INCLUDING the current month: a target in this very month
+// still has one contribution window left. 0 once the target date has passed.
+// Single source of truth for Funds page and dashboard insights.
+export function monthsLeftTo(month, target) {
+  return Math.max(0, monthsBetween(month, target) + 1);
+}
+
 // Planned amount for a category in a month: explicit budget line overrides,
 // otherwise the category's standing monthly plan. Inactive categories plan 0.
 // With roll_overs enabled, last month's underspend (only if that month had
@@ -37,7 +44,7 @@ export function plannedForCategory(cat, month) {
   const hadActivity =
     db
       .prepare(
-        'SELECT 1 FROM transactions WHERE category_id = ? AND substr(date,1,7) = ? LIMIT 1'
+        `SELECT 1 FROM transactions WHERE category_id = ? AND substr(date,1,7) = ? AND ${NOT_PARENT('transactions')} LIMIT 1`
       )
       .get(cat.id, prev);
   if (!hadActivity) return base;
@@ -275,9 +282,10 @@ function insightsForMonth(month, view) {
         kind: 'over-budget',
         severity: 'danger',
         title: `${r.name} is over budget`,
-        message: `${eur(r.actual - r.planned)} over its ${eur(r.planned)} plan.`,
+        message: '',
         link: '/budgets',
         action: 'Open budgets',
+        fields: { amount_over: round2(r.actual - r.planned) },
       });
     });
 
@@ -290,28 +298,47 @@ function insightsForMonth(month, view) {
         kind: 'pace',
         severity: 'warning',
         title: 'Spending is running ahead',
-        message: `${Math.round(spent * 100)}% of the plan used with ${Math.round(elapsed * 100)}% of the month elapsed.`,
+        message: '',
         link: '/',
         action: 'View dashboard',
+        fields: { spent_pct: Math.round(spent * 100), elapsed_pct: Math.round(elapsed * 100) },
       });
     }
   }
 
-  db.prepare('SELECT * FROM funds WHERE target_amount IS NOT NULL AND target_date IS NOT NULL')
+  db.prepare('SELECT * FROM funds WHERE target_amount IS NOT NULL AND target_amount > 0 AND target_date IS NOT NULL')
     .all()
     .forEach((fund) => {
-      if (fund.target_date < month) return;
       const balance = fundBalanceAt(fund, month);
-      const monthsLeft = monthsBetween(month, fund.target_date) + 1;
-      const monthlyNeed = Math.max(0, (fund.target_amount - balance) / Math.max(1, monthsLeft));
+      const missing = round2(fund.target_amount - balance);
+      if (missing <= 0.01) return; // goal reached
+
+      const late = Math.max(0, monthsBetween(fund.target_date, month));
+      if (late > 0) {
+        // overdue goals must not disappear silently
+        insights.push({
+          kind: 'fund-overdue',
+          severity: 'danger',
+          title: `${fund.name} goal is overdue`,
+          message: '',
+          link: '/funds',
+          action: 'Open funds',
+          fields: { missing, months_late: late },
+        });
+        return;
+      }
+
+      const monthsLeft = monthsLeftTo(month, fund.target_date);
+      const monthlyNeed = Math.max(0, missing / Math.max(1, monthsLeft));
       if (monthlyNeed > fund.monthly_contribution + 0.01) {
         insights.push({
           kind: 'fund-goal',
           severity: 'warning',
           title: `${fund.name} needs a higher contribution`,
-          message: `${eur(monthlyNeed)} per month needed to reach ${eur(fund.target_amount)} by ${fund.target_date}.`,
+          message: '',
           link: '/funds',
           action: 'Open funds',
+          fields: { monthly_needed: round2(monthlyNeed), target: fund.target_amount },
         });
       }
     });
@@ -329,10 +356,6 @@ function insightsForMonth(month, view) {
   }
 
   return { insights, notification_count: insights.length };
-}
-
-function eur(n) {
-  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n ?? 0);
 }
 
 // Full picture for one month (dashboard / reports)

@@ -44,6 +44,19 @@ export default function Dashboard() {
   const isCurrent = month === currentMonth();
   const now = new Date();
 
+  // Server sends raw numbers in `fields`; format here so amounts follow the
+  // currency chosen on the Settings page.
+  const insightText = (ins) => {
+    const f = ins.fields ?? {};
+    switch (ins.kind) {
+      case 'over-budget': return `${eur(f.amount_over)} over its planned budget.`;
+      case 'pace': return `${f.spent_pct}% of plan used · ${f.elapsed_pct}% of month elapsed.`;
+      case 'fund-goal': return `${eur(f.monthly_needed)} per month needed to reach ${eur(f.target)}.`;
+      case 'fund-overdue': return `${f.months_late} month${f.months_late === 1 ? '' : 's'} past target — still ${eur(f.missing)} short.`;
+      default: return ins.message || '';
+    }
+  };
+
   return (
     <div>
       <div className="page-head">
@@ -146,7 +159,7 @@ export default function Dashboard() {
                 </div>
                 <div className="insight-copy">
                   <strong>{insight.title}</strong>
-                  <p>{insight.message}</p>
+                  <p>{insightText(insight)}</p>
                   <Link to={insight.link}>{insight.action} <span aria-hidden="true">→</span></Link>
                 </div>
               </div>

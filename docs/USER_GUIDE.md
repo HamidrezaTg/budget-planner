@@ -74,6 +74,11 @@ The month at a glance. Use **← / Today / →** to change months — every figu
   Applied suggestions become learned rules too.
 - **Split** — divide one purchase across two or more categories. The parts must add up
   to the original amount. **Unsplit** removes the parts and restores the original.
+- **Attachments** — attach receipts/documents (PDF, PNG, JPEG, WebP, CSV; max 10 MB) to
+  any transaction via the paperclip button. Files are stored under `data/uploads` on
+  this machine and deleted with their transaction or individually.
+  Note: the Settings **backup downloads the database only** — attachment files must be
+  copied from `data/uploads/<username>/` separately when migrating to a new server.
 
 ## Budgets
 
@@ -96,6 +101,9 @@ For irregular bills: accrue monthly, withdraw when the bill lands.
   recorded movements. Contributions accrue automatically — you only record
   withdrawals (**Out**) when a bill actually arrives, and occasional extra deposits (**In**).
 - A **negative balance is a warning, not an error** — the bill arrived early.
+- **Goals** — set a target amount and optional date; the page shows progress, what is
+  still needed per month, and whether you are on track. Overdue goals raise a danger
+  card on the Dashboard.
 
 ## Commitments
 

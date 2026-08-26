@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { fundBalanceAt, currentMonth, addMonths, monthsBetween } from '../services/model.js';
+import { fundBalanceAt, currentMonth, addMonths, monthsBetween, monthsLeftTo } from '../services/model.js';
 
 const router = Router();
 
@@ -27,7 +27,7 @@ router.get('/', (req, res) => {
       let goal = null;
       if (f.target_amount != null && f.target_amount > 0) {
         const remaining = Math.max(0, f.target_amount - balance);
-        const monthsLeft = f.target_date ? Math.max(0, monthsBetween(month, f.target_date)) : null;
+        const monthsLeft = f.target_date ? monthsLeftTo(month, f.target_date) : null;
         goal = {
           target_amount: f.target_amount,
           target_date: f.target_date ?? null,

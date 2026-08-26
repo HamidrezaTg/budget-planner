@@ -20,9 +20,10 @@ export const api = {
   put: (path, body) => request(path, { method: 'PUT', body }),
   patch: (path, body) => request(path, { method: 'PATCH', body }),
   del: (path) => request(path, { method: 'DELETE' }),
-  upload: async (path, file) => {
+  upload: async (path, file, fields = {}) => {
     const fd = new FormData();
     fd.append('file', file);
+    for (const [key, value] of Object.entries(fields)) fd.append(key, String(value));
     const res = await fetch(`/api${path}`, {
       method: 'POST',
       credentials: 'same-origin',

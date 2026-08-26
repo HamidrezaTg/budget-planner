@@ -3,6 +3,26 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.3.0] — 2026-08-26
+
+### Added
+- **Transaction attachments** — attach receipts/documents (PDF, PNG, JPEG, WebP,
+  CSV; max 10 MB) via the paperclip control on Transactions; list, download,
+  preview images inline, delete; files live under `data/uploads/<user>/`, never in git
+
+### Fixed
+- Fund goals whose target date has passed now raise an overdue **danger** insight
+  instead of silently disappearing from the dashboard
+- Goal months-left math unified between the Funds page and dashboard insights
+  (inclusive of the current month)
+- Insight cards now carry raw numbers; amounts render client-side so they follow
+  the currency chosen in Settings
+- Funds page refuses goal saves without a positive target amount instead of
+  silently dropping the date
+- Rollover "previous month had activity" check ignores split-parent rows
+- In-app Help documents Recurring, splits, rollover, advanced rules, rule tester,
+  insights, and attachments
+
 ## [3.2.0] — 2026-08-26
 
 ### Added

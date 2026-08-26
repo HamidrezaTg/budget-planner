@@ -1,5 +1,7 @@
 import { Router } from 'express';
-import { db } from '../db.js';
+import { db, DATA_DIR } from '../db.js';
+import path from 'node:path';
+import fs from 'node:fs';
 import { learnRule, categorizeTransaction, createAutomationRule } from '../services/categorizer.js';
 
 const router = Router();
@@ -22,7 +24,8 @@ router.get('/', (req, res) => {
   const sql = `
     SELECT t.*, c.name AS category_name,
       (SELECT COUNT(*) FROM transactions x WHERE x.split_of = t.id) AS split_parts,
-      (SELECT description FROM transactions p WHERE p.id = t.split_of) AS split_parent_desc
+      (SELECT description FROM transactions p WHERE p.id = t.split_of) AS split_parent_desc,
+      (SELECT COUNT(*) FROM attachments a WHERE a.transaction_id = t.id) AS attachment_count
     FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     ORDER BY t.date DESC, t.id DESC
@@ -55,6 +58,18 @@ router.patch('/:id', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
+  // remove any attachment files first (FKs are not enforced, so no auto-cascade)
+  const files = db.prepare('SELECT filename FROM attachments WHERE transaction_id = ?').all(req.params.id);
+  if (files.length) {
+    const dir = path.join(DATA_DIR, 'uploads', req.username.replace(/[^a-zA-Z0-9_\-]/g, '_'));
+    for (const f of files) {
+      const resolved = path.resolve(dir, f.filename);
+      if (resolved.startsWith(path.resolve(dir) + path.sep)) {
+        try { fs.unlinkSync(resolved); } catch {}
+      }
+    }
+    db.prepare('DELETE FROM attachments WHERE transaction_id = ?').run(req.params.id);
+  }
   db.prepare('DELETE FROM transactions WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
