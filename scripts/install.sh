@@ -32,20 +32,24 @@ for arg in "$@"; do
   esac
 done
 
-if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
-  if [ -z "${GH_TOKEN:-}" ]; then
-    echo "Re-running with sudo — the token travels along via the environment."
-  fi
-  exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$0" "$@"
-fi
-
-# ---- token ------------------------------------------------------------
+# ---- token (resolved as the invoking user — root's gh is usually not logged in)
 if [ -z "${GH_TOKEN:-}" ]; then
-  echo "This repository is private — a GitHub token with 'Contents: read' access is required."
-  read -rsp "GitHub token: " GH_TOKEN
-  echo
+  # convenience: reuse a GitHub CLI login if present (gh auth login)
+  if command -v gh >/dev/null 2>&1 && gh auth token >/dev/null 2>&1; then
+    GH_TOKEN=$(gh auth token)
+  else
+    echo "This repository is private — authenticate with 'gh auth login' or provide a"
+    echo "fine-grained token (Contents: read-only)."
+    read -rsp "GitHub token: " GH_TOKEN
+    echo
+  fi
 fi
 AUTH=("Authorization: Bearer $GH_TOKEN")
+
+if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
+  echo "==> re-running with sudo (your GitHub login travels along)"
+  exec sudo -E GH_TOKEN="$GH_TOKEN" bash "$0" "$@"
+fi
 
 gh_api() {
   curl -fsSL -H "${AUTH[0]}" -H "Accept: application/vnd.github+json" "$@"
