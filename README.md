@@ -15,7 +15,7 @@ optional AI assistant (works with local models too).
 **Recommended — one line on any Debian/Ubuntu machine:**
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/HamidrezaTg/budget-planner/main/scripts/install.sh)"
+curl -fsSL https://raw.githubusercontent.com/HamidrezaTg/budget-planner/main/scripts/install.sh -o /tmp/bp-install.sh && bash /tmp/bp-install.sh
 ```
 
 The installer downloads the latest release, checks Node.js ≥ 22 (and offers to set it
