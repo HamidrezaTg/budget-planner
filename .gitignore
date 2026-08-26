@@ -10,6 +10,7 @@ dist/
 
 # android build outputs (mobile/)
 mobile/node_modules/
+mobile/local.properties
 mobile/android/.gradle/
 mobile/android/build/
 mobile/android/app/build/
