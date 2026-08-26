@@ -72,12 +72,18 @@
       btn.disabled = true;
       btn.textContent = 'Checking…';
       try {
-        const res = await fetch(url + '/api/auth/status', { signal: AbortSignal.timeout(6000) });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        // The launcher runs from the Capacitor origin, so probing the server is
+        // a cross-origin request: use no-cors (resolves when the host answers,
+        // rejects when it cannot be reached).
+        await fetch(url + '/api/auth/status', { mode: 'no-cors', signal: AbortSignal.timeout(8000) });
         localStorage.setItem(KEY, url);
         window.location.href = url + '/';
       } catch (e) {
-        err.textContent = 'Could not reach the server (' + (e.message || 'network error') + '). Check the address and that phone and server are on the same network / VPN.';
+        err.textContent =
+          'Could not reach ' + url + '. Check: the address is an IP like 192.168.x.x '
+          + '(a computer name like “lenovo” usually does not resolve on phones) '
+          + 'or lenovo.local; phone and server are on the same Wi-Fi or VPN; '
+          + 'and the server is running. To change the server later, clear the app’s storage.';
         btn.disabled = false;
         btn.textContent = 'Connect';
       }

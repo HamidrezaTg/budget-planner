@@ -2,6 +2,9 @@
   "appId": "com.hamidreza.budgetplanner",
   "appName": "Budget Planner",
   "webDir": "www",
+  "server": {
+    "allowNavigation": ["*"]
+  },
   "android": {
     "allowMixedContent": true
   }

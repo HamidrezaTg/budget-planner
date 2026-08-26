@@ -41,11 +41,19 @@ to it as clients — over your LAN or a VPN such as Tailscale:
 
 - **Android** — download `budget-planner-android.apk` from
   [Releases](https://github.com/HamidrezaTg/budget-planner/releases) and sideload it.
-  On first launch it asks for your server's address and remembers it. (A PWA install
-  via "Add to Home Screen" works too.)
+  On first launch it asks for the server's address — use the **IP form**
+  (`http://192.168.x.x:2026`; computer names rarely resolve on phones), it verifies
+  reachability and remembers it. To change the server later: Android Settings → Apps
+  → Budget Planner → Clear storage. (A PWA install via "Add to Home Screen" works too.)
 - **Linux desktop** — download `budget-planner-client_<version>_amd64.deb` from
-  Releases, or build both yourself with `scripts/build-apk.sh` and
-  `scripts/build-deb-client.sh` (see `scripts/` for requirements).
+  Releases (v3.8.3+ — the v3.8.0 package had a packaging bug showing the default
+  Electron page). Enter the server address on first launch; stored per user in
+  `~/.config/budget-planner-client/config.json`.
+- **Build them yourself** with `scripts/build-apk.sh` (needs a JDK) and
+  `scripts/build-deb-client.sh`.
+
+Connection problems (phone can't reach the server, wrong account list, hostname
+traps): see [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
 
 ## Running from source
 
@@ -125,6 +133,7 @@ without any AI.
 
 - [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — every page, button and section explained
 - [`docs/MATH.md`](docs/MATH.md) — the exact formulas behind every number, so you can trust them
+- [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — service won't start, devices can't connect, odd totals
 - [`CHANGELOG.md`](CHANGELOG.md) — release history
 
 ## Roadmap

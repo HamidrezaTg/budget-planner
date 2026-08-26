@@ -24,9 +24,11 @@ curl -fL --retry 2 -o "$ZIP" \
 unzip -q -o "$ZIP" -d "$STAGE/opt/budget-planner-client"
 rm "$ZIP"
 
-# application files + launcher binary name
-cp desktop-client/main.js desktop-client/preload.js desktop-client/setup.html desktop-client/package.json \
-   "$STAGE/opt/budget-planner-client/"
+# application files must live in resources/app — that is where the electron
+# binary looks for package.json; anything else shows the default welcome screen
+APP="$STAGE/opt/budget-planner-client/resources/app"
+mkdir -p "$APP"
+cp desktop-client/main.js desktop-client/preload.js desktop-client/setup.html desktop-client/package.json "$APP/"
 mv "$STAGE/opt/budget-planner-client/electron" "$STAGE/opt/budget-planner-client/budget-planner-client"
 chmod 755 "$STAGE/opt/budget-planner-client/budget-planner-client"
 
