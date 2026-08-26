@@ -3,6 +3,23 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.7.0] — 2026-08-26
+
+### Added
+- **Debian package** (`scripts/build-deb.sh` → `dist/*.deb`): ships server + built
+  client + production deps, systemd service with hardening as system user `budget`,
+  data in `/var/lib/budget-planner` (kept on remove, deleted on purge)
+- **Android APK build** (`scripts/build-apk.sh`): Capacitor native shell that loads
+  the planner server over LAN/Tailscale; auto-bootstraps the Android SDK and JDK
+  requirements documented in the README
+- Full end-to-end workflow test (21 checks) covering import → rules → dashboard →
+  rollover → income → recurrences → funds/goals → FX → snapshots → splits →
+  attachments → balances → **backup/restore round-trip** → password change → exports
+
+### Verified
+- Unauthenticated access returns 401 on every API mount; PWA assets serve correctly
+- Backup→restore survives the multer async-context pitfall (no user context leaks)
+
 ## [3.6.0] — 2026-08-26
 
 ### Added

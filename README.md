@@ -21,6 +21,32 @@ and manages users on the Users page.
 
 Development mode with hot reload: `npm run dev`.
 
+## Install as a service (Debian/Ubuntu)
+
+```bash
+./scripts/build-deb.sh                       # → dist/budget-planner_<ver>_all.deb
+sudo apt install ./dist/budget-planner_<ver>_all.deb
+```
+
+Runs as the system user `budget` via systemd, data in `/var/lib/budget-planner`,
+port 2026 (override in `/etc/default/budget-planner`). To reuse data from a manual
+install: stop the service, `sudo cp -a <old data>/. /var/lib/budget-planner/`,
+`sudo chown -R budget:budget /var/lib/budget-planner`, start the service.
+`sudo apt purge budget-planner` deletes the data directory; `remove` keeps it.
+
+## Android app
+
+The PWA already installs from the browser, but a native APK is available:
+
+```bash
+sudo apt install openjdk-21-jdk-headless     # once — needs a JDK, not just a JRE
+./scripts/build-apk.sh                       # auto-downloads the Android SDK
+./scripts/build-apk.sh http://192.168.1.10:2026   # or point at another server
+```
+
+Output: `dist/budget-planner-android.apk`. The app is a native shell that loads
+your planner server (home LAN or Tailscale) — cleartext HTTP is enabled for LAN use.
+
 ## The one-minute workflow
 
 1. **Import** your bank statement (Revolut exports work out of the box; anything else,

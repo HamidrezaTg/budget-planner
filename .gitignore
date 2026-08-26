@@ -6,6 +6,16 @@ data/
 
 # build output
 client/dist/
+dist/
+
+# android build outputs (mobile/)
+mobile/node_modules/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/.idea/
+mobile/android/capacitor-cordova-android-plugins/
 
 # environment & secrets
 .env

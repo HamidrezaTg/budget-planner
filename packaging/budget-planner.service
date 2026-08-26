@@ -1,0 +1,29 @@
+[Unit]
+Description=Budget Planner (self-hosted, per-user SQLite)
+After=network.target
+
+[Service]
+Type=simple
+User=budget
+Group=budget
+WorkingDirectory=/opt/budget-planner
+Environment=NODE_ENV=production
+EnvironmentFile=-/etc/default/budget-planner
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+RestartSec=3
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/budget-planner
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

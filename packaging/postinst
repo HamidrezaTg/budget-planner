@@ -1,0 +1,32 @@
+#!/bin/bash
+set -e
+
+# dedicated system user owns the data directory
+if ! id budget >/dev/null 2>&1; then
+  adduser --system --group --home /nonexistent --no-create-home --quiet budget
+fi
+mkdir -p /var/lib/budget-planner
+chown budget:budget /var/lib/budget-planner
+chmod 750 /var/lib/budget-planner
+
+systemctl daemon-reload || true
+deb-systemd-helper enable budget-planner.service >/dev/null || true
+
+echo "-------------------------------------------------------------"
+echo " Budget Planner installed."
+echo "   Service:  systemctl status budget-planner"
+echo "   URL:      http://localhost:2026"
+echo "   Data dir: /var/lib/budget-planner   (SQLite — back it up!)"
+echo
+echo " To reuse data from a manual installation, stop the service, copy"
+echo " your old data/ contents here and fix ownership, then start:"
+echo "   sudo systemctl stop budget-planner"
+echo "   sudo cp -a /path/to/old/data/. /var/lib/budget-planner/"
+echo "   sudo chown -R budget:budget /var/lib/budget-planner"
+echo "   sudo systemctl start budget-planner"
+echo "-------------------------------------------------------------"
+
+# start on fresh install and restart on upgrade
+if [ -d /run/systemd/system ]; then
+  deb-systemd-invoke restart budget-planner.service || true
+fi

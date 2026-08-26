@@ -1,0 +1,13 @@
+Package: budget-planner
+Version: 3.6.0
+Section: web
+Priority: optional
+Architecture: all
+Depends: nodejs (>= 22)
+Recommends: systemd
+Maintainer: HamidrezaTg <hamidreza@users.noreply.github.com>
+Description: Self-hosted multi-user budget planner
+ Private, local-first household budgeting: statement import with duplicate
+ protection, learning categorization, budgets with rollover, sinking funds,
+ 96-month projection, multi-currency reporting, month-end report snapshots,
+ attachments, and an installable PWA frontend. Data stays on this machine.

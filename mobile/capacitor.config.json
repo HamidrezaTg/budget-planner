@@ -1,0 +1,12 @@
+{
+  "appId": "com.hamidreza.budgetplanner",
+  "appName": "Budget Planner",
+  "webDir": "www",
+  "server": {
+    "url": "http://192.168.0.7:2026",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
