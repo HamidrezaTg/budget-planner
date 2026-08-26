@@ -202,6 +202,18 @@ CREATE TABLE IF NOT EXISTS category_rules (
   category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS recurrences (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  amount REAL NOT NULL,                      -- signed: negative = expense
+  day_of_month INTEGER NOT NULL,             -- 1..28
+  account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+  auto_post INTEGER NOT NULL DEFAULT 0,      -- post automatically when due
+  active INTEGER NOT NULL DEFAULT 1,
+  last_posted_month TEXT                     -- YYYY-MM of last auto/manual post
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

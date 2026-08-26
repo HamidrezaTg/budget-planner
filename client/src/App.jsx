@@ -21,6 +21,7 @@ import Chat from './pages/Chat.jsx';
 import Settings from './pages/Settings.jsx';
 import Help from './pages/Help.jsx';
 import Users from './pages/Users.jsx';
+import Recurring from './pages/Recurring.jsx';
 
 export default function App() {
   const [status, setStatus] = useState(null);
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="/categories" element={<Categories />} />
             <Route path="/import" element={<ImportPage />} />
             <Route path="/transactions" element={<Transactions />} />
+            <Route path="/recurring" element={<Recurring />} />
             <Route path="/funds" element={<Funds />} />
             <Route path="/commitments" element={<Commitments />} />
             <Route path="/income" element={<Income />} />

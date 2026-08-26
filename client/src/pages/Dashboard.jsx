@@ -15,9 +15,18 @@ const GROUP_COLORS = {
 export default function Dashboard() {
   const [month, setMonth] = useState(currentMonth());
   const [data, setData] = useState(null);
+  const [upcoming, setUpcoming] = useState(null);
 
   useEffect(() => {
     api.get(`/dashboard/${month}`).then(setData).catch(() => {});
+  }, [month]);
+
+  useEffect(() => {
+    if (month === currentMonth()) {
+      api.get('/recurrences').then((r) => setUpcoming(r.upcoming)).catch(() => {});
+    } else {
+      setUpcoming(null);
+    }
   }, [month]);
 
   if (!data) return <div className="loading">Loading…</div>;
@@ -111,6 +120,28 @@ export default function Dashboard() {
               <Link to="/budgets">{data.warnings.untagged_categories.join(', ')}</Link>
             </div>
           )}
+        </div>
+      )}
+
+      {isCurrent && upcoming?.length > 0 && (
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Coming up</p>
+              <h2>Expected this & next month</h2>
+            </div>
+            <span className="count-pill">{upcoming.length} items</span>
+          </div>
+          {upcoming.slice(0, 8).map((u, i) => (
+            <div key={i} className="bill-row">
+              <div className="bill-date"><strong>{String(u.day).padStart(2, '0')}</strong><span>{u.month.slice(5)}</span></div>
+              <div className="transaction-main">
+                <strong>{u.name}</strong>
+                <small>{u.auto_post ? 'auto-posts' : 'confirm on Recurring page'}</small>
+              </div>
+              <b className={u.amount >= 0 ? 'income' : ''}>{eur(u.amount)}</b>
+            </div>
+          ))}
         </div>
       )}
 

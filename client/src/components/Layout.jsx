@@ -16,6 +16,7 @@ const groups = [
     links: [
       { to: '/import', label: 'Import', glyph: '⇩' },
       { to: '/transactions', label: 'Transactions', glyph: '⇄' },
+      { to: '/recurring', label: 'Recurring', glyph: '↻' },
       { to: '/budgets', label: 'Budgets', glyph: '▤' },
       { to: '/income', label: 'Income', glyph: '↑' },
     ],
