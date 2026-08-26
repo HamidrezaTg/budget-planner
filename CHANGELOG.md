@@ -3,6 +3,23 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.8.0] — 2026-08-26
+
+### Added
+- **Client-only application architecture** — apps contain no backend and connect to
+  a server running elsewhere (the user's choice for multi-device use)
+- **Android APK** (`scripts/build-apk.sh`): pure Capacitor client; first launch asks
+  for the server address, validates reachability, remembers it; cleartext HTTP enabled
+  for LAN use. Built and verified (`dist/budget-planner-android.apk`).
+- **Linux desktop client** (`scripts/build-deb-client.sh`): Electron shell with a
+  connect-once setup screen, offline/lost-connection handling, and per-user server
+  address in `~/.config/budget-planner-client/config.json`. Application-menu entry
+  included.
+
+### Changed
+- The `budget-planner` Debian package remains the **server**; `budget-planner-client`
+  is the desktop client — install the server on one machine, clients everywhere else.
+
 ## [3.7.0] — 2026-08-26
 
 ### Added

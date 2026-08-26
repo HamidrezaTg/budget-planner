@@ -1,1 +1,89 @@
-<html><body><p>This app loads your Budget Planner server. Configure the URL in capacitor.config.json and rebuild.</p></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Budget Planner</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: #f5f3ec; color: #162037;
+    }
+    @media (prefers-color-scheme: dark) { body { background: #10162a; color: #e9edf8; } }
+    .card {
+      width: min(420px, calc(100vw - 40px));
+      background: #fffefa; border: 1px solid #e3e0d7; border-radius: 18px;
+      padding: 28px 24px; box-shadow: 0 12px 40px rgba(20,30,54,0.08);
+    }
+    @media (prefers-color-scheme: dark) { .card { background: #18213a; border-color: #26304a; } }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    p { font-size: 13px; line-height: 1.5; color: #72798a; margin: 0 0 16px; }
+    label { display: block; font-size: 11px; font-weight: 650; text-transform: uppercase;
+            letter-spacing: 0.1em; color: #72798a; margin-bottom: 6px; }
+    input {
+      width: 100%; padding: 11px 12px; font-size: 15px; border-radius: 10px;
+      border: 1px solid #c9c6bb; background: transparent; color: inherit;
+    }
+    button {
+      width: 100%; margin-top: 14px; padding: 12px; font-size: 15px; font-weight: 600;
+      border: 0; border-radius: 10px; background: #3157d5; color: #fff; cursor: pointer;
+    }
+    button:disabled { opacity: 0.55; }
+    .err { color: #ef6b6e; font-size: 12.5px; margin-top: 10px; min-height: 16px; }
+    .mark { width: 34px; height: 34px; border-radius: 9px; background: #c9ed52;
+            display: inline-flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 12px; }
+    .mark i { display: block; width: 3px; border-radius: 2px; background: #141e36; margin: 0 1.5px; }
+    .mark i:nth-child(1) { height: 12px; } .mark i:nth-child(2) { height: 16px; } .mark i:nth-child(3) { height: 9px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="mark"><i></i><i></i><i></i></span>
+    <h1>Budget Planner</h1>
+    <p>
+      This app is a client for your self-hosted planner. Enter the address of the machine
+      running the server — e.g. <b>http://192.168.1.10:2026</b> (home LAN) or your Tailscale
+      address. The server itself never runs on this device.
+    </p>
+    <label for="server">Server address</label>
+    <input id="server" type="url" inputmode="url" autocomplete="off"
+           placeholder="http://192.168.1.10:2026" />
+    <div class="err" id="err"></div>
+    <button id="go">Connect</button>
+  </div>
+  <script>
+    const KEY = 'bp-server-url';
+    const input = document.getElementById('server');
+    const err = document.getElementById('err');
+    const btn = document.getElementById('go');
+    const saved = localStorage.getItem(KEY);
+    if (saved) input.value = saved;
+
+    async function connect() {
+      let url = input.value.trim().replace(/\/+$/, '');
+      err.textContent = '';
+      if (!/^https?:\/\/.+/i.test(url)) {
+        err.textContent = 'Enter a full address starting with http:// or https://';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      try {
+        const res = await fetch(url + '/api/auth/status', { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        localStorage.setItem(KEY, url);
+        window.location.href = url + '/';
+      } catch (e) {
+        err.textContent = 'Could not reach the server (' + (e.message || 'network error') + '). Check the address and that phone and server are on the same network / VPN.';
+        btn.disabled = false;
+        btn.textContent = 'Connect';
+      }
+    }
+    btn.addEventListener('click', connect);
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && connect());
+  </script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Budget Planner — Connect</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: #f5f3ec; color: #162037;
+    }
+    @media (prefers-color-scheme: dark) { body { background: #10162a; color: #e9edf8; } }
+    .card {
+      width: min(460px, calc(100vw - 48px));
+      background: #fffefa; border: 1px solid #e3e0d7; border-radius: 18px;
+      padding: 30px 26px; box-shadow: 0 12px 40px rgba(20,30,54,0.08);
+    }
+    @media (prefers-color-scheme: dark) { .card { background: #18213a; border-color: #26304a; } }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    p { font-size: 13px; line-height: 1.55; color: #72798a; margin: 0 0 16px; }
+    label { display: block; font-size: 11px; font-weight: 650; text-transform: uppercase;
+            letter-spacing: 0.1em; color: #72798a; margin-bottom: 6px; }
+    input { width: 100%; padding: 11px 12px; font-size: 15px; border-radius: 10px;
+            border: 1px solid #c9c6bb; background: transparent; color: inherit; }
+    button { width: 100%; margin-top: 14px; padding: 12px; font-size: 15px; font-weight: 600;
+             border: 0; border-radius: 10px; background: #3157d5; color: #fff; cursor: pointer; }
+    button:disabled { opacity: 0.55; }
+    .err { color: #ef6b6e; font-size: 12.5px; margin-top: 10px; min-height: 16px; }
+    .mark { width: 34px; height: 34px; border-radius: 9px; background: #c9ed52;
+            display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+    .mark i { display: block; width: 3px; border-radius: 2px; background: #141e36; margin: 0 1.5px; }
+    .mark i:nth-child(1) { height: 12px; } .mark i:nth-child(2) { height: 16px; } .mark i:nth-child(3) { height: 9px; }
+    #offline { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="mark"><i></i><i></i><i></i></span>
+    <h1>Budget Planner</h1>
+    <p>
+      This is a client for your self-hosted planner. Enter the address of the machine
+      running the server — for example <b>http://192.168.1.10:2026</b> (home network)
+      or your Tailscale address. No backend runs inside this app.
+    </p>
+    <div id="offline">
+      <p style="color:#ef6b6e; margin-bottom:10px;" id="offlineMsg"></p>
+    </div>
+    <label for="server">Server address</label>
+    <input id="server" type="url" spellcheck="false" placeholder="http://192.168.1.10:2026" />
+    <div class="err" id="err"></div>
+    <button id="go">Connect</button>
+  </div>
+  <script>
+    const input = document.getElementById('server');
+    const err = document.getElementById('err');
+    const btn = document.getElementById('go');
+    const offline = document.getElementById('offline');
+    const offlineMsg = document.getElementById('offlineMsg');
+
+    window.plannerClient.getConfig().then(({ url }) => {
+      if (url) {
+        input.value = url;
+        offline.style.display = 'block';
+        offlineMsg.textContent = 'Could not reach ' + url + ' — check that the server is running, then retry or change the address.';
+      }
+    });
+    window.plannerClient.onLoadFailed((info) => {
+      offline.style.display = 'block';
+      offlineMsg.textContent = 'Lost connection to ' + (info.url || 'the server') + '. Retry or change the address below.';
+      input.value = info.url || input.value;
+    });
+
+    async function connect() {
+      err.textContent = '';
+      btn.disabled = true; btn.textContent = 'Checking…';
+      let url = input.value.trim().replace(/\/+$/, '');
+      try {
+        if (!/^https?:\/\/.+/i.test(url)) throw new Error('Enter a full address starting with http:// or https://');
+        const res = await fetch(url + '/api/auth/status', { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        await window.plannerClient.saveUrl(url);
+      } catch (e) {
+        err.textContent = e.message.includes('Failed to fetch')
+          ? 'Could not reach the server — check the address and that this computer can reach it.'
+          : e.message;
+        btn.disabled = false; btn.textContent = 'Connect';
+      }
+    }
+    btn.addEventListener('click', connect);
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && connect());
+  </script>
+</body>
+</html>

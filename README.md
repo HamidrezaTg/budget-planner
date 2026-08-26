@@ -34,18 +34,32 @@ install: stop the service, `sudo cp -a <old data>/. /var/lib/budget-planner/`,
 `sudo chown -R budget:budget /var/lib/budget-planner`, start the service.
 `sudo apt purge budget-planner` deletes the data directory; `remove` keeps it.
 
-## Android app
+## Android app (client)
 
-The PWA already installs from the browser, but a native APK is available:
+The APK is a **pure client** — no backend inside. On first launch it asks for your
+server's address (LAN IP or Tailscale), remembers it, and loads the planner from there.
 
 ```bash
 sudo apt install openjdk-21-jdk-headless     # once — needs a JDK, not just a JRE
-./scripts/build-apk.sh                       # auto-downloads the Android SDK
-./scripts/build-apk.sh http://192.168.1.10:2026   # or point at another server
+./scripts/build-apk.sh                       # -> dist/budget-planner-android.apk
 ```
 
-Output: `dist/budget-planner-android.apk`. The app is a native shell that loads
-your planner server (home LAN or Tailscale) — cleartext HTTP is enabled for LAN use.
+Install with `adb install` or by copying the APK to the phone (allow "unknown sources").
+
+## Desktop client (Linux)
+
+A client-only desktop app (Electron shell, no backend) that connects to your server:
+
+```bash
+./scripts/build-deb-client.sh                # -> dist/budget-planner-client_<ver>_amd64.deb
+sudo apt install ./dist/budget-planner-client_<ver>_amd64.deb
+```
+
+Find "Budget Planner" in your application menu; enter the server address on first
+launch. Stored per user in `~/.config/budget-planner-client/config.json`.
+
+The server itself is the `budget-planner` package above — install it on exactly one
+machine (home server, mini PC, ...); phones, tablets and desktops all connect as clients.
 
 ## The one-minute workflow
 
