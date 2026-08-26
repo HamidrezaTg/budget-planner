@@ -2,8 +2,9 @@
 # ============================================================
 # Budget Planner — one-line installer for the SERVER (.deb)
 #
-# Works with a PRIVATE GitHub repository: you authenticate with
-# a fine-grained personal access token (Contents: read-only).
+# Works without authentication against the public repository. If the
+# repository is private, it falls back to 'gh auth login' or a fine-grained
+# personal access token (Contents: read-only).
 #
 # Usage:
 #   GH_TOKEN=github_pat_xxxx bash -c "$(curl -fsSL \
@@ -32,39 +33,41 @@ for arg in "$@"; do
   esac
 done
 
-# ---- token (resolved as the invoking user — root's gh is usually not logged in)
-if [ -z "${GH_TOKEN:-}" ]; then
-  # convenience: reuse a GitHub CLI login if present (gh auth login)
-  if command -v gh >/dev/null 2>&1 && gh auth token >/dev/null 2>&1; then
-    GH_TOKEN=$(gh auth token)
+# ---- release fetch: anonymous first (repo is public), token only if needed
+fetch_release() {
+  local url="https://api.github.com/repos/$REPO/releases/latest"
+  [ -n "$WANT_VERSION" ] && url="https://api.github.com/repos/$REPO/releases/tags/v$WANT_VERSION"
+  if [ -n "${GH_TOKEN:-}" ]; then
+    curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$url" 2>/dev/null
   else
-    echo "This repository is private — authenticate with 'gh auth login' or provide a"
-    echo "fine-grained token (Contents: read-only)."
-    read -rsp "GitHub token: " GH_TOKEN
-    echo
+    curl -fsSL -H "Accept: application/vnd.github+json" "$url" 2>/dev/null
   fi
+}
+
+acquire_token() {
+  # private-repo fallback: GitHub CLI login or a fine-grained token
+  if [ -z "${GH_TOKEN:-}" ]; then
+    if command -v gh >/dev/null 2>&1 && gh auth token >/dev/null 2>&1; then
+      GH_TOKEN=$(gh auth token)
+    else
+      echo "The repository is not publicly reachable — authenticate with 'gh auth login'"
+      echo "or provide a fine-grained token (Contents: read-only)."
+      read -rsp "GitHub token: " GH_TOKEN
+      echo
+    fi
+  fi
+}
+
+echo "==> fetching release info"
+RELEASE_JSON=$(fetch_release || true)
+if [ -z "$RELEASE_JSON" ]; then
+  acquire_token
+  RELEASE_JSON=$(fetch_release) || { echo "ERROR: could not fetch releases even with authentication." >&2; exit 1; }
 fi
-AUTH=("Authorization: Bearer $GH_TOKEN")
 
 if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
   echo "==> re-running with sudo (your GitHub login travels along)"
-  exec sudo -E GH_TOKEN="$GH_TOKEN" bash "$0" "$@"
-fi
-
-gh_api() {
-  curl -fsSL -H "${AUTH[0]}" -H "Accept: application/vnd.github+json" "$@"
-}
-
-# ---- pick release -----------------------------------------------------
-if [ -n "$WANT_VERSION" ]; then
-  echo "==> fetching release $WANT_VERSION"
-  RELEASE_JSON=$(gh_api "https://api.github.com/repos/$REPO/releases/tags/v$WANT_VERSION")
-else
-  echo "==> fetching latest release"
-  RELEASE_JSON=$(gh_api "https://api.github.com/repos/$REPO/releases/latest") || {
-    echo "ERROR: could not fetch releases. Check your token (needs 'Contents: read' on $REPO)." >&2
-    exit 1
-  }
+  exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$0" "$@"
 fi
 
 TAG=$(echo "$RELEASE_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{console.log(JSON.parse(d).tag_name||'')})" 2>/dev/null || true)
@@ -121,8 +124,13 @@ fi
 # ---- download + install ----------------------------------------------
 OUT="/tmp/$ASSET_NAME"
 echo "==> downloading $ASSET_NAME"
-curl -fSL -H "${AUTH[0]}" -H "Accept: application/octet-stream" \
-  -o "$OUT" "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
+if [ -n "${GH_TOKEN:-}" ]; then
+  curl -fSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" \
+    -o "$OUT" "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
+else
+  curl -fSL -H "Accept: application/octet-stream" \
+    -o "$OUT" "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
+fi
 [ "$(stat -c%s "$OUT")" -gt 10000 ] || { echo "ERROR: download too small — token or asset problem." >&2; exit 1; }
 
 echo "==> installing $ASSET_NAME"
