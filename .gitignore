@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+
+# user data — databases, uploads, backups (never commit personal data)
+data/
+
+# build output
+client/dist/
+
+# environment & secrets
+.env
+.env.*
+
+# logs & OS noise
+*.log
+.DS_Store
+Thumbs.db

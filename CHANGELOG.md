@@ -1,0 +1,64 @@
+# Changelog
+
+All notable changes to the Budget Planner are documented here.
+The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
+
+## [2.0.0] — 2026-08-26
+
+The complete rebuild of the original single-user planner into a multi-user,
+household-grade budgeting system.
+
+### Added
+- **Multi-user with private databases** — username + password login; every user
+  gets their own SQLite database; admin account manages users (add, reset
+  password, delete) from a dedicated Users page
+- **Household money model** — persons, multiple accounts (bank + spending card),
+  category groups, per-month budget overrides, commitments with start/end months
+- **Sinking funds** — monthly accrual with In/Out movement ledger; negative
+  balances surfaced as warnings
+- **96-month projection** — commitments drop out at end dates; free vs committed
+  savings split; **re-anchoring reconciliation** against manually entered real
+  bank balances
+- **Actual income tracking** — per person/source, actual vs usual amounts
+- **AI layer** (any OpenAI-compatible provider: OpenAI, Anthropic, OpenRouter,
+  Groq, DeepSeek, Mistral, Together, Ollama, LM Studio, custom):
+  - AI category suggestions with per-item / bulk (≥80% confidence) apply
+  - AI file doctor — detects the format of arbitrary bank exports and converts
+    them for import
+  - Read-only finance chat over a strictly guarded SELECT-only SQL tool
+  - Guarded dev-mode chat — whitelisted change proposals, human-readable diffs,
+    explicit apply, full audit log
+- **Data safety** — full database backup download, backup restore with
+  validation, spending-data reset (keeps budget)
+- **Settings** — light/dark theme, currency selection, password change
+- **In-app Help** page documenting every page and button
+
+### Import engine
+- CSV/XLSX auto-detection (handles Revolut's ".csv that is actually Excel")
+- Only COMPLETED rows import; pendings from previous months treated as
+  completed; current-month pendings and REVERTED rows skipped
+- Duplicate blocking via date+amount+description key
+- Pre-confirm preview with per-row status
+
+### Design
+- "Clarity" theme: warm paper light mode + navy dark mode, navy sidebar with
+  profile block, glyph navigation, collapsible menu, editorial serif headings
+- Custom modals and toast notifications (no native browser dialogs)
+
+### Fixed
+- Timezone-shifting dates on XLSX import (Excel serials now converted in UTC)
+- Stale-cache white screens (index.html never cached; hashed assets immutable)
+
+## [1.0.0] — 2026-08 (pre-git, superseded by 2.0.0)
+
+The original single-user planner. Its concepts live on inside 2.0.0:
+
+- Revolut statement import (CSV/XLSX) with state filtering and dedupe
+- Learning keyword categorization ("needs review" queue)
+- Monthly budgets with spent-vs-plan tracking
+- Per-category savings envelopes (predecessor of sinking funds)
+- Monthly & yearly reports with CSV export
+- Single password login on localhost:2026
+
+Version 1 was fully rebuilt into 2.0.0; its code was not preserved as a
+separate tag.

@@ -1,0 +1,87 @@
+import crypto from 'node:crypto';
+import { master, getUserDb, als, isAdmin } from './db.js';
+
+const COOKIE = 'bp_session';
+
+export function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+export function createUser(username, password, role = 'user') {
+  const name = String(username ?? '').trim().toLowerCase();
+  if (!/^[a-z0-9_.-]{2,32}$/.test(name))
+    throw new Error('Username must be 2–32 chars: letters, numbers, . _ -');
+  if (!password || password.length < 4)
+    throw new Error('Password must be at least 4 characters');
+  master
+    .prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)')
+    .run(name, hashPassword(password), role);
+  // admin-created users start from a neutral setup; the first (admin) account
+  // gets the household seed
+  getUserDb(name, { generic: role !== 'admin' });
+  return name;
+}
+
+// Admin-only guard, used after requireAuth.
+export function requireAdmin(req, res, next) {
+  if (!isAdmin(req.username)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+}
+
+export function verifyLogin(username, password) {
+  const row = master
+    .prepare('SELECT username, password_hash FROM users WHERE username = ?')
+    .get(String(username ?? '').trim().toLowerCase());
+  if (!row) return null;
+  const [salt, hash] = row.password_hash.split(':');
+  const check = crypto.scryptSync(password ?? '', salt, 64).toString('hex');
+  if (crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(check, 'hex'))) {
+    return row.username;
+  }
+  return null;
+}
+
+export function userExists(username) {
+  return !!master.prepare('SELECT 1 FROM users WHERE username = ?').get(username);
+}
+
+export function changePassword(username, currentPassword, newPassword) {
+  if (!verifyLogin(username, currentPassword))
+    throw new Error('Current password is wrong');
+  if (!newPassword || newPassword.length < 4)
+    throw new Error('New password must be at least 4 characters');
+  master
+    .prepare('UPDATE users SET password_hash = ? WHERE username = ?')
+    .run(hashPassword(newPassword), username);
+}
+
+export function createSession(res, username) {
+  const token = crypto.randomBytes(32).toString('hex');
+  master.prepare('INSERT INTO sessions (token, username) VALUES (?, ?)').run(token, username);
+  res.cookie(COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 3600 * 1000,
+  });
+}
+
+export function destroySession(req, res) {
+  const token = req.cookies?.[COOKIE];
+  if (token) master.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+  res.clearCookie(COOKIE);
+}
+
+// Validates the session and enters the AsyncLocalStorage context for this
+// user's database — every handler downstream can just use the `db` proxy.
+export function requireAuth(req, res, next) {
+  const token = req.cookies?.[COOKIE];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  const sess = master.prepare('SELECT username FROM sessions WHERE token = ?').get(token);
+  if (!sess) return res.status(401).json({ error: 'Unauthorized' });
+  req.username = sess.username;
+  als.run(getUserDb(sess.username), next);
+}
