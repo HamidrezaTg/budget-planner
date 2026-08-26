@@ -75,7 +75,7 @@ if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
   SELF="$0"
   if [ ! -f "$SELF" ]; then
     SELF="/tmp/budget-planner-install.sh"
-    curl -fsSL "https://raw.githubusercontent.com/$REPO/main/scripts/install.sh" -o "$SELF"
+    curl -fsSL "https://raw.githubusercontent.com/$REPO/main/scripts/install.sh?v=$(date +%s)" -o "$SELF"
   fi
   exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$SELF" "$@"
 fi
