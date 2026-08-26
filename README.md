@@ -23,6 +23,26 @@ Development mode with hot reload: `npm run dev`.
 
 ## Install as a service (Debian/Ubuntu)
 
+### One-line install (works while the repo is private)
+
+1. Create a **fine-grained personal access token**: GitHub → Settings → Developer
+   settings → Fine-grained tokens → *Generate* → repository access: `budget-planner` →
+   permission **Contents: read-only**.
+2. Run (replace the token in **both** places):
+
+```bash
+GH_TOKEN=github_pat_xxxx bash -c "$(curl -fsSL \
+  -H 'Authorization: Bearer github_pat_xxxx' \
+  https://raw.githubusercontent.com/HamidrezaTg/budget-planner/main/scripts/install.sh)"
+```
+
+The installer downloads the latest server `.deb` from GitHub Releases, checks
+Node.js ≥ 22 (offers to install it), and installs the service. Add `-- --client`
+to install the desktop client instead. Once the repo goes public, the token can
+be dropped from both places.
+
+### Manual install
+
 ```bash
 ./scripts/build-deb.sh                       # → dist/budget-planner_<ver>_all.deb
 sudo apt install ./dist/budget-planner_<ver>_all.deb

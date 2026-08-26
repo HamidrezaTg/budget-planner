@@ -25,11 +25,12 @@ cp package.json package-lock.json "$STAGE/opt/budget-planner/"
 echo "==> npm ci --omit=dev"
 ( cd "$STAGE/opt/budget-planner" && npm ci --omit=dev --no-audit --no-fund --loglevel=error )
 
-# deb control files + service + defaults
+# deb control files + service + defaults (version stamped from package.json)
 for f in control postinst prerm postrm; do
   cp "packaging/$f" "$STAGE/DEBIAN/$f"
   chmod 755 "$STAGE/DEBIAN/$f"
 done
+sed -i "s/^Version: .*/Version: $VERSION/" "$STAGE/DEBIAN/control"
 cp packaging/budget-planner.service "$STAGE/lib/systemd/system/"
 cp packaging/budget-planner.default "$STAGE/etc/default/budget-planner"
 chmod 644 "$STAGE/etc/default/budget-planner"
