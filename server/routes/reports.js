@@ -35,7 +35,7 @@ router.get('/yearly/:year', (req, res) => {
       .prepare(
         `SELECT COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END),0) AS income,
                 COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END),0) AS expenses
-         FROM transactions WHERE substr(date,1,7) = ?`
+         FROM transactions WHERE substr(date,1,7) = ? AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
       )
       .get(m);
     months.push({ month: m, expenses: t.expenses, income: t.income });
@@ -46,7 +46,7 @@ router.get('/yearly/:year', (req, res) => {
       `SELECT COALESCE(c.name, 'Uncategorized') AS name,
               SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END) AS spent
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
-       WHERE substr(t.date,1,4) = ? AND t.amount < 0 GROUP BY c.id ORDER BY spent`
+       WHERE substr(t.date,1,4) = ? AND t.amount < 0 AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) GROUP BY c.id ORDER BY spent`
     )
     .all(year);
 
@@ -54,14 +54,14 @@ router.get('/yearly/:year', (req, res) => {
     .prepare(
       `SELECT COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END),0) AS income,
               COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END),0) AS expenses
-       FROM transactions WHERE substr(date,1,4) = ?`
+       FROM transactions WHERE substr(date,1,4) = ? AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
     )
     .get(year);
 
   const prev = db
     .prepare(
       `SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END),0) AS expenses
-       FROM transactions WHERE substr(date,1,4) = ?`
+       FROM transactions WHERE substr(date,1,4) = ? AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
     )
     .get(String(Number(year) - 1));
 
@@ -87,7 +87,7 @@ const exportMonthly = (req, res) => {
     .prepare(
       `SELECT t.date, t.description, t.amount, t.currency, COALESCE(c.name,'Uncategorized') AS category
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
-       WHERE substr(t.date,1,7) = ? ORDER BY t.date`
+       WHERE substr(t.date,1,7) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) ORDER BY t.date`
     )
     .all(month);
   sendCsv(res, `report-${month}.csv`, rows);
@@ -100,7 +100,7 @@ const exportYearly = (req, res) => {
     .prepare(
       `SELECT t.date, t.description, t.amount, t.currency, COALESCE(c.name,'Uncategorized') AS category
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
-       WHERE substr(t.date,1,4) = ? ORDER BY t.date`
+       WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) ORDER BY t.date`
     )
     .all(year);
   sendCsv(res, `report-${year}.csv`, rows);

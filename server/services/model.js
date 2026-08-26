@@ -55,7 +55,7 @@ function actualForCategoryMonth(categoryId, month) {
   return (
     db
       .prepare(
-        'SELECT COALESCE(SUM(amount),0) AS s FROM transactions WHERE category_id = ? AND substr(date,1,7) = ?'
+        `SELECT COALESCE(SUM(amount),0) AS s FROM transactions WHERE category_id = ? AND substr(date,1,7) = ? AND ${NOT_PARENT('transactions')}`
       )
       .get(categoryId, month).s * -1
   );
@@ -73,6 +73,11 @@ export function getAllCategories() {
     .all();
 }
 
+// A split parent (has split_group, no split_of) is excluded from all category
+// sums — its children carry the amounts.
+const NOT_PARENT = (alias = 't') =>
+  `NOT (${alias}.split_of IS NULL AND ${alias}.split_group IS NOT NULL)`;
+
 // Actual spending per category in a month, NET of refunds (spec §3.5):
 // negative amounts are spend, positive ones (refunds) offset the same category.
 export function actualByCategory(month) {
@@ -80,7 +85,7 @@ export function actualByCategory(month) {
     .prepare(
       `SELECT category_id, SUM(amount) AS net
        FROM transactions
-       WHERE substr(date,1,7) = ? AND category_id IS NOT NULL
+       WHERE substr(date,1,7) = ? AND category_id IS NOT NULL AND ${NOT_PARENT('transactions')}
        GROUP BY category_id`
     )
     .all(month);

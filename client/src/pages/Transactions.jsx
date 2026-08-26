@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, eur, currentMonth, monthLabel } from '../api.js';
+import { useDialogs } from '../components/Dialog.jsx';
 
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
@@ -12,6 +13,10 @@ export default function Transactions() {
   const [suggestions, setSuggestions] = useState(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState('');
+  const [splitTx, setSplitTx] = useState(null);
+  const [splitParts, setSplitParts] = useState([]);
+  const [splitError, setSplitError] = useState('');
+  const { confirm } = useDialogs();
 
   const load = () => {
     const q = new URLSearchParams();
@@ -54,6 +59,39 @@ export default function Transactions() {
   };
 
   const sugFor = (txId) => suggestions?.find((s) => s.id === txId);
+
+  const openSplit = (tx) => {
+    setSplitTx(tx);
+    setSplitParts([
+      { category_id: '', amount: '' },
+      { category_id: '', amount: '' },
+    ]);
+    setSplitError('');
+  };
+
+  const submitSplit = async () => {
+    setSplitError('');
+    const parts = splitParts.filter((p) => p.category_id && Number(p.amount));
+    try {
+      await api.post(`/transactions/${splitTx.id}/split`, { parts });
+      setSplitTx(null);
+      load();
+    } catch (e) {
+      setSplitError(e.message);
+    }
+  };
+
+  const unsplit = async (tx) => {
+    const ok = await confirm({
+      title: 'Undo this split?',
+      message: 'The parts are removed and the original full amount returns to "needs review".',
+      danger: true,
+      confirmLabel: 'Undo split',
+    });
+    if (!ok) return;
+    await api.post(`/transactions/${tx.id}/unsplit`);
+    load();
+  };
 
   const applyMany = async (minConfidence) => {
     const list = suggestions.filter((s) => s.confidence >= minConfidence);
@@ -130,13 +168,29 @@ export default function Transactions() {
                 <td>
                   {tx.description}
                   {tx.tx_type && <span className="muted type-tag">{tx.tx_type}</span>}
+                  {tx.split_parts > 0 && (
+                    <span className="pill-badge accent-badge">split · {tx.split_parts}</span>
+                  )}
+                  {tx.split_of && (
+                    <span className="muted tiny" title={tx.split_parent_desc}>
+                      part of {tx.split_parent_desc}
+                    </span>
+                  )}
                 </td>
                 <td className={tx.amount >= 0 ? 'income' : 'expense'}>{eur(tx.amount)}</td>
                 <td>
                   {tx.category_name && !tx.needs_review ? (
-                    <span className="cat-chip" style={{ background: tx.category_color || '#5E8BD9' }}>
-                      {tx.category_name}
-                    </span>
+                    <div className="assign">
+                      <span className="cat-chip" style={{ background: tx.category_color || '#5E8BD9' }}>
+                        {tx.category_name}
+                      </span>
+                      {tx.split_parts > 0 && (
+                        <button className="btn ghost small" onClick={() => unsplit(tx)}>Unsplit</button>
+                      )}
+                      {!tx.split_of && !tx.split_group && (
+                        <button className="btn ghost small" onClick={() => openSplit(tx)}>Split</button>
+                      )}
+                    </div>
                   ) : sugFor(tx.id) ? (
                     <div className="assign">
                       <span className="cat-chip ai-chip">
@@ -166,6 +220,58 @@ export default function Transactions() {
           </tbody>
         </table>
       </div>
+
+      {splitTx && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setSplitTx(null)}>
+          <div className="modal-card" style={{ width: 520 }}>
+            <h3 className="modal-title">Split — {splitTx.description}</h3>
+            <p className="modal-message">
+              Original amount: <b className={splitTx.amount >= 0 ? 'income' : 'expense'}>{eur(splitTx.amount)}</b> ·
+              parts must add up to it.
+            </p>
+            {splitParts.map((p, i) => (
+              <div key={i} className="split-row">
+                <select
+                  value={p.category_id}
+                  onChange={(e) => {
+                    const next = [...splitParts];
+                    next[i] = { ...p, category_id: e.target.value };
+                    setSplitParts(next);
+                  }}
+                >
+                  <option value="">Category…</option>
+                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <input
+                  type="number" step="0.01" placeholder="Amount"
+                  value={p.amount}
+                  onChange={(e) => {
+                    const next = [...splitParts];
+                    next[i] = { ...p, amount: e.target.value };
+                    setSplitParts(next);
+                  }}
+                />
+                {splitParts.length > 2 && (
+                  <button className="btn ghost small" onClick={() => setSplitParts(splitParts.filter((_, j) => j !== i))}>✕</button>
+                )}
+              </div>
+            ))}
+            <div className="split-summary">
+              <span className={Math.abs(splitParts.reduce((s, p) => s + (Number(p.amount) || 0), 0) - splitTx.amount) <= 0.01 ? 'good' : 'bad'}>
+                {eur(splitParts.reduce((s, p) => s + (Number(p.amount) || 0), 0))} of {eur(splitTx.amount)}
+              </span>
+              <button className="btn ghost small" onClick={() => setSplitParts([...splitParts, { category_id: '', amount: '' }])}>
+                + Add part
+              </button>
+            </div>
+            {splitError && <div className="error" style={{ margin: '8px 0' }}>{splitError}</div>}
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={() => setSplitTx(null)}>Cancel</button>
+              <button className="btn primary" onClick={submitSplit}>Save split</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

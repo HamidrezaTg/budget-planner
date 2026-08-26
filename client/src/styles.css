@@ -676,3 +676,7 @@ select.missing { color: var(--orange); border-color: rgba(233, 162, 59, 0.45); }
 /* ---------- fund goals ---------- */
 .goal-line { display: flex; align-items: center; gap: 8px; }
 .goal-edit { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+
+/* ---------- split editor ---------- */
+.split-row { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; margin-bottom: 8px; align-items: center; }
+.split-summary { display: flex; justify-content: space-between; align-items: center; margin: 10px 0 4px; font-family: var(--font-mono); font-size: 13px; }

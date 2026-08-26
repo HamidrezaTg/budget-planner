@@ -20,7 +20,9 @@ router.get('/', (req, res) => {
   }
 
   const sql = `
-    SELECT t.*, c.name AS category_name
+    SELECT t.*, c.name AS category_name,
+      (SELECT COUNT(*) FROM transactions x WHERE x.split_of = t.id) AS split_parts,
+      (SELECT description FROM transactions p WHERE p.id = t.split_of) AS split_parent_desc
     FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     ORDER BY t.date DESC, t.id DESC
@@ -54,6 +56,63 @@ router.patch('/:id', (req, res) => {
 
 router.delete('/:id', (req, res) => {
   db.prepare('DELETE FROM transactions WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ------------------------------------------------------------- splits
+// Split a transaction into parts across categories. The original row becomes
+// a parent that is excluded from all sums; children carry the amounts.
+router.post('/:id/split', (req, res) => {
+  const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
+  if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+  if (tx.split_group) return res.status(400).json({ error: 'Transaction is already split (or a split part)' });
+
+  const parts = req.body?.parts;
+  if (!Array.isArray(parts) || parts.length < 2)
+    return res.status(400).json({ error: 'Provide at least two parts' });
+
+  const sum = parts.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  if (Math.abs(sum - tx.amount) > 0.01)
+    return res.status(400).json({
+      error: `Parts sum to ${sum.toFixed(2)} but the transaction is ${tx.amount.toFixed(2)}`,
+    });
+  for (const p of parts) {
+    if (!p.category_id || !db.prepare('SELECT id FROM categories WHERE id = ?').get(p.category_id))
+      return res.status(400).json({ error: 'Every part needs a valid category' });
+    if (!Number(p.amount)) return res.status(400).json({ error: 'Part amounts must be non-zero' });
+  }
+
+  const group = `split-${tx.id}-${Date.now()}`;
+  const ins = db.prepare(
+    `INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key, split_group, split_of)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
+  );
+  db.exec('BEGIN');
+  try {
+    parts.forEach((p, i) => {
+      ins.run(
+        tx.date, tx.description, Number(p.amount), tx.tx_type, tx.currency,
+        tx.account_id, Number(p.category_id), `split:${tx.id}`, `split|${tx.id}|${i}`,
+        group, tx.id
+      );
+    });
+    db.prepare('UPDATE transactions SET split_group = ? WHERE id = ?').run(group, tx.id);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+  res.json({ ok: true, parts: parts.length });
+});
+
+// Undo a split: remove children, clear the parent.
+router.post('/:id/unsplit', (req, res) => {
+  const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
+  if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+  if (!tx.split_group) return res.status(400).json({ error: 'Not split' });
+  if (tx.split_of) return res.status(400).json({ error: 'This is a split part — delete it instead' });
+  db.prepare('DELETE FROM transactions WHERE split_of = ?').run(tx.id);
+  db.prepare('UPDATE transactions SET split_group = NULL WHERE id = ?').run(tx.id);
   res.json({ ok: true });
 });
 

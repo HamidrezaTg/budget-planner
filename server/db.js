@@ -194,7 +194,9 @@ CREATE TABLE IF NOT EXISTS transactions (
   category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   needs_review INTEGER NOT NULL DEFAULT 0,
   source_file TEXT,
-  dedup_key TEXT NOT NULL UNIQUE
+  dedup_key TEXT NOT NULL UNIQUE,
+  split_group TEXT,                          -- set on all parts of a split
+  split_of INTEGER REFERENCES transactions(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_tx_cat ON transactions(category_id);
@@ -225,11 +227,25 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS ai_audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  kind TEXT NOT NULL,              -- 'read_sql' | 'proposal' | 'applied' | 'suggest' | 'import_fix'
+  kind TEXT NOT NULL,
   detail TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'ok'
 );
 `);
+
+// migrations for databases created before the split feature
+for (const col of ['split_group TEXT', 'split_of INTEGER REFERENCES transactions(id) ON DELETE CASCADE']) {
+  try {
+    db.exec(`ALTER TABLE transactions ADD COLUMN ${col}`);
+  } catch {}
+}
+try {
+  db.exec('ALTER TABLE categories ADD COLUMN roll_overs INTEGER NOT NULL DEFAULT 0');
+} catch {}
+try {
+  db.exec('ALTER TABLE funds ADD COLUMN target_amount REAL');
+  db.exec('ALTER TABLE funds ADD COLUMN target_date TEXT');
+} catch {}
 
   const seed = db.prepare('SELECT COUNT(*) AS c FROM categories').get().c;
   if (seed === 0) seedGeneric(db);
