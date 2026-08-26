@@ -8,6 +8,7 @@ User=budget
 Group=budget
 WorkingDirectory=/opt/budget-planner
 Environment=NODE_ENV=production
+Environment=DATA_DIR=/var/lib/budget-planner
 EnvironmentFile=-/etc/default/budget-planner
 ExecStart=/usr/bin/node server/index.js
 Restart=on-failure

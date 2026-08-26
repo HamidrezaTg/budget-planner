@@ -136,7 +136,10 @@ BIND_IP=""
 ADMIN_NAME=""
 ADMIN_PW=""
 
-if [ "$WANT_CLIENT" != "1" ] && [ "$QUIET" != "1" ] && [ -t 0 ]; then
+# sudo does not always keep a tty; remember interactivity from the caller
+if [ -t 0 ]; then export BP_WANT_MENU=1; fi
+
+if [ "$WANT_CLIENT" != "1" ] && [ "$QUIET" != "1" ] && { [ -t 0 ] || [ "${BP_WANT_MENU:-}" = "1" ]; }; then
   RECONFIGURE=""
   if [ -f "$DEFAULTS_FILE" ] && grep -q '^PORT=' "$DEFAULTS_FILE" 2>/dev/null; then
     read -rp "Existing configuration found. Reconfigure? [y/N] " reconf
@@ -245,7 +248,7 @@ echo " Budget Planner server: $STATE"
 echo "   Data dir: /var/lib/budget-planner   (SQLite — back it up!)"
 [ "$STATE" = "running" ] || { echo "============================================================="; exit 0; }
 echo
-[ -n "$ADMIN_DONE" ] && echo "   Admin account: $ADMIN_NAME (log in with it right away)" \
+[ -n "${ADMIN_DONE:-}" ] && echo "   Admin account: $ADMIN_NAME (log in with it right away)" \
                      || echo "   First step: open the URL below and create your account"
 echo "   This machine:  http://localhost:$PORT"
 [ -n "$LAN_IP" ] && [ "$BIND_IP" != "127.0.0.1" ] && echo "   Home network:  http://$LAN_IP:$PORT"
