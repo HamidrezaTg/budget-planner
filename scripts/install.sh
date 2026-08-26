@@ -65,9 +65,19 @@ if [ -z "$RELEASE_JSON" ]; then
   RELEASE_JSON=$(fetch_release) || { echo "ERROR: could not fetch releases even with authentication." >&2; exit 1; }
 fi
 
+# if we are the buffered temp copy, remove it (safe: already loaded)
+case "${0:-}" in /tmp/budget-planner-install.sh) rm -f "$0" ;; esac
+
 if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
   echo "==> re-running with sudo (your GitHub login travels along)"
-  exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$0" "$@"
+  # $0 is unreliable when piped (bash -c "$(curl …)") — make sure we have a
+  # real file for the privileged re-exec.
+  SELF="$0"
+  if [ ! -f "$SELF" ]; then
+    SELF="/tmp/budget-planner-install.sh"
+    curl -fsSL "https://raw.githubusercontent.com/$REPO/main/scripts/install.sh" -o "$SELF"
+  fi
+  exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$SELF" "$@"
 fi
 
 TAG=$(echo "$RELEASE_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{console.log(JSON.parse(d).tag_name||'')})" 2>/dev/null || true)
