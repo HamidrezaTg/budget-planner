@@ -231,7 +231,12 @@ export default function Transactions() {
                     {tx.attachment_count > 0 ? tx.attachment_count : ''}
                   </button>
                 </td>
-                <td className={tx.amount >= 0 ? 'income' : 'expense'}>{eur(tx.amount)}</td>
+                <td className={tx.amount >= 0 ? 'income' : 'expense'}>
+                  {eur(tx.amount)}
+                  {tx.currency && tx.currency !== (localStorage.getItem('bp-currency') || 'EUR') && (
+                    <span className="muted tiny" title={`recorded in ${tx.currency}`}> {tx.currency}</span>
+                  )}
+                </td>
                 <td>
                   {tx.category_name && !tx.needs_review ? (
                     <div className="assign">

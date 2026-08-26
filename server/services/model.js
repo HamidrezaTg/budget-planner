@@ -62,7 +62,9 @@ function actualForCategoryMonth(categoryId, month) {
   return (
     db
       .prepare(
-        `SELECT COALESCE(SUM(amount),0) AS s FROM transactions WHERE category_id = ? AND substr(date,1,7) = ? AND ${NOT_PARENT('transactions')}`
+        `SELECT COALESCE(SUM(${FX_MULT} * t.amount),0) AS s
+         FROM transactions t ${FX_JOIN}
+         WHERE t.category_id = ? AND substr(t.date,1,7) = ? AND ${NOT_PARENT()}`
       )
       .get(categoryId, month).s * -1
   );
@@ -85,15 +87,26 @@ export function getAllCategories() {
 const NOT_PARENT = (alias = 't') =>
   `NOT (${alias}.split_of IS NULL AND ${alias}.split_group IS NOT NULL)`;
 
+export function baseCurrency() {
+  return db.prepare("SELECT value FROM settings WHERE key = 'currency'").get()?.value || 'EUR';
+}
+
+// Monthly FX conversion: transactions are multiplied by the rate of their own
+// month and currency. Missing rate ⇒ COALESCE keeps it 1:1, and monthView's
+// warnings surface how many rows were affected (no silent wrongness).
+const FX_JOIN = 'LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency';
+const FX_MULT = 'COALESCE(f.rate, 1)';
+
 // Actual spending per category in a month, NET of refunds (spec §3.5):
 // negative amounts are spend, positive ones (refunds) offset the same category.
+// Foreign-currency amounts are converted to the base currency first.
 export function actualByCategory(month) {
   const rows = db
     .prepare(
-      `SELECT category_id, SUM(amount) AS net
-       FROM transactions
-       WHERE substr(date,1,7) = ? AND category_id IS NOT NULL AND ${NOT_PARENT('transactions')}
-       GROUP BY category_id`
+      `SELECT t.category_id, SUM(${FX_MULT} * t.amount) AS net
+       FROM transactions t ${FX_JOIN}
+       WHERE substr(t.date,1,7) = ? AND t.category_id IS NOT NULL AND ${NOT_PARENT()}
+       GROUP BY t.category_id`
     )
     .all(month);
   const map = {};
@@ -343,6 +356,17 @@ function insightsForMonth(month, view) {
       }
     });
 
+  if ((view.warnings.unconverted_fx ?? 0) > 0) {
+    insights.push({
+      kind: 'fx-missing',
+      severity: 'warning',
+      title: 'Exchange rates missing',
+      message: `${view.warnings.unconverted_fx} transaction(s) this month are foreign-currency with no rate and are counted 1:1.`,
+      link: '/settings',
+      action: 'Open settings',
+    });
+  }
+
   const due = month === currentMonth() ? recurringDueWithinDays() : [];
   if (due.length > 0) {
     insights.push({
@@ -397,6 +421,12 @@ export function monthView(month) {
   const needsReview = db
     .prepare('SELECT COUNT(*) AS c FROM transactions WHERE needs_review = 1')
     .get().c;
+  const unconvertedFx = db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM transactions t ${FX_JOIN}
+       WHERE substr(t.date,1,7) = ? AND t.currency != ? AND f.rate IS NULL AND ${NOT_PARENT()}`
+    )
+    .get(month, baseCurrency()).c;
 
   const funds = db
     .prepare('SELECT * FROM funds ORDER BY name')
@@ -420,7 +450,7 @@ export function monthView(month) {
     month_result: round2(totalsPlanned - totalsActual),
     transfer_to_revolut: round2(transferToRevolut(month)),
     funds,
-    warnings: { untagged_categories: untagged, needs_review: needsReview },
+    warnings: { untagged_categories: untagged, needs_review: needsReview, unconverted_fx: unconvertedFx },
   };
   return { ...result, ...insightsForMonth(month, result) };
 }

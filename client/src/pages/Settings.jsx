@@ -14,6 +14,9 @@ export default function Settings() {
   const [msg, setMsg] = useState(null);
 
   const [currency, setCurrencyState] = useState('EUR');
+  const [fx, setFx] = useState(null);
+  const [fxEdits, setFxEdits] = useState({});
+  const [fxBusy, setFxBusy] = useState(false);
   const [pw, setPw] = useState({ current: '', next: '', repeat: '' });
   const [pwMsg, setPwMsg] = useState(null);
   const [dataMsg, setDataMsg] = useState(null);
@@ -28,6 +31,7 @@ export default function Settings() {
       setCurrencyState(s.currency || 'EUR');
       if (s.provider && s.model) setModels([s.model]);
     });
+    api.get('/settings/fx').then(setFx).catch(() => {});
   }, []);
 
   const providerDef = cfg?.providers?.find((p) => p.id === provider);
@@ -65,7 +69,14 @@ export default function Settings() {
       setCfg(updated);
       setCurrency(currency);
       setApiKey('');
-      setMsg({ ok: true, text: 'Saved.' });
+      // rates were stored relative to the old base currency
+      api.get('/settings/fx').then(setFx).catch(() => {});
+      setMsg({
+        ok: true,
+        text: updated.rates_cleared
+          ? 'Saved. Exchange rates were cleared because the display currency changed — fetch or re-enter them below.'
+          : 'Saved.',
+      });
     } catch (err) {
       setMsg({ ok: false, text: err.message });
     }
@@ -85,6 +96,43 @@ export default function Settings() {
     setTheme(t);
     document.documentElement.dataset.theme = t;
     localStorage.setItem('bp-theme', t);
+  };
+
+  const loadFx = () => api.get('/settings/fx').then(setFx).catch(() => {});
+
+  const saveFxRate = async (month, cur) => {
+    const key = `${month}|${cur}`;
+    const value = fxEdits[key];
+    if (value === undefined || value === '') return;
+    try {
+      await api.put('/settings/fx', { month, currency: cur, rate: Number(value) });
+      setFxEdits((p) => ({ ...p, [key]: undefined }));
+      loadFx();
+      toast(`Saved ${cur} rate for ${month}.`, 'ok');
+    } catch (e) { toast(e.message, 'error'); }
+  };
+
+  const deleteFxRate = async (month, cur) => {
+    await api.del('/settings/fx', { body: { month, currency: cur } });
+    loadFx();
+  };
+
+  const fetchFx = async (overwrite) => {
+    setFxBusy(true);
+    try {
+      const r = await api.post('/settings/fx/fetch', { overwrite });
+      loadFx();
+      if (r.filled > 0 && r.failed.length === 0) {
+        toast(`Imported ${r.filled} monthly rate(s) from the ECB.`, 'ok');
+      } else if (r.filled > 0) {
+        toast(`${r.filled} imported, ${r.failed.length} failed — see failed months below.`, 'error');
+      } else if (r.attempted === 0) {
+        toast('Nothing to fetch — all rates present.', 'ok');
+      } else {
+        toast(r.failed[0]?.error || 'Could not reach the rate service.', 'error');
+      }
+    } catch (e) { toast(e.message, 'error'); }
+    finally { setFxBusy(false); }
   };
 
   const changePassword = async (e) => {
@@ -182,6 +230,85 @@ export default function Settings() {
         </select>
         <span className="muted tiny">saved with the next Save below</span>
       </div>
+
+      {fx && fx.used.length > 0 && (
+        <>
+          <h2>Exchange rates</h2>
+          <p className="muted">
+            Transactions recorded in another currency are converted to <b>{fx.base}</b> with a
+            monthly rate ({fx.base} units per 1 foreign unit). Without a rate they count 1:1 and a
+            warning card appears on the Dashboard.
+          </p>
+          <div className="card table-card tight">
+            <div className="panel-head">
+              <span className="muted tiny">{fx.missing.length} month/currency pair(s) missing a rate</span>
+              <button className="btn small" disabled={fxBusy} onClick={() => fetchFx(false)}>
+                {fxBusy ? 'Fetching…' : 'Fetch missing from ECB'}
+              </button>
+            </div>
+            <table>
+              <thead><tr><th>Month</th><th>Currency</th><th>Rate</th><th>Source</th><th></th></tr></thead>
+              <tbody>
+                {fx.rates.map((r) => {
+                  const key = `${r.month}|${r.currency}`;
+                  return (
+                    <tr key={key}>
+                      <td>{r.month}</td>
+                      <td>{r.currency}</td>
+                      <td className="num">
+                        <input
+                          className="budget-input"
+                          type="number" step="0.0001" min="0.000001"
+                          style={{ width: 110 }}
+                          value={fxEdits[key] ?? r.rate}
+                          onChange={(e) => setFxEdits((p) => ({ ...p, [key]: e.target.value }))}
+                        />
+                      </td>
+                      <td className="muted">{r.source === 'ecb' ? 'ECB' : 'manual'}</td>
+                      <td>
+                        <div className="env-actions">
+                          <button
+                            className={`btn small ${fxEdits[key] !== undefined ? 'primary' : 'ghost'}`}
+                            disabled={fxEdits[key] === undefined}
+                            onClick={() => saveFxRate(r.month, r.currency)}
+                          >Save</button>
+                          <button className="btn danger small" onClick={() => deleteFxRate(r.month, r.currency)}>✕</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {fx.missing.map((m) => {
+                  const key = `${m.month}|${m.currency}`;
+                  return (
+                    <tr key={`miss-${key}`} className="needs-review-row">
+                      <td>{m.month}</td>
+                      <td>{m.currency}</td>
+                      <td className="num">
+                        <input
+                          className="budget-input"
+                          type="number" step="0.0001" min="0.000001"
+                          style={{ width: 110 }}
+                          placeholder={`in ${fx.base}`}
+                          value={fxEdits[key] ?? ''}
+                          onChange={(e) => setFxEdits((p) => ({ ...p, [key]: e.target.value }))}
+                        />
+                      </td>
+                      <td colSpan="2">
+                        <button
+                          className="btn small primary"
+                          disabled={fxEdits[key] === undefined || fxEdits[key] === ''}
+                          onClick={() => saveFxRate(m.month, m.currency)}
+                        >Save</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <h2>Account</h2>
       <form onSubmit={changePassword} className="card inline-form settings-form">

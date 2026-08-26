@@ -242,6 +242,18 @@ CREATE TABLE IF NOT EXISTS attachments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Multi-currency support: monthly reference rates converting transaction
+-- currency to the user's base (display) currency. rate = base units per
+-- 1 unit of "currency". Rates are never stored for the base currency itself.
+CREATE TABLE IF NOT EXISTS fx_rates (
+  month TEXT NOT NULL,                       -- YYYY-MM this rate applies to
+  currency TEXT NOT NULL,
+  rate REAL NOT NULL,
+  source TEXT NOT NULL DEFAULT 'manual',     -- manual | ecb
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (month, currency)
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

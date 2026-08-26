@@ -46,7 +46,8 @@ export function schemaContext() {
 
   return [
     'Tables:',
-    '- transactions(id, date TEXT YYYY-MM-DD, description TEXT, amount REAL (negative=expense, positive=refund/credit), currency, account_id, category_id, needs_review INTEGER)',
+    '- transactions(id, date TEXT YYYY-MM-DD, description TEXT, amount REAL (negative=expense, positive=refund/credit), currency (original statement currency!), account_id, category_id, needs_review INTEGER)',
+    '- fx_rates(month TEXT YYYY-MM, currency, rate REAL = base-currency units per 1 unit of currency)  -- monthly reference rates; convert with amount * rate for the transaction month',
     '- categories(id, name, group_id, account_id, monthly_budget REAL (standing monthly plan), active_from, active_to, is_active)',
     '- budget_lines(category_id, month TEXT YYYY-MM, planned_amount REAL)  -- per-month plan overrides',
     '- accounts(id, name, kind: sparkasse|revolut)',

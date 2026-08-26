@@ -140,6 +140,24 @@ Provider → API key → **Load models** → pick a model → Save → Test conn
 Supported: OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, Mistral, Together AI,
 Ollama (local, no key), LM Studio (local, no key), Custom.
 
+### Multi-currency
+
+Transactions keep the currency they were recorded in (from your statements). Everything
+is reported in the display currency chosen under Appearance:
+
+- Budgets, funds, commitments and income are planning figures and always live in the
+  display currency.
+- Actual spending converts per month via an **exchange rates** table: rate = display
+  units per 1 foreign unit, applied by transaction month.
+- **Fetch missing from ECB** imports monthly reference rates from frankfurter.app
+  (ECB data, keyless — requests contain only dates and currency codes).
+- You can also enter or correct any month/currency rate manually.
+- Foreign-currency transactions without a rate count 1:1 and raise an
+  "Exchange rates missing" warning on the Dashboard until you add one.
+- Changing the display currency clears all stored rates (they were relative to the
+  old base) — refetch afterwards.
+- CSV exports always contain the original statement amounts and currency codes.
+
 ## Categories
 
 - **Categorization rules** — keyword rules are learned from manual assignments.

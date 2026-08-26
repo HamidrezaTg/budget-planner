@@ -76,6 +76,18 @@ router.get('/', (req, res) => {
 
 router.put('/', (req, res) => {
   const { provider, api_key, model, base_url, currency } = req.body ?? {};
+  let ratesCleared = false;
+  if (currency !== undefined) {
+    if (!CURRENCIES.includes(currency)) return res.status(400).json({ error: 'Unknown currency' });
+    const previous = getSetting('currency') || 'EUR';
+    setSetting('currency', currency);
+    // FX rates are stored relative to the OLD base currency; a switch makes
+    // them all meaningless. Clear them instead of converting wrongly.
+    if (previous !== currency) {
+      db.prepare('DELETE FROM fx_rates').run();
+      ratesCleared = true;
+    }
+  }
   if (provider !== undefined) {
     if (!PROVIDERS[provider]) return res.status(400).json({ error: 'Unknown provider' });
     setSetting('ai_provider', provider);
@@ -99,7 +111,104 @@ router.put('/', (req, res) => {
       key_hint: '',
     };
   }
-  res.json({ ...ai, currency: getSetting('currency') || 'EUR' });
+  res.json({ ...ai, currency: getSetting('currency') || 'EUR', rates_cleared: ratesCleared });
+});
+
+// ------------------------------------------------------------ exchange rates
+// Monthly reference rates converting foreign transaction currencies into the
+// base currency. Missing rates count transactions 1:1 and are surfaced as
+// warnings — they never silently distort totals forever.
+const MONTH_RE = /^\d{4}-\d{2}$/;
+
+router.get('/fx', (_req, res) => {
+  const base = getSetting('currency') || 'EUR';
+  const used = db
+    .prepare(
+      'SELECT DISTINCT currency FROM transactions WHERE currency != ? ORDER BY currency'
+    )
+    .all(base)
+    .map((r) => r.currency);
+  const rates = db
+    .prepare(
+      `SELECT month, currency, rate, source, updated_at FROM fx_rates
+       WHERE currency != ? ORDER BY month DESC, currency LIMIT 240`
+    )
+    .all(base);
+  const missingRows = db
+    .prepare(
+      `SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t
+       LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
+       WHERE t.currency != ? AND f.month IS NULL`
+    )
+    .all(base);
+  res.json({ base, used, rates, missing: missingRows });
+});
+
+router.put('/fx', (req, res) => {
+  const { month, currency, rate } = req.body ?? {};
+  const base = getSetting('currency') || 'EUR';
+  if (!MONTH_RE.test(month || '')) return res.status(400).json({ error: 'month must be YYYY-MM' });
+  if (!currency || currency === base)
+    return res.status(400).json({ error: 'currency must differ from the base currency' });
+  const r = Number(rate);
+  if (!Number.isFinite(r) || r <= 0 || r > 100000)
+    return res.status(400).json({ error: 'rate must be a positive number' });
+  db.prepare(
+    `INSERT INTO fx_rates (month, currency, rate, source) VALUES (?, ?, ?, 'manual')
+     ON CONFLICT(month, currency) DO UPDATE SET rate = excluded.rate, source = 'manual', updated_at = datetime('now')`
+  ).run(month, String(currency).toUpperCase(), r);
+  res.json({ ok: true });
+});
+
+router.delete('/fx', (req, res) => {
+  const { month, currency } = req.body ?? {};
+  if (!MONTH_RE.test(month || '') || !currency)
+    return res.status(400).json({ error: 'month and currency required' });
+  db.prepare('DELETE FROM fx_rates WHERE month = ? AND currency = ?').run(month, currency);
+  res.json({ ok: true });
+});
+
+// Fill missing rates from frankfurter.app (ECB reference rates). Keyless and
+// privacy-safe: requests contain only dates and currency codes.
+router.post('/fx/fetch', async (req, res) => {
+  const base = getSetting('currency') || 'EUR';
+  const overwrite = req.body?.overwrite === true;
+  const rows = overwrite
+    ? db.prepare('SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t WHERE t.currency != ?').all(base)
+    : db
+        .prepare(
+          `SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t
+           LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
+           WHERE t.currency != ? AND f.month IS NULL`
+        )
+        .all(base);
+
+  const lastDay = (m) => {
+    const [y, mo] = m.split('-').map(Number);
+    return `${m}-${String(new Date(y, mo, 0).getDate()).padStart(2, '0')}`;
+  };
+
+  let filled = 0;
+  const failed = [];
+  const upsert = db.prepare(
+    `INSERT INTO fx_rates (month, currency, rate, source) VALUES (?, ?, ?, 'ecb')
+     ON CONFLICT(month, currency) DO UPDATE SET rate = excluded.rate, source = 'ecb', updated_at = datetime('now')`
+  );
+  for (const row of rows) {
+    try {
+      const url = `https://api.frankfurter.dev/v1/${lastDay(row.month)}?from=${encodeURIComponent(row.currency)}&to=${encodeURIComponent(base)}`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(12000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const rate = data?.rates?.[base];
+      if (!Number.isFinite(rate)) throw new Error(`no ${base} rate for ${row.currency} in response`);
+      upsert.run(row.month, row.currency, rate);
+      filled++;
+    } catch (e) {
+      failed.push({ month: row.month, currency: row.currency, error: e.message });
+    }
+  }
+  res.json({ ok: failed.length === 0, filled, attempted: rows.length, failed });
 });
 
 // Download a full backup of this user's database.

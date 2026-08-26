@@ -3,6 +3,25 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.4.0] — 2026-08-26
+
+### Added
+- **Multi-currency reporting** — transactions keep their statement currency; actual
+  spending converts to the display currency per month via the new `fx_rates` table
+- **Exchange-rate management** on Settings: manual month/currency rates plus one-click
+  autofill of missing rates from frankfurter.app (ECB reference rates, keyless,
+  privacy-safe — requests contain only dates and currency codes)
+- Foreign-currency transactions without a rate count 1:1 and raise an
+  "Exchange rates missing" insight until a rate is added
+
+### Changed
+- Recurring transactions post with the base (display) currency label instead of
+  hardcoded EUR
+- CSV exports explicitly keep original amounts/currency codes (documented)
+
+### Fixed
+- Yearly report now converts foreign-currency rows consistently with all other views
+
 ## [3.3.0] — 2026-08-26
 
 ### Added

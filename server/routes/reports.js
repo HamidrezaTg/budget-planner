@@ -33,9 +33,10 @@ router.get('/yearly/:year', (req, res) => {
     const m = `${year}-${String(i).padStart(2, '0')}`;
     const t = db
       .prepare(
-        `SELECT COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END),0) AS income,
-                COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END),0) AS expenses
-         FROM transactions WHERE substr(date,1,7) = ? AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
+        `SELECT COALESCE(SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount > 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END),0) AS income,
+                COALESCE(SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount < 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END),0) AS expenses
+         FROM transactions t LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
+         WHERE substr(t.date,1,7) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)`
       )
       .get(m);
     months.push({ month: m, expenses: t.expenses, income: t.income });
@@ -44,31 +45,35 @@ router.get('/yearly/:year', (req, res) => {
   const byCategory = db
     .prepare(
       `SELECT COALESCE(c.name, 'Uncategorized') AS name,
-              SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END) AS spent
+              SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount < 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END) AS spent
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
-       WHERE substr(t.date,1,4) = ? AND t.amount < 0 AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) GROUP BY c.id ORDER BY spent`
+       LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
+       WHERE substr(t.date,1,4) = ? AND (COALESCE(f.rate, 1)) * t.amount < 0 AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) GROUP BY c.id ORDER BY spent`
     )
     .all(year);
 
   const totals = db
     .prepare(
-      `SELECT COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END),0) AS income,
-              COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END),0) AS expenses
-       FROM transactions WHERE substr(date,1,4) = ? AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
+      `SELECT COALESCE(SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount > 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END),0) AS income,
+              COALESCE(SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount < 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END),0) AS expenses
+       FROM transactions t LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
+       WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)`
     )
     .get(year);
 
   const prev = db
     .prepare(
-      `SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END),0) AS expenses
-       FROM transactions WHERE substr(date,1,4) = ? AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
+      `SELECT COALESCE(SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount < 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END),0) AS expenses
+       FROM transactions t LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
+       WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)`
     )
     .get(String(Number(year) - 1));
 
   res.json({ year, months, byCategory, totals, prevYearExpenses: prev.expenses });
 });
 
-// CSV exports
+// CSV exports keep the ORIGINAL stored amounts and currency codes —
+// conversion is a reporting concern, raw statements stay raw.
 function sendCsv(res, filename, rows) {
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const header = 'date,description,amount,currency,category';

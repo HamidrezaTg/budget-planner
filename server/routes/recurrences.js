@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '../db.js';
+import { db, getSetting } from '../db.js';
 import { currentMonth, addMonths } from '../services/model.js';
 
 const router = Router();
@@ -67,11 +67,12 @@ function autoPost() {
 
 function post(r, month, day) {
   const dedupKey = `rec|${r.id}|${month}`;
+  // Recurring amounts are planning figures — they live in the base currency.
   db.prepare(
     `INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
-     VALUES (?, ?, ?, 'Recurring', 'EUR', ?, ?, 0, 'recurring', ?)
+     VALUES (?, ?, ?, 'Recurring', ?, ?, ?, 0, 'recurring', ?)
      ON CONFLICT(dedup_key) DO NOTHING`
-  ).run(`${month}-${String(day).padStart(2, '0')}`, r.name, r.amount, r.account_id, r.category_id, dedupKey);
+  ).run(`${month}-${String(day).padStart(2, '0')}`, r.name, r.amount, getSetting('currency') || 'EUR', r.account_id, r.category_id, dedupKey);
   db.prepare('UPDATE recurrences SET last_posted_month = ? WHERE id = ?').run(month, r.id);
 }
 
