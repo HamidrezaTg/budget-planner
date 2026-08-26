@@ -1,39 +1,34 @@
 #!/usr/bin/env bash
 # ============================================================
-# Budget Planner — one-line installer for the SERVER (.deb)
+# Budget Planner — interactive installer (server .deb)
 #
-# Works without authentication against the public repository. If the
-# repository is private, it falls back to 'gh auth login' or a fine-grained
-# personal access token (Contents: read-only).
+# Public repository: no authentication needed.
+#   curl -fsSL https://raw.githubusercontent.com/HamidrezaTg/budget-planner/main/scripts/install.sh -o /tmp/bp-install.sh && bash /tmp/bp-install.sh
 #
-# Usage:
-#   GH_TOKEN=github_pat_xxxx bash -c "$(curl -fsSL \
-#     -H 'Authorization: Bearer github_pat_xxxx' \
-#     https://raw.githubusercontent.com/HamidrezaTg/budget-planner/main/scripts/install.sh)"
-#
-# or, after downloading the file:
-#   GH_TOKEN=github_pat_xxxx ./install.sh
-#
-# Flags:
-#   --client    install the Linux desktop client instead of the server
-#   --version X install a specific release instead of the latest
+# Flags: --client (desktop client), --version X, --quiet (skip menu, defaults)
 # ============================================================
 set -euo pipefail
 
 REPO="HamidrezaTg/budget-planner"
 WANT_CLIENT=0
 WANT_VERSION=""
+QUIET=0
 
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --client) WANT_CLIENT=1 ;;
-    --version) WANT_VERSION="set" ;; # consumed below with value
-    --version=*) WANT_VERSION="${arg#*=}" ;;
-    *) if [ "$WANT_VERSION" = "set" ]; then WANT_VERSION="$arg"; fi ;;
+    --quiet) QUIET=1 ;;
+    --version) WANT_VERSION="$2"; shift ;;
+    --version=*) WANT_VERSION="${1#*=}" ;;
+    *) echo "Unknown flag: $1" >&2; exit 1 ;;
   esac
+  shift
 done
 
-# ---- release fetch: anonymous first (repo is public), token only if needed
+# if we are the buffered temp copy, remove it (safe: already loaded)
+case "${0:-}" in /tmp/budget-planner-install.sh) rm -f "$0" ;; esac
+
+# ---- release fetch: anonymous first, token only if the repo needs it ----
 fetch_release() {
   local url="https://api.github.com/repos/$REPO/releases/latest"
   [ -n "$WANT_VERSION" ] && url="https://api.github.com/repos/$REPO/releases/tags/v$WANT_VERSION"
@@ -45,7 +40,6 @@ fetch_release() {
 }
 
 acquire_token() {
-  # private-repo fallback: GitHub CLI login or a fine-grained token
   if [ -z "${GH_TOKEN:-}" ]; then
     if command -v gh >/dev/null 2>&1 && gh auth token >/dev/null 2>&1; then
       GH_TOKEN=$(gh auth token)
@@ -65,13 +59,8 @@ if [ -z "$RELEASE_JSON" ]; then
   RELEASE_JSON=$(fetch_release) || { echo "ERROR: could not fetch releases even with authentication." >&2; exit 1; }
 fi
 
-# if we are the buffered temp copy, remove it (safe: already loaded)
-case "${0:-}" in /tmp/budget-planner-install.sh) rm -f "$0" ;; esac
-
 if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
   echo "==> re-running with sudo (your GitHub login travels along)"
-  # $0 is unreliable when piped (bash -c "$(curl …)") — make sure we have a
-  # real file for the privileged re-exec.
   SELF="$0"
   if [ ! -f "$SELF" ]; then
     SELF="/tmp/budget-planner-install.sh"
@@ -80,14 +69,10 @@ if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
   exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$SELF" "$@"
 fi
 
-TAG=$(echo "$RELEASE_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{console.log(JSON.parse(d).tag_name||'')})" 2>/dev/null || true)
-if [ -z "$TAG" ]; then
-  echo "ERROR: release not found." >&2
-  exit 1
-fi
+TAG=$(echo "$RELEASE_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).tag_name||'')}catch{console.log('')}})" 2>/dev/null || true)
+[ -n "$TAG" ] || { echo "ERROR: release not found." >&2; exit 1; }
 echo "==> release: $TAG"
 
-# ---- pick asset -------------------------------------------------------
 if [ "$WANT_CLIENT" = "1" ]; then
   [ "$(dpkg --print-architecture)" = "amd64" ] || { echo "ERROR: the desktop client is amd64-only." >&2; exit 1; }
   PATTERN="budget-planner-client_.*_amd64\.deb"
@@ -95,43 +80,108 @@ else
   PATTERN="budget-planner_[0-9.]*_all\.deb"
 fi
 
-ASSET_ID=$(echo "$RELEASE_JSON" | node -e "
+ASSET_ID=$(echo "$RELEASE_JSON" | BP_PATTERN="$PATTERN" node -e "
   let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
-    const re=/$PATTERN/;
+    const re=new RegExp(process.env.BP_PATTERN);
     const a=(JSON.parse(d).assets||[]).find(x=>re.test(x.name));
     console.log(a?a.id:'');
   })")
-ASSET_NAME=$(echo "$RELEASE_JSON" | node -e "
+ASSET_NAME=$(echo "$RELEASE_JSON" | BP_PATTERN="$PATTERN" node -e "
   let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
-    const re=/$PATTERN/;
+    const re=new RegExp(process.env.BP_PATTERN);
     const a=(JSON.parse(d).assets||[]).find(x=>re.test(x.name));
     console.log(a?a.name:'');
   })")
-if [ -z "$ASSET_ID" ]; then
-  echo "ERROR: no matching .deb asset in release $TAG." >&2
-  exit 1
-fi
+[ -n "$ASSET_ID" ] || { echo "ERROR: no matching .deb asset in release $TAG." >&2; exit 1; }
 echo "==> asset: $ASSET_NAME"
 
-# ---- node dependency --------------------------------------------------
-NEED_NODE=1
-if command -v node >/dev/null 2>&1; then
-  MAJOR=$(node -p "process.versions.node.split('.')[0]")
-  [ "$MAJOR" -ge 22 ] && NEED_NODE=0
-fi
-if [ "$NEED_NODE" = "1" ] && [ "$WANT_CLIENT" != "1" ]; then
-  echo "==> Node.js >= 22 is required. Install Node 22 via NodeSource now?"
-  read -rp "Run 'curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt install -y nodejs'? [y/N] " yn
-  if [ "${yn:-n}" = "y" ]; then
-    curl -fsSL "https://deb.nodesource.com/setup_22.x" | bash -
-    apt-get install -y nodejs
-  else
-    echo "Install Node 22 manually, then re-run this installer." >&2
-    exit 1
+# ---- Node.js >= 22 is mandatory for the server --------------------------
+if [ "$WANT_CLIENT" != "1" ]; then
+  NODE_OK=0
+  if command -v node >/dev/null 2>&1; then
+    MAJOR=$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || echo 0)
+    [ "$MAJOR" -ge 22 ] && NODE_OK=1
+  fi
+  if [ "$NODE_OK" != "1" ]; then
+    CURRENT="$(command -v node >/dev/null 2>&1 && node -v || echo 'not installed')"
+    echo
+    echo "  Node.js >= 22 is REQUIRED (the server uses the built-in node:sqlite)."
+    echo "  Found: $CURRENT — the service will not start with an older Node."
+    echo
+    if [ "$QUIET" = "1" ]; then
+      echo "==> --quiet: installing Node 22 via NodeSource automatically"
+      yn=y
+    else
+      read -rp "  Install Node 22 via NodeSource now? [Y/n] " yn
+      yn="${yn:-y}"
+    fi
+    case "$yn" in
+      y|Y)
+        curl -fsSL "https://deb.nodesource.com/setup_22.x" | bash - > /dev/null
+        apt-get install -y nodejs > /dev/null
+        echo "  $(node -v) installed."
+        ;;
+      *)
+        echo "  Aborting — install Node 22 manually, then re-run this installer." >&2
+        exit 1
+        ;;
+    esac
   fi
 fi
 
-# ---- download + install ----------------------------------------------
+# ---- interactive configuration (skipped with --quiet or when piped) -----
+DEFAULTS_FILE="${BP_DEFAULTS_FILE:-/etc/default/budget-planner}"
+PORT=2026
+BIND_IP=""
+ADMIN_NAME=""
+ADMIN_PW=""
+
+if [ "$WANT_CLIENT" != "1" ] && [ "$QUIET" != "1" ] && [ -t 0 ]; then
+  RECONFIGURE=""
+  if [ -f "$DEFAULTS_FILE" ] && grep -q '^PORT=' "$DEFAULTS_FILE" 2>/dev/null; then
+    read -rp "Existing configuration found. Reconfigure? [y/N] " reconf
+    RECONFIGURE="$reconf"
+  fi
+  if [ ! -f "$DEFAULTS_FILE" ] || [ "${RECONFIGURE:-n}" = "y" ] || [ "${RECONFIGURE:-n}" = "Y" ]; then
+    EXISTING_TS=""
+    command -v tailscale >/dev/null 2>&1 && EXISTING_TS=$(tailscale ip -4 -1 2>/dev/null || true)
+
+    echo
+    echo "  Where will you use Budget Planner from?"
+    echo "   1) Everywhere — LAN and Tailscale (recommended)"
+    echo "   2) This machine only (localhost)"
+    [ -n "$EXISTING_TS" ] && echo "   3) Tailscale devices only"
+    read -rp "  Choice [1]: " choice
+    choice="${choice:-1}"
+    case "$choice" in
+      2) BIND_IP="127.0.0.1" ;;
+      3) if [ -n "$EXISTING_TS" ]; then BIND_IP="$EXISTING_TS"; else BIND_IP="0.0.0.0"; fi ;;
+      *) BIND_IP="0.0.0.0" ;;
+    esac
+
+    read -rp "  Port [2026]: " port_in
+    PORT="${port_in:-2026}"
+    case "$PORT" in ''|*[!0-9]*) PORT=2026 ;; esac
+    [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || PORT=2026
+
+    echo
+    read -rp "  Create the first admin account now? [Y/n] " mkadmin
+    if [ "${mkadmin:-y}" != "n" ] && [ "${mkadmin:-y}" != "N" ]; then
+      while true; do
+        read -rp "  Admin username (letters/numbers, 2-32 chars): " ADMIN_NAME
+        ADMIN_NAME=$(echo "$ADMIN_NAME" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_.-')
+        [ "${#ADMIN_NAME}" -ge 2 ] && break
+        echo "  Username must be at least 2 valid characters."
+      done
+      while [ -z "$ADMIN_PW" ]; do
+        read -rsp "  Admin password (min 4 chars): " ADMIN_PW; echo
+        [ "${#ADMIN_PW}" -ge 4 ] || { echo "  Too short."; ADMIN_PW=""; }
+      done
+    fi
+  fi
+fi
+
+# ---- download + install -------------------------------------------------
 OUT="/tmp/$ASSET_NAME"
 echo "==> downloading $ASSET_NAME"
 if [ -n "${GH_TOKEN:-}" ]; then
@@ -141,24 +191,65 @@ else
   curl -fSL -H "Accept: application/octet-stream" \
     -o "$OUT" "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
 fi
-[ "$(stat -c%s "$OUT")" -gt 10000 ] || { echo "ERROR: download too small — token or asset problem." >&2; exit 1; }
+[ "$(stat -c%s "$OUT")" -gt 10000 ] || { echo "ERROR: download too small — asset problem." >&2; exit 1; }
 
 echo "==> installing $ASSET_NAME"
 apt-get install -y "$OUT"
 rm -f "$OUT"
 
-echo
-echo "============================================================="
 if [ "$WANT_CLIENT" = "1" ]; then
+  echo
+  echo "============================================================="
   echo " Desktop client installed — find 'Budget Planner' in your"
   echo " application menu and enter your server address on first launch."
-else
-  echo " Budget Planner server installed and running (systemd)."
-  echo "   URL:      http://<this-machine-ip>:2026"
-  echo "   Data dir: /var/lib/budget-planner   (SQLite — back it up!)"
-  echo "   Service:  systemctl status budget-planner"
-  echo
-  echo " Open the URL from any phone/PC on your network, create your"
-  echo " account (first account = admin), and you're in."
+  echo "============================================================="
+  exit 0
 fi
+
+# ---- write chosen configuration ----------------------------------------
+if [ -n "$BIND_IP" ] || [ "$PORT" != "2026" ]; then
+  {
+    echo "PORT=$PORT"
+    [ -n "$BIND_IP" ] && echo "BIND_IP=$BIND_IP"
+  } > "$DEFAULTS_FILE"
+  systemctl restart budget-planner
+fi
+
+# ---- optional admin creation -------------------------------------------
+if [ -n "$ADMIN_NAME" ] && [ -n "$ADMIN_PW" ]; then
+  echo "==> creating admin account"
+  if sudo -u budget env DATA_DIR=/var/lib/budget-planner \
+      BP_USER="$ADMIN_NAME" BP_PW="$ADMIN_PW" \
+      node /opt/budget-planner/server/cli-add-user.mjs; then
+    ADMIN_DONE=yes
+  else
+    echo "  (Could not create the account here — create it in the browser instead.)"
+  fi
+fi
+
+# ---- verify + summary ---------------------------------------------------
+sleep 1
+if systemctl is-active --quiet budget-planner; then
+  STATE="running"
+else
+  STATE="NOT RUNNING — check: journalctl -u budget-planner -n 30"
+fi
+
+LAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')
+TS_IP=""
+command -v tailscale >/dev/null 2>&1 && TS_IP=$(tailscale ip -4 -1 2>/dev/null || true)
+
+echo
+echo "============================================================="
+echo " Budget Planner server: $STATE"
+echo "   Data dir: /var/lib/budget-planner   (SQLite — back it up!)"
+[ "$STATE" = "running" ] || { echo "============================================================="; exit 0; }
+echo
+[ -n "$ADMIN_DONE" ] && echo "   Admin account: $ADMIN_NAME (log in with it right away)" \
+                     || echo "   First step: open the URL below and create your account"
+echo "   This machine:  http://localhost:$PORT"
+[ -n "$LAN_IP" ] && [ "$BIND_IP" != "127.0.0.1" ] && echo "   Home network:  http://$LAN_IP:$PORT"
+[ -n "$TS_IP" ] && [ "$BIND_IP" != "127.0.0.1" ] && echo "   Tailscale:     http://$TS_IP:$PORT"
+echo
+echo "   Backup: copy /var/lib/budget-planner (or Settings -> Backup)"
 echo "============================================================="

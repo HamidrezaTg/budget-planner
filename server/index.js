@@ -23,6 +23,9 @@ import { requireAuth } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 2026;
+// Optional interface binding: e.g. 127.0.0.1 (localhost only) or a Tailscale IP.
+// Unset = all interfaces (LAN).
+const BIND_IP = process.env.BIND_IP || '';
 
 const app = express();
 app.use(express.json());
@@ -68,6 +71,7 @@ if (fs.existsSync(dist)) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`Budget planner running at http://localhost:${PORT}`);
+app.listen(PORT, BIND_IP || undefined, () => {
+  const shown = BIND_IP || '0.0.0.0';
+  console.log(`Budget planner running at http://${shown === '0.0.0.0' ? '<this-machine>' : shown}:${PORT}`);
 });
