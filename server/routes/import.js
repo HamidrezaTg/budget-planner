@@ -2,12 +2,23 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { db } from '../db.js';
+import { db, als } from '../db.js';
 import { parseStatement, rawGrid, transactionsFromGrid } from '../services/parser.js';
 import { applyCategorization } from '../services/categorizer.js';
 import { getAiConfig, chatComplete, parseJsonLoose } from '../services/ai.js';
 
 const router = Router();
+
+// Multer's async streaming resumes outside the AsyncLocalStorage scope on
+// current Node: capture the user's concrete database handle BEFORE multer
+// runs (requireAuth context is still intact here), then re-enter it around
+// each handler.
+router.use((req, _res, next) => {
+  req.impDb = als.getStore();
+  next();
+});
+const withCtx = (handler) => (req, res) => als.run(req.impDb, () => handler(req, res));
+
 const UPLOAD_DIR = process.env.DATA_DIR
   ? path.join(process.env.DATA_DIR, 'uploads')
   : path.join(process.cwd(), 'data', 'uploads');
@@ -31,10 +42,10 @@ function stageFile(file) {
   return token;
 }
 
-function previewParsed(parsed) {
+function previewParsed(parsed, conn) {
   const withCats = applyCategorization(parsed.transactions);
   const existing = new Set(
-    db.prepare('SELECT dedup_key FROM transactions').all().map((r) => r.dedup_key)
+    conn.prepare('SELECT dedup_key FROM transactions').all().map((r) => r.dedup_key)
   );
   const preview = withCats.map((tx) => ({ ...tx, duplicate: existing.has(tx.dedup_key) }));
   const dupCount = preview.filter((p) => p.duplicate).length;
@@ -50,12 +61,12 @@ function previewParsed(parsed) {
   };
 }
 
-router.post('/upload', upload.single('file'), (req, res) => {
+router.post('/upload', upload.single('file'), withCtx((req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
     const parsed = parseStatement(req.file.path);
     const token = stageFile(req.file);
-    const { preview, summary } = previewParsed(parsed);
+    const { preview, summary } = previewParsed(parsed, req.impDb);
     res.json({ token, stats: parsed.stats, summary, preview, ai_spec: null });
   } catch (e) {
     res.status(400).json({
@@ -63,10 +74,10 @@ router.post('/upload', upload.single('file'), (req, res) => {
       suggest_ai: true,
     });
   }
-});
+}));
 
 // AI format doctor: inspects the raw file and proposes a column mapping.
-router.post('/smart', upload.single('file'), async (req, res) => {
+router.post('/smart', upload.single('file'), withCtx(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
     const cfg = getAiConfig();
@@ -106,8 +117,8 @@ router.post('/smart', upload.single('file'), async (req, res) => {
     const token = stageFile(req.file);
     staged.get(token).spec = spec;
 
-    const { preview, summary } = previewParsed(parsed);
-    auditImport(`AI format fix via ${cfg.model}: ${spec.notes ?? ''}`);
+    const { preview, summary } = previewParsed(parsed, req.impDb);
+    auditImport(req.impDb, `AI format fix via ${cfg.model}: ${spec.notes ?? ''}`);
     res.json({
       token,
       stats: parsed.stats,
@@ -119,27 +130,27 @@ router.post('/smart', upload.single('file'), async (req, res) => {
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
-});
+}));
 
-function auditImport(detail) {
-  db.prepare('INSERT INTO ai_audit_log (kind, detail) VALUES (?, ?)').run('import_fix', String(detail).slice(0, 2000));
+function auditImport(conn, detail) {
+  conn.prepare('INSERT INTO ai_audit_log (kind, detail) VALUES (?, ?)').run('import_fix', String(detail).slice(0, 2000));
 }
 
-router.post('/confirm', (req, res) => {
+router.post('/confirm', withCtx((req, res) => {
   const { token, account_id = null } = req.body ?? {};
   const stagedEntry = staged.get(token);
   if (!stagedEntry) return res.status(400).json({ error: 'Unknown or expired import token' });
   const filePath = stagedEntry.path;
   const accId =
-    account_id && db.prepare('SELECT id FROM accounts WHERE id = ?').get(account_id)
+    account_id && req.impDb.prepare('SELECT id FROM accounts WHERE id = ?').get(account_id)
       ? Number(account_id)
-      : db.prepare(`SELECT id FROM accounts WHERE kind = 'revolut'`).get()?.id ?? null;
+      : req.impDb.prepare(`SELECT id FROM accounts WHERE kind = 'revolut'`).get()?.id ?? null;
   try {
     const parsed = stagedEntry.spec
       ? transactionsFromGrid(rawGrid(filePath, 1000000), stagedEntry.spec)
       : parseStatement(filePath);
     const withCats = applyCategorization(parsed.transactions);
-    const ins = db.prepare(`
+    const ins = req.impDb.prepare(`
       INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(dedup_key) DO NOTHING`);
@@ -160,13 +171,13 @@ router.post('/confirm', (req, res) => {
       inserted += r.changes;
     }
     staged.delete(token);
-    const remainingReview = db
+    const remainingReview = req.impDb
       .prepare('SELECT COUNT(*) AS c FROM transactions WHERE needs_review = 1')
       .get().c;
     res.json({ inserted, skippedDuplicates: withCats.length - inserted, remainingReview });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
 export default router;

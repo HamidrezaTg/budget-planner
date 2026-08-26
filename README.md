@@ -63,6 +63,17 @@ Development mode with hot reload: `npm run dev`.
 Node.js (built-in `node:sqlite`), Express, React + Vite + Recharts.
 No external database, no cloud, no telemetry.
 
+## Roadmap
+
+Release history lives in [`CHANGELOG.md`](CHANGELOG.md). Up next:
+
+1. **Bank synchronization** — pull transactions directly from banks (GoCardless Bank
+   Account Data, PSD2) or scheduled CSV watching; design depends on privacy preference
+2. **Native packaging** — installable builds for Android (APK), Linux
+   (Ubuntu/Debian `.deb`), macOS (.app/.dmg) and Windows (installer), wrapping the
+   existing PWA so each platform gets a real app without app-store review
+3. Ongoing: security hardening, performance, polish
+
 ## Data & backups
 
 Everything lives in `data/`:

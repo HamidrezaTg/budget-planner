@@ -60,6 +60,14 @@ The month at a glance. Use **← / Today / →** to change months — every figu
   (and what the AI detected) before anything is written.
 - **Import into account** — which account the statement belongs to.
 - **Confirm import** — the only step that writes to the database.
+- **Duplicate protection** — re-importing the same file, or any export with overlapping
+  date ranges, never creates a second copy: rows are fingerprinted by
+  date + amount + description (plus an occurrence index for legitimate same-day twins,
+  e.g. two identical coffees) and the database itself refuses duplicate fingerprints.
+  The preview shows exactly which rows count as duplicates before you confirm.
+  Limitations: a bank that changes the merchant *wording* between statements can still
+  slip past the fingerprint; same-day twins split across two different exports may
+  occasionally collide.
 
 ## Transactions
 

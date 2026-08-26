@@ -3,6 +3,23 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.6.0] — 2026-08-26
+
+### Added
+- **Occurrence-indexed dedup fingerprints** — two genuinely different purchases on the
+  same day with the same amount and merchant (e.g. two identical coffees) used to
+  silently swallow each other on import; they now both import, while re-imports and
+  overlapping exports still insert nothing twice (verified by a 16-case test suite)
+
+### Fixed
+- **CSV import was broken on current Node** — multer's async streaming escapes the
+  auth-scoped database context, so every import failed with "No user database context".
+  Import handlers now re-enter the user's database context explicitly.
+
+### Decided
+- Bank synchronization stays manual for now (user choice): hardened CSV import is the
+  sync path; GoCardless PSD2 integration may be added later and remains on the roadmap.
+
 ## [3.5.0] — 2026-08-26
 
 ### Added

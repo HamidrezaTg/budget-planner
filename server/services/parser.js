@@ -111,6 +111,22 @@ export function normalizeDesc(s) {
     .trim();
 }
 
+// Two genuinely different purchases CAN share a day, amount and merchant
+// (two coffees at the same place). Keys must stay deterministic across
+// re-imports and overlapping exports, so identical rows get an occurrence
+// index in file order: first occurrence keeps the plain key, subsequent ones
+// gain "|#1", "|#2", … A re-import of the same or an overlapping file
+// reproduces the same keys, so dedup still blocks everything already stored.
+function assignDedupKeys(transactions) {
+  const seen = new Map();
+  for (const tx of transactions) {
+    const n = seen.get(tx.dedup_key) ?? 0;
+    seen.set(tx.dedup_key, n + 1);
+    if (n > 0) tx.dedup_key = `${tx.dedup_key}|#${n}`;
+  }
+  return transactions;
+}
+
 function finalize({ mapping, raw }, mode) {
   if (!mapping || !mapping.date || !mapping.amount) {
     throw new Error(
@@ -159,7 +175,7 @@ function finalize({ mapping, raw }, mode) {
       dedup_key: `${iso}|${amount.toFixed(2)}|${normalizeDesc(description)}`,
     });
   }
-  return { transactions, stats, mapping };
+  return { transactions: assignDedupKeys(transactions), stats, mapping };
 }
 
 // -------------------------------------------------------------- AI file doctor
@@ -267,5 +283,5 @@ export function transactionsFromGrid(grid, spec) {
       dedup_key: `${iso}|${amount.toFixed(2)}|${normalizeDesc(description)}`,
     });
   }
-  return { transactions, stats };
+  return { transactions: assignDedupKeys(transactions), stats };
 }
