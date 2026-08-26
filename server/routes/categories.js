@@ -62,7 +62,7 @@ router.patch('/:id', (req, res) => {
   const err = validateCategory({ ...row, ...b }, row.id);
   if (err) return res.status(400).json({ error: err });
   db.prepare(
-    `UPDATE categories SET name=?, group_id=?, account_id=?, monthly_budget=?, active_from=?, active_to=?, is_active=?
+    `UPDATE categories SET name=?, group_id=?, account_id=?, monthly_budget=?, active_from=?, active_to=?, is_active=?, roll_overs=?
      WHERE id=?`
   ).run(
     b.name ?? row.name,
@@ -72,6 +72,7 @@ router.patch('/:id', (req, res) => {
     b.active_from !== undefined ? b.active_from : row.active_from,
     b.active_to !== undefined ? b.active_to : row.active_to,
     b.is_active !== undefined ? (b.is_active ? 1 : 0) : row.is_active,
+    b.roll_overs !== undefined ? (b.roll_overs ? 1 : 0) : row.roll_overs,
     req.params.id
   );
   res.json(db.prepare('SELECT * FROM categories WHERE id = ?').get(row.id));

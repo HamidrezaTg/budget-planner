@@ -93,8 +93,9 @@ CREATE TABLE IF NOT EXISTS categories (
   account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
   monthly_budget REAL NOT NULL DEFAULT 0,
   active_from TEXT,
-  active_to TEXT,
-  is_active INTEGER NOT NULL DEFAULT 1
+  active_to TEXT,                            -- YYYY-MM, NULL = active
+  is_active INTEGER NOT NULL DEFAULT 1,
+  roll_overs INTEGER NOT NULL DEFAULT 0      -- underspend carries to next month
 );
 
 CREATE TABLE IF NOT EXISTS category_groups (

@@ -37,6 +37,12 @@ export default function Budgets() {
     load();
   };
 
+  const toggleRollover = async (l) => {
+    const cur = l.roll_overs === undefined ? false : !!l.roll_overs;
+    await api.patch(`/categories/${l.category_id}`, { roll_overs: !cur });
+    load();
+  };
+
   const input = (key, value) => (
     <input
       className="budget-input"
@@ -71,7 +77,7 @@ export default function Budgets() {
                 <tr>
                   <th>Category</th><th>Account</th>
                   <th className="num">Standing plan</th>
-                  <th className="num">Plan for {monthLabel(month)}</th><th></th>
+                  <th className="num">Plan for {monthLabel(month)}</th><th>Rollover</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -110,6 +116,15 @@ export default function Budgets() {
                       >✓</button>
                     </td>
                     <td className="num">{input(l.category_id, l.planned)}</td>
+                    <td>
+                      <button
+                        className={`btn ghost small ${l.roll_overs ? 'active' : ''}`}
+                        title="Underspend carries forward to the next month"
+                        onClick={() => toggleRollover(l)}
+                      >
+                        {l.roll_overs ? 'on' : 'off'}
+                      </button>
+                    </td>
                     <td>
                       <button
                         className={`btn small ${edits[l.category_id] !== undefined ? 'primary' : 'ghost'}`}

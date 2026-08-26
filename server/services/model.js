@@ -18,6 +18,8 @@ export function monthsBetween(a, b) {
 
 // Planned amount for a category in a month: explicit budget line overrides,
 // otherwise the category's standing monthly plan. Inactive categories plan 0.
+// With roll_overs enabled, last month's underspend (only if that month had
+// activity in the category) is added to this month's plan.
 export function plannedForCategory(cat, month) {
   const active =
     cat.is_active &&
@@ -27,7 +29,36 @@ export function plannedForCategory(cat, month) {
   const line = db
     .prepare('SELECT planned_amount FROM budget_lines WHERE category_id = ? AND month = ?')
     .get(cat.id, month);
-  return line ? line.planned_amount : cat.monthly_budget;
+  const base = line ? line.planned_amount : cat.monthly_budget;
+
+  if (!cat.roll_overs) return base;
+
+  const prev = addMonths(month, -1);
+  const hadActivity =
+    db
+      .prepare(
+        'SELECT 1 FROM transactions WHERE category_id = ? AND substr(date,1,7) = ? LIMIT 1'
+      )
+      .get(cat.id, prev);
+  if (!hadActivity) return base;
+
+  const prevLine = db
+    .prepare('SELECT planned_amount FROM budget_lines WHERE category_id = ? AND month = ?')
+    .get(cat.id, prev);
+  const prevPlan = prevLine ? prevLine.planned_amount : cat.monthly_budget;
+  const prevActual = actualForCategoryMonth(cat.id, prev);
+  const carry = Math.max(0, prevPlan - prevActual);
+  return base + Math.round(carry * 100) / 100;
+}
+
+function actualForCategoryMonth(categoryId, month) {
+  return (
+    db
+      .prepare(
+        'SELECT COALESCE(SUM(amount),0) AS s FROM transactions WHERE category_id = ? AND substr(date,1,7) = ?'
+      )
+      .get(categoryId, month).s * -1
+  );
 }
 
 export function getAllCategories() {
