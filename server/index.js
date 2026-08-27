@@ -19,7 +19,7 @@ import attachmentRoutes from './routes/attachments.js';
 import reportRoutes from './routes/reports.js';
 import settingsRoutes from './routes/settings.js';
 import aiRoutes from './routes/ai.js';
-import { requireAuth } from './auth.js';
+import { requireAuth, sweepExpiredSessions } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 2026;
@@ -28,8 +28,28 @@ const PORT = Number(process.env.PORT) || 2026;
 const BIND_IP = process.env.BIND_IP || '';
 
 const app = express();
-app.use(express.json());
+app.disable('x-powered-by');
+app.set('trust proxy', process.env.TRUST_PROXY === '1' ? 1 : false);
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+
+// Security headers. CSP is scoped to the built client's needs: React inline
+// styles are allowed, but scripts must come from the same origin.
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+      "script-src 'self' 'sha256-rBN/v916LrsvlEADLbAag4oxTka3H2ltz3J6Mjfhif8='; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+      "img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; " +
+      "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'"
+  );
+  next();
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', requireAuth, categoryRoutes);
@@ -70,6 +90,30 @@ if (fs.existsSync(dist)) {
     res.sendFile(path.join(dist, 'index.html'));
   });
 }
+
+// Unknown API routes get a clean JSON 404 (never the SPA fallback).
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// Centralized error handler: no stack traces or internal paths leak to clients.
+// eslint-disable-next-line no-unused-vars
+app.use((err, _req, res, next) => {
+  const status = err.status || err.statusCode || (err.type === 'entity.parse.failed' ? 400 : 500);
+  if (status >= 500) console.error('[error]', err);
+  if (res.headersSent) return next(err);
+  const message =
+    process.env.NODE_ENV === 'production'
+      ? status >= 500
+        ? 'Internal server error'
+        : err.message
+      : err.message;
+  res.status(status).json({ error: message });
+});
+
+// Remove expired sessions once at startup (and periodically after that).
+sweepExpiredSessions();
+setInterval(sweepExpiredSessions, 3600 * 1000).unref();
 
 app.listen(PORT, BIND_IP || undefined, () => {
   const shown = BIND_IP || '0.0.0.0';

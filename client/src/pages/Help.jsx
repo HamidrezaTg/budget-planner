@@ -135,7 +135,7 @@ const PAGES = [
     title: 'Accounts & users',
     items: [
       ['Accounts', 'You define your own accounts (e.g. a main bank account and a daily-spending card). Salaries land in the bank account; one monthly transfer funds the card — the Dashboard shows the exact amount.'],
-      ['Add user', 'Each user gets a completely separate database. Use the sidebar button while logged in.'],
+      ['Add user', 'Each user gets a completely separate database. Admins manage users under Admin → Users in the sidebar.'],
     ],
   },
 ];

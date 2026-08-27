@@ -3,6 +3,76 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.9.0] — 2026-08-27
+
+### Fixed (data integrity)
+- **Split deletion** — deleting a split parent now removes its children (SQLite
+  foreign-key enforcement is enabled on every database). Attachment files for the
+  parent AND its children are deleted from disk.
+- **Atomic restore** — backups are integrity-checked (`PRAGMA integrity_check`,
+  `foreign_key_check`) before restore, applied via an atomic rename with a
+  timestamped `.pre-restore-<ts>` snapshot, and rolled back if the database cannot
+  be reopened. An interrupted restore can no longer truncate the live database.
+- **Projection anchoring** — when the latest observed balance predates the forecast
+  start month, the projection now rolls forward from the observed balance instead
+  of silently ignoring the anchor.
+- **Recurrence posting** — posting a future month no longer suppresses the current
+  month's item; `last_posted_month` never moves backwards; month input is validated.
+- **Import categorization** — account-scoped automation rules now match on import:
+  categorization runs AFTER the selected account is assigned. Picking an account in
+  the preview re-runs rules via `/api/import/preview`.
+- **Import account selection** — an invalid account is now rejected explicitly; the
+  silent "first Revolut account" fallback is gone.
+- **Currency-aware dedup** — deduplication fingerprints include the transaction
+  currency, so identical date/amount/description rows in different currencies no
+  longer collide. Existing keys are migrated once (guarded by `PRAGMA user_version`).
+- **Date parsing** — impossible dates (e.g. `31/31/2026`) are rejected instead of
+  stored; MM/DD files like `05/31/2026` resolve via a validity-based fallback.
+- **Number parsing** — German (`1.234,56`) and US (`1,234.56`) amounts, currency
+  symbols and parenthesised negatives parse correctly.
+- **Import staging cleanup** — uploaded files are deleted on confirm, on parse
+  failure, on eviction, and stale uploads are swept on startup.
+- **Dedup migration safety** — application-owned `rec|...` and `split|...` keys are
+  preserved; normal-key migration is transactional and collision-safe.
+- **Split part deletion** — direct deletion of a split child is rejected; undo the
+  split from its parent instead.
+
+### Fixed (security)
+- **Login protection** — per-IP+username rate limiting (10/minute) with a generic
+  error message; the setup endpoint is rate-limited too.
+- **Password policy** — minimum raised to 8 characters for new and changed passwords.
+- **Async password hashing** — scrypt no longer blocks the event loop.
+- **Session lifecycle** — sessions expire server-side after 30 days; expired sessions
+  are swept; changing your own password now invalidates every session.
+- **Security headers** — CSP, `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`, `Permissions-Policy`; `X-Powered-By` removed. CSP hash matches
+  the built client's inline theme script.
+- **Error handling** — centralized error middleware; no stack traces in production;
+  clean JSON 404s for unknown API routes.
+- **AI SQL allowlist** — the finance chat can only read budget tables; `settings`
+  (AI API key) and internal audit tables are unreachable; SQLite authorizer checks
+  enforce the allowlist at execution time and row limits are capped.
+- **Upload limits** — import uploads are capped at 64 MB (single file).
+- **Import staging isolation** — staged import tokens are bound to their owning user.
+- **First-run setup** — setup is limited to localhost unless `SETUP_TOKEN` is used.
+
+### Fixed (packaging & installer)
+- The desktop client `.deb` now stamps its Debian metadata version from
+  `desktop-client/package.json` (fixes the filename-vs-metadata mismatch).
+- The installer preserves `--client`, `--version` and `--quiet` across the sudo
+  re-exec; it no longer requires Node to parse release JSON; assets are downloaded
+  via the direct release URL.
+- CI installs root and client dependencies before running tests and the client build.
+
+### Added
+- Test suite (`npm test`, 33 tests) covering parser, DB integrity,
+  projection, security, import rules and an end-to-end HTTP flow.
+- GitHub Actions CI: server tests, client build, dependency audit, version checks.
+- `docs/IMPROVEMENT_PLAN.md` — the validated improvement plan this release implements.
+
+### Removed
+- Dead `client/src/pages/Savings.jsx` (referenced non-existent `/envelopes` routes).
+
 ## [3.8.0] — 2026-08-26
 
 ### Added

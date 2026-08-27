@@ -113,6 +113,13 @@ export default function Settings() {
   };
 
   const deleteFxRate = async (month, cur) => {
+    const ok = await confirm({
+      title: 'Delete this exchange rate?',
+      message: `The ${cur} rate for ${month} will be removed. Transactions for that month will be counted 1:1 until you add a new rate.`,
+      danger: true,
+      confirmLabel: 'Delete rate',
+    });
+    if (!ok) return;
     await api.del('/settings/fx', { body: { month, currency: cur } });
     loadFx();
   };

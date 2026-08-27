@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { normalizeDesc } from './services/parser.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
@@ -14,6 +15,7 @@ fs.mkdirSync(path.join(DATA_DIR, 'uploads'), { recursive: true });
 export const master = new DatabaseSync(path.join(DATA_DIR, 'master.db'));
 master.exec(`
 PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE,
@@ -70,6 +72,11 @@ export function getUserDb(username, opts = {}) {
   const inst = new DatabaseSync(path.join(USERS_DIR, `${safe}.db`));
   initUserSchema(inst, opts);
   inst.exec('PRAGMA journal_mode = WAL;');
+  // Foreign-key enforcement: declared ON DELETE CASCADE / SET NULL rules now
+  // actually fire (e.g. split children removed when their parent is deleted).
+  // Set AFTER initUserSchema so legacy ALTER TABLE ADD COLUMN migrations
+  // (which may carry a REFERENCES clause) are not blocked by SQLite.
+  inst.exec('PRAGMA foreign_keys = ON;');
   dbCache.set(username, inst);
   return inst;
 }
@@ -84,7 +91,7 @@ export function closeUserDb(username) {
   }
 }
 
-function initUserSchema(db, { generic = false } = {}) {
+export function initUserSchema(db, { generic = false } = {}) {
   db.exec(`
 CREATE TABLE IF NOT EXISTS categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -298,9 +305,53 @@ try {
 try {
   db.exec('ALTER TABLE funds ADD COLUMN target_date TEXT');
 } catch {}
+try {
+  db.exec("ALTER TABLE transactions ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'");
+} catch {}
+
+// Deduplication fingerprint now includes the transaction currency. Recompute
+// existing keys once (guarded by PRAGMA user_version) so re-imports of old
+// statements still deduplicate against stored rows, and same-date/same-amount/
+// same-description rows in different currencies no longer collide.
+const v = db.prepare('PRAGMA user_version').get().user_version;
+if (v < 1) {
+  migrateDedupKeys(db);
+  db.exec('PRAGMA user_version = 1');
+}
 
   const seed = db.prepare('SELECT COUNT(*) AS c FROM categories').get().c;
   if (seed === 0) seedGeneric(db);
+}
+
+function migrateDedupKeys(inst) {
+  const seen = new Map();
+  const rows = inst
+    .prepare('SELECT id, date, amount, currency, description, dedup_key FROM transactions ORDER BY id')
+    .all();
+  const updates = [];
+  for (const tx of rows) {
+    // Recurrence and split keys are application-owned identities, not imported
+    // statement fingerprints. Rewriting them would break idempotent posting
+    // and make existing split parts look like imported transactions.
+    if (/^(?:rec|split)\|/.test(tx.dedup_key)) continue;
+    const base = `${tx.date}|${Number(tx.amount).toFixed(2)}|${tx.currency || 'EUR'}|${normalizeDesc(tx.description)}`;
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    updates.push({ id: tx.id, key: n > 0 ? `${base}|#${n}` : base });
+  }
+
+  // Use temporary unique values first so an existing legacy key cannot collide
+  // with a later migrated key during the rewrite.
+  const temp = inst.prepare('UPDATE transactions SET dedup_key = ? WHERE id = ?');
+  inst.exec('BEGIN');
+  try {
+    for (const update of updates) temp.run(`__dedup_migration__${update.id}`, update.id);
+    for (const update of updates) temp.run(update.key, update.id);
+    inst.exec('COMMIT');
+  } catch (error) {
+    inst.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 // Neutral starter setup for users created by the admin: no household-specific

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getSetting, setSetting, db, als, getUserDb, closeUserDb, DATA_DIR } from '../db.js';
+import { getSetting, setSetting, db, als, getUserDb, closeUserDb, DATA_DIR, initUserSchema } from '../db.js';
 import { getAiConfig, chatComplete } from '../services/ai.js';
 import { requireAuth } from '../auth.js';
 import fs from 'node:fs';
@@ -228,19 +228,39 @@ router.get('/backup', (req, res) => {
 // Danger zone: delete all spending data, keep budgets/rules/funds/income.
 router.delete('/spending', (req, res) => {
   const n = db.prepare('SELECT COUNT(*) AS c FROM transactions').get().c;
-  db.prepare('DELETE FROM transactions').run();
-  db.prepare('DELETE FROM ai_audit_log').run();
+  const files = db.prepare('SELECT filename FROM attachments').all();
+  if (files.length) {
+    const dir = path.join(DATA_DIR, 'uploads', req.username.replace(/[^a-zA-Z0-9_\-]/g, '_'));
+    for (const f of files) {
+      const resolved = path.resolve(dir, f.filename);
+      if (resolved.startsWith(path.resolve(dir) + path.sep)) {
+        try { fs.unlinkSync(resolved); } catch {}
+      }
+    }
+  }
+  db.exec('BEGIN');
+  try {
+    // FK cascade removes split children + attachment metadata rows.
+    db.prepare('DELETE FROM transactions').run();
+    db.prepare('DELETE FROM ai_audit_log').run();
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
   res.json({ ok: true, deleted: n });
 });
 
 // Restore a previously downloaded backup (.db). Validates the file, keeps a
-// copy of the current database as <name>.db.pre-restore, then swaps it in.
+// timestamped copy of the current database as <name>.db.pre-restore-<ts>, then
+// swaps it in via an atomic rename. On reopen failure the previous database is
+// restored, so a failed copy can never leave the live database truncated.
 router.post('/restore', restoreUpload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-  const tmp = path.join(DATA_DIR, `restore-${Date.now()}.tmp`);
   const dataDir = DATA_DIR;
   fs.mkdirSync(dataDir, { recursive: true });
+  const tmp = path.join(dataDir, `restore-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`);
   fs.writeFileSync(tmp, req.file.buffer);
 
   let check;
@@ -251,26 +271,61 @@ router.post('/restore', restoreUpload.single('file'), (req, res) => {
     );
     const missing = REQUIRED_TABLES.filter((t) => !tables.has(t));
     if (missing.length) throw new Error(`Not a valid budget backup — missing: ${missing.join(', ')}`);
+    const integrity = check.prepare('PRAGMA integrity_check').get();
+    if (integrity?.integrity_check !== 'ok')
+      throw new Error('Backup failed the SQLite integrity check — refusing to restore');
+    const fkViolations = check.prepare('PRAGMA foreign_key_check').all();
+    if (fkViolations.length)
+      throw new Error(`Backup has ${fkViolations.length} broken reference(s) — refusing to restore`);
     const txCount = check.prepare('SELECT COUNT(*) AS c FROM transactions').get().c;
     const catCount = check.prepare('SELECT COUNT(*) AS c FROM categories').get().c;
     check.close();
+    check = null;
 
     const username = req.username;
     const safe = username.replace(/[^a-zA-Z0-9_\-]/g, '_');
     const target = path.join(dataDir, 'users', `${safe}.db`);
 
+    // Apply any pending schema migrations to a writable staging copy so an
+    // older backup still restores cleanly into the current app version.
+    const staged = `${tmp}.staged`;
+    fs.copyFileSync(tmp, staged);
+    const mig = new DatabaseSync(staged);
+    initUserSchema(mig);
+    mig.close();
+
+    // Checkpoint before copying the live database so its snapshot does not
+    // depend on a separate WAL file.
+    const live = getUserDb(username);
+    live.exec('PRAGMA wal_checkpoint(TRUNCATE);');
     closeUserDb(username);
-    try { fs.copyFileSync(target, target + '.pre-restore'); } catch {}
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const pre = `${target}.pre-restore-${stamp}`;
+    fs.copyFileSync(target, pre);
     for (const suffix of ['-wal', '-shm']) {
       try { fs.unlinkSync(target + suffix); } catch {}
     }
-    fs.copyFileSync(tmp, target);
-    fs.unlinkSync(tmp);
 
-    getUserDb(username); // reopen + cache
+    // Atomic swap on the same filesystem.
+    fs.renameSync(staged, target);
+    try { fs.unlinkSync(tmp); } catch {}
+
+    try {
+      getUserDb(username); // reopen + cache
+    } catch (e) {
+      // Roll back using renames so a failed restore never leaves a partial
+      // database or a target WAL sidecar in place.
+      const failed = `${target}.failed-restore-${stamp}`;
+      try { fs.renameSync(target, failed); } catch {}
+      fs.renameSync(pre, target);
+      try { getUserDb(username); } catch {}
+      try { fs.unlinkSync(failed); } catch {}
+      throw new Error('Restore failed while reopening the database — previous data was rolled back');
+    }
     res.json({ ok: true, transactions: txCount, categories: catCount });
   } catch (e) {
     try { fs.unlinkSync(tmp); } catch {}
+    try { fs.unlinkSync(tmp + '.staged'); } catch {}
     try { check?.close(); } catch {}
     res.status(400).json({ error: e.message });
   }

@@ -6,38 +6,75 @@ import {
   createSession,
   destroySession,
   changePassword,
-  hashPassword,
+  hashPasswordAsync,
   requireAuth,
   requireAdmin,
+  PASSWORD_MIN,
 } from '../auth.js';
 import { getSetting, setSetting, db } from '../db.js';
+import { rateLimit, consume, clear } from '../rate-limit.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const router = Router();
+
+const SETUP_TOKEN = String(process.env.SETUP_TOKEN || '').trim();
+
+function isLoopback(ip) {
+  const normalized = String(ip || '').replace(/^::ffff:/, '');
+  return normalized === '127.0.0.1' || normalized === '::1';
+}
+
+function hasSetupToken(req) {
+  const presented = String(req.get('X-Setup-Token') || '');
+  if (!SETUP_TOKEN || !presented) return false;
+  const expected = Buffer.from(SETUP_TOKEN);
+  const actual = Buffer.from(presented);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+function requireLocalSetup(req, res, next) {
+  if (isLoopback(req.ip) || hasSetupToken(req)) return next();
+  return res.status(403).json({
+    error: 'Initial setup is limited to localhost; set SETUP_TOKEN for remote setup',
+  });
+}
 
 router.get('/status', (req, res) => {
   res.json({ passwordSet: hasAnyUser() }); // true = at least one account exists
 });
 
-// First-run: create the initial account (becomes admin)
-router.post('/setup', (req, res) => {
-  if (hasAnyUser()) return res.status(400).json({ error: 'An account already exists — please log in' });
-  const { username, password } = req.body ?? {};
-  try {
-    const name = createUser(username, password, 'admin');
-    als.run(getUserDb(name), () => setSetting('currency', 'EUR'));
-    createSession(res, name);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
+// First-run: create the initial account (becomes admin). Rate-limited by IP so
+// a LAN scan cannot hammer the endpoint.
+router.post(
+  '/setup',
+  rateLimit({ windowMs: 60 * 1000, max: 5 }),
+  requireLocalSetup,
+  async (req, res) => {
+    if (hasAnyUser()) return res.status(400).json({ error: 'An account already exists — please log in' });
+    const { username, password } = req.body ?? {};
+    try {
+      const name = await createUser(username, password, 'admin');
+      als.run(getUserDb(name), () => setSetting('currency', 'EUR'));
+      createSession(res, name);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
   }
-});
+);
 
-router.post('/login', (req, res) => {
-  const { username, password } = req.body ?? {};
-  const user = verifyLogin(username, password);
+// Login is rate-limited per IP+username (10 tries / minute), with a generic
+// error so usernames cannot be enumerated.
+router.post('/login', async (req, res) => {
+  const username = String(req.body?.username ?? '').trim().toLowerCase();
+  const key = `${req.ip}|${username}`;
+  if (consume(key, 60 * 1000, 10))
+    return res.status(429).json({ error: 'Too many attempts — try again in a minute' });
+  const user = await verifyLogin(username, req.body?.password);
   if (!user) return res.status(401).json({ error: 'Wrong username or password' });
+  clear(key);
   createSession(res, user);
   res.json({ ok: true });
 });
@@ -55,10 +92,10 @@ router.get('/me', requireAuth, (req, res) => {
   });
 });
 
-router.post('/change-password', requireAuth, (req, res) => {
+router.post('/change-password', requireAuth, async (req, res) => {
   const { current_password, new_password } = req.body ?? {};
   try {
-    changePassword(req.username, current_password, new_password);
+    await changePassword(req.username, current_password, new_password);
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -70,10 +107,10 @@ router.get('/users', requireAuth, requireAdmin, (_req, res) => {
   res.json(listUsers());
 });
 
-router.post('/users', requireAuth, requireAdmin, (req, res) => {
+router.post('/users', requireAuth, requireAdmin, async (req, res) => {
   const { username, password } = req.body ?? {};
   try {
-    const name = createUser(username, password, 'user');
+    const name = await createUser(username, password, 'user');
     als.run(getUserDb(name), () => {
       db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run('currency', 'EUR');
     });
@@ -83,16 +120,16 @@ router.post('/users', requireAuth, requireAdmin, (req, res) => {
   }
 });
 
-router.post('/users/:username/password', requireAuth, requireAdmin, (req, res) => {
+router.post('/users/:username/password', requireAuth, requireAdmin, async (req, res) => {
   const target = String(req.params.username ?? '').toLowerCase();
   const { new_password } = req.body ?? {};
   const row = master.prepare('SELECT username FROM users WHERE username = ?').get(target);
   if (!row) return res.status(404).json({ error: 'User not found' });
-  if (!new_password || new_password.length < 4)
-    return res.status(400).json({ error: 'Password must be at least 4 characters' });
+  if (!new_password || new_password.length < PASSWORD_MIN)
+    return res.status(400).json({ error: `Password must be at least ${PASSWORD_MIN} characters` });
   master
     .prepare('UPDATE users SET password_hash = ? WHERE username = ?')
-    .run(hashPassword(new_password), target);
+    .run(await hashPasswordAsync(new_password), target);
   // force re-login everywhere
   master.prepare('DELETE FROM sessions WHERE username = ?').run(target);
   res.json({ ok: true });

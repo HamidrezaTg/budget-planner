@@ -58,8 +58,25 @@ router.patch('/:id', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
-  // remove any attachment files first (FKs are not enforced, so no auto-cascade)
-  const files = db.prepare('SELECT filename FROM attachments WHERE transaction_id = ?').all(req.params.id);
+  const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
+  if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+  if (tx.split_of) {
+    return res.status(400).json({
+      error: 'Cannot delete a split part directly — undo the split from its parent first',
+    });
+  }
+
+  // Deleting a split parent removes its children via the ON DELETE CASCADE
+  // foreign key (enforced since v3.9). Attachment files are not stored by
+  // SQLite, so collect and unlink them for the parent AND all children first.
+  const ids = [
+    tx.id,
+    ...db.prepare('SELECT id FROM transactions WHERE split_of = ?').all(tx.id).map((r) => r.id),
+  ];
+  const placeholders = ids.map(() => '?').join(',');
+  const files = db
+    .prepare(`SELECT filename FROM attachments WHERE transaction_id IN (${placeholders})`)
+    .all(...ids);
   if (files.length) {
     const dir = path.join(DATA_DIR, 'uploads', req.username.replace(/[^a-zA-Z0-9_\-]/g, '_'));
     for (const f of files) {
@@ -68,9 +85,15 @@ router.delete('/:id', (req, res) => {
         try { fs.unlinkSync(resolved); } catch {}
       }
     }
-    db.prepare('DELETE FROM attachments WHERE transaction_id = ?').run(req.params.id);
   }
-  db.prepare('DELETE FROM transactions WHERE id = ?').run(req.params.id);
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM transactions WHERE id = ?').run(tx.id);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
   res.json({ ok: true });
 });
 
@@ -126,8 +149,32 @@ router.post('/:id/unsplit', (req, res) => {
   if (!tx) return res.status(404).json({ error: 'Transaction not found' });
   if (!tx.split_group) return res.status(400).json({ error: 'Not split' });
   if (tx.split_of) return res.status(400).json({ error: 'This is a split part — delete it instead' });
-  db.prepare('DELETE FROM transactions WHERE split_of = ?').run(tx.id);
-  db.prepare('UPDATE transactions SET split_group = NULL WHERE id = ?').run(tx.id);
+
+  // Remove attachment files attached to the split children before deleting them.
+  const children = db.prepare('SELECT id FROM transactions WHERE split_of = ?').all(tx.id);
+  if (children.length) {
+    const ids = children.map((r) => r.id);
+    const placeholders = ids.map(() => '?').join(',');
+    const files = db
+      .prepare(`SELECT filename FROM attachments WHERE transaction_id IN (${placeholders})`)
+      .all(...ids);
+    const dir = path.join(DATA_DIR, 'uploads', req.username.replace(/[^a-zA-Z0-9_\-]/g, '_'));
+    for (const f of files) {
+      const resolved = path.resolve(dir, f.filename);
+      if (resolved.startsWith(path.resolve(dir) + path.sep)) {
+        try { fs.unlinkSync(resolved); } catch {}
+      }
+    }
+  }
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM transactions WHERE split_of = ?').run(tx.id);
+    db.prepare('UPDATE transactions SET split_group = NULL WHERE id = ?').run(tx.id);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
   res.json({ ok: true });
 });
 

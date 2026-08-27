@@ -28,7 +28,7 @@ export default function Transactions() {
     api.get(`/transactions?${q}`).then((d) => {
       setRows(d.rows);
       setTotal(d.total);
-    });
+    }).catch((e) => setError(e.message));
   };
 
   useEffect(() => {

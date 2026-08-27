@@ -4,7 +4,7 @@ import { useDialogs } from '../components/Dialog.jsx';
 
 // Category management (groups, accounts, active dates) + learned keyword rules.
 export default function Categories() {
-  const { toast } = useDialogs();
+  const { toast, confirm } = useDialogs();
   const [cats, setCats] = useState([]);
   const [meta, setMeta] = useState({ groups: [], accounts: [] });
   const [rules, setRules] = useState([]);
@@ -20,6 +20,16 @@ export default function Categories() {
   useEffect(() => { load(); api.get('/categories/meta/all').then(setMeta); }, []);
 
   const patch = async (id, body) => {
+    if (body.is_active === false) {
+      const ok = await confirm({
+        title: 'Retire this category?',
+        message:
+          'Retiring clears its monthly plan and categorization rules so nothing phantom survives. You can reactivate it later.',
+        danger: true,
+        confirmLabel: 'Retire category',
+      });
+      if (!ok) return;
+    }
     try { await api.patch(`/categories/${id}`, body); load(); }
     catch (e) { toast(e.message, 'error'); }
   };
@@ -52,6 +62,20 @@ export default function Categories() {
     e.preventDefault();
     try {
       setTestResult(await api.post('/transactions/rules/test', { ...testTx, amount: Number(testTx.amount) || 0 }));
+    } catch (e) { toast(e.message, 'error'); }
+  };
+
+  const deleteRule = async (r) => {
+    const ok = await confirm({
+      title: 'Delete this rule?',
+      message: `"${r.rule_type === 'advanced' ? [r.description_contains && `desc: ${r.description_contains}`, r.amount_min != null && `≥ €${r.amount_min}`, r.amount_max != null && `≤ €${r.amount_max}`, r.account_id && 'account', r.tx_type && `type: ${r.tx_type}`].filter(Boolean).join(' · ') : r.keyword}" will stop matching new transactions. Existing transactions keep their categories.`,
+      danger: true,
+      confirmLabel: 'Delete rule',
+    });
+    if (!ok) return;
+    try {
+      await api.del(`/transactions/rules${r.rule_type === 'advanced' ? '/advanced' : ''}/${r.id}`);
+      load();
     } catch (e) { toast(e.message, 'error'); }
   };
 
@@ -141,7 +165,7 @@ export default function Categories() {
                 <td>
                   <button
                     className="btn danger small"
-                    onClick={() => api.del(`/transactions/rules${r.rule_type === 'advanced' ? '/advanced' : ''}/${r.id}`).then(load)}
+                    onClick={() => deleteRule(r)}
                   >Delete</button>
                 </td>
               </tr>

@@ -170,6 +170,28 @@ function latestAnchor(from) {
   return row?.m || null;
 }
 
+// Net change in free savings for a single month: income minus commitment and
+// variable outgoings. Shared by the forecast loop and the pre-range roll-forward.
+function monthNet(m, cats, coveredCats, commitments) {
+  const inc = incomeForMonth(m);
+  let outgoings = 0;
+  const lines = [];
+  for (const cm of commitments) {
+    if (m >= cm.start_month && (!cm.end_month || m <= cm.end_month)) {
+      outgoings += cm.monthly_amount;
+      lines.push({ name: cm.name, amount: cm.monthly_amount });
+    }
+  }
+  let variableTotal = 0;
+  for (const c of cats) {
+    if (coveredCats.has(c.id)) continue;
+    const p = plannedForCategory(c, m);
+    if (p) variableTotal += p;
+  }
+  outgoings += variableTotal;
+  return { income: inc.total, outgoings, variable: variableTotal, net: inc.total - outgoings, lines };
+}
+
 // Projection: income minus outgoings rolled forward, commitments dropping out
 // at their end dates. Re-anchors to the latest observed bank balance (spec §7).
 export function project(numMonths = 96, from = currentMonth()) {
@@ -190,27 +212,28 @@ export function project(numMonths = 96, from = currentMonth()) {
   let free = 0;
   let varianceAtAnchor = null;
 
+  // If the latest observation predates the forecast start, start from the
+  // observed balance and roll free savings forward to `from` instead of
+  // silently ignoring the anchor (its month never appears in the loop).
+  if (anchorMonth && anchorMonth < from) {
+    const observed = db
+      .prepare('SELECT COALESCE(SUM(balance),0) AS s FROM balance_observations WHERE month = ?')
+      .get(anchorMonth).s;
+    const committedAtAnchor = db
+      .prepare('SELECT * FROM funds')
+      .all()
+      .reduce((s, f) => s + fundBalanceAt(f, anchorMonth), 0);
+    free = observed - committedAtAnchor;
+    let m = addMonths(anchorMonth, 1);
+    while (m < from) {
+      free += monthNet(m, cats, coveredCats, commitments).net;
+      m = addMonths(m, 1);
+    }
+  }
+
   for (let i = 0; i < numMonths; i++) {
     const m = addMonths(from, i);
-    const inc = incomeForMonth(m);
-
-    let outgoings = 0;
-    const lines = [];
-    for (const cm of commitments) {
-      if (m >= cm.start_month && (!cm.end_month || m <= cm.end_month)) {
-        outgoings += cm.monthly_amount;
-        lines.push({ name: cm.name, amount: cm.monthly_amount });
-      }
-    }
-    let variableTotal = 0;
-    for (const c of cats) {
-      if (coveredCats.has(c.id)) continue;
-      const p = plannedForCategory(c, m);
-      if (p) variableTotal += p;
-    }
-    outgoings += variableTotal;
-
-    const net = inc.total - outgoings;
+    const { income: incTotal, outgoings, variable: variableTotal, net, lines } = monthNet(m, cats, coveredCats, commitments);
 
     // re-anchor: once we pass an observed month, shift so totals match reality
     if (anchorMonth && m === anchorMonth) {
@@ -231,7 +254,7 @@ export function project(numMonths = 96, from = currentMonth()) {
     const committed = committedSavingsAt(m);
     months.push({
       month: m,
-      income: round2(inc.total),
+      income: round2(incTotal),
       commitments: round2(lines.reduce((s, l) => s + l.amount, 0)),
       variable: round2(variableTotal),
       outgoings: round2(outgoings),
@@ -418,7 +441,11 @@ export function monthView(month) {
   const inc = incomeForMonth(month);
 
   const untagged = cats.filter((c) => !c.account_id && c.is_active).map((c) => c.name);
+  // Month-scoped count for the month being viewed, plus the global queue size.
   const needsReview = db
+    .prepare('SELECT COUNT(*) AS c FROM transactions WHERE needs_review = 1 AND substr(date,1,7) = ?')
+    .get(month).c;
+  const needsReviewTotal = db
     .prepare('SELECT COUNT(*) AS c FROM transactions WHERE needs_review = 1')
     .get().c;
   const unconvertedFx = db
@@ -450,7 +477,12 @@ export function monthView(month) {
     month_result: round2(totalsPlanned - totalsActual),
     transfer_to_revolut: round2(transferToRevolut(month)),
     funds,
-    warnings: { untagged_categories: untagged, needs_review: needsReview, unconverted_fx: unconvertedFx },
+    warnings: {
+      untagged_categories: untagged,
+      needs_review: needsReview,
+      needs_review_total: needsReviewTotal,
+      unconverted_fx: unconvertedFx,
+    },
   };
   return { ...result, ...insightsForMonth(month, result) };
 }

@@ -63,6 +63,24 @@ export default function ImportPage() {
     }
   };
 
+  // Picking an account re-runs categorization (account-scoped rules only match
+  // once the account is known), so refresh the preview for the same staged file.
+  const pickAccount = async (e) => {
+    const value = e.target.value;
+    setAccountId(value);
+    if (!result?.token) return;
+    setBusy(true);
+    setError('');
+    try {
+      const r = await api.post('/import/preview', { token: result.token, account_id: value || null });
+      setResult((prev) => ({ ...prev, ...r }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       <h1>Import statement</h1>
@@ -116,7 +134,7 @@ export default function ImportPage() {
             <div className="card stat"><div className="stat-label">Income / Expenses</div><div className="stat-value small-value">{result.summary.income} / {result.summary.expenses}</div></div>
           </div>
           <div style={{ marginTop: 16 }} className="inline-form">
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <select value={accountId} onChange={pickAccount}>
               <option value="">Import into account…</option>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>

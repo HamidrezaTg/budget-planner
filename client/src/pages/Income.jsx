@@ -6,7 +6,7 @@ export default function Income() {
   const [month, setMonth] = useState(currentMonth());
   const [data, setData] = useState(null);
   const [edits, setEdits] = useState({});
-  const { prompt } = useDialogs();
+  const { prompt, confirm } = useDialogs();
 
   const load = () => api.get(`/income?month=${month}`).then((d) => { setData(d); setEdits({}); });
   useEffect(() => { load(); }, [month]);
@@ -89,7 +89,17 @@ export default function Income() {
                   {s.entry_amount != null && (
                     <button
                       className="btn ghost small"
-                      onClick={() => api.put(`/income/${month}/${s.id}`, { amount: null }).then(load)}
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: 'Clear this month’s actual?',
+                          message: `"${s.name}" will fall back to its usual amount for the projection.`,
+                          danger: true,
+                          confirmLabel: 'Clear',
+                        });
+                        if (!ok) return;
+                        await api.put(`/income/${month}/${s.id}`, { amount: null });
+                        load();
+                      }}
                     >Clear</button>
                   )}
                 </td>

@@ -17,7 +17,7 @@ if (hasAnyUser()) {
   process.exit(1);
 }
 try {
-  createUser(name, pw, 'admin');
+  await createUser(name, pw, 'admin');
   als.run(getUserDb(name), () => setSetting('currency', 'EUR'));
   console.log(`Admin account "${name}" created.`);
 } catch (e) {

@@ -7,13 +7,14 @@ export default function Recurring() {
   const [meta, setMeta] = useState({ accounts: [], groups: [] });
   const [cats, setCats] = useState([]);
   const [form, setForm] = useState({ name: '', amount: '', day_of_month: '1', account_id: '', category_id: '', auto_post: false });
-  const { toast } = useDialogs();
+  const { toast, confirm } = useDialogs();
 
-  const load = () => api.get('/recurrences').then(setData);
+  const load = () =>
+    api.get('/recurrences').then(setData).catch((e) => toast(e.message, 'error'));
   useEffect(() => {
     load();
-    api.get('/categories/meta/all').then(setMeta);
-    api.get('/categories').then(setCats);
+    api.get('/categories/meta/all').then(setMeta).catch(() => {});
+    api.get('/categories').then(setCats).catch(() => {});
   }, []);
   if (!data) return <div className="loading">Loading…</div>;
 
@@ -42,6 +43,20 @@ export default function Recurring() {
   const post = async (u) => {
     await api.post(`/recurrences/${u.recurrence_id}/post`, { month: u.month });
     load();
+  };
+
+  const remove = async (r) => {
+    const ok = await confirm({
+      title: 'Delete this recurring item?',
+      message: `"${r.name}" will be removed from the schedule. Already-posted transactions are kept.`,
+      danger: true,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    try {
+      await api.del(`/recurrences/${r.id}`);
+      load();
+    } catch (e) { toast(e.message, 'error'); }
   };
 
   const expected = data.upcoming.reduce((s, u) => s + u.amount, 0);
@@ -101,7 +116,7 @@ export default function Recurring() {
                   </button>
                 </td>
                 <td>
-                  <button className="btn danger small" onClick={() => api.del(`/recurrences/${r.id}`).then(load)}>Delete</button>
+                  <button className="btn danger small" onClick={() => remove(r)}>Delete</button>
                 </td>
               </tr>
             ))}

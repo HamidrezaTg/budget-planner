@@ -77,31 +77,67 @@ export function parseStatement(filePath) {
   return finalize(parseSheetRows(rows), format === 'xlsx' ? 'date' : 'string');
 }
 
-function toISODate(value, mode) {  if (value instanceof Date && !isNaN(value)) {
+function validISODate(y, m, d) {
+  if (!Number.isInteger(y) || y < 1000 || y > 9999) return false;
+  if (m < 1 || m > 12 || d < 1) return false;
+  const dim = new Date(y, m, 0).getDate();
+  return d <= dim;
+}
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+export function toISODate(value, mode) {  if (value instanceof Date && !isNaN(value)) {
     const y = value.getFullYear();
     const m = String(value.getMonth() + 1).padStart(2, '0');
     const d = String(value.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
   if (typeof value === 'number') {
-    return new Date(EXCEL_EPOCH + Math.floor(value) * 86400000)
-      .toISOString()
-      .slice(0, 10);
+    const d = new Date(EXCEL_EPOCH + Math.floor(value) * 86400000);
+    if (isNaN(d)) return null;
+    return d.toISOString().slice(0, 10);
   }
   const s = String(value ?? '').trim();
   if (!s) return null;
   if (/^\d{5}(\.\d+)?$/.test(s)) {
-    return new Date(EXCEL_EPOCH + Math.floor(parseFloat(s)) * 86400000)
-      .toISOString()
-      .slice(0, 10);
+    const d = new Date(EXCEL_EPOCH + Math.floor(parseFloat(s)) * 86400000);
+    if (isNaN(d)) return null;
+    return d.toISOString().slice(0, 10);
   }
   const dmy = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
   if (dmy) {
-    return `${dmy[3]}-${String(dmy[2]).padStart(2, '0')}-${String(dmy[1]).padStart(2, '0')}`;
+    const d1 = Number(dmy[1]);
+    const d2 = Number(dmy[2]);
+    const y = Number(dmy[3]);
+    // Default DMY; fall back to MDY only when DMY is an impossible calendar
+    // date (e.g. 05/31/2026). Genuinely ambiguous dates stay DMY.
+    if (validISODate(y, d2, d1)) return `${y}-${pad2(d2)}-${pad2(d1)}`;
+    if (validISODate(y, d1, d2)) return `${y}-${pad2(d1)}-${pad2(d2)}`;
+    return null; // impossible date like 31/31/2026 — reject instead of storing it
   }
   const parsed = new Date(s);
   if (!isNaN(parsed)) return parsed.toISOString().slice(0, 10);
   return null;
+}
+
+// Parse statement amounts across European and US formats: "1.234,56",
+// "1,234.56", "1234.56", "1.234", with optional currency symbols and
+// parenthesised negatives "(12,50)".
+export function parseAmountValue(v) {
+  if (v === '' || v == null) return NaN;
+  let s = String(v).trim().replace(/[€$£\s]/g, '');
+  const negative = s.startsWith('-') || (s.startsWith('(') && s.endsWith(')'));
+  s = s.replace(/[()]/g, '');
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)$/.test(s)) {
+    s = s.replace(/\./g, '').replace(',', '.'); // 1.234,56
+  } else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) {
+    s = s.replace(/,/g, ''); // 1,234.56
+  } else if (/^-?\d+,\d+$/.test(s)) {
+    s = s.replace(',', '.'); // 1234,56
+  }
+  const n = parseFloat(s);
+  if (isNaN(n)) return NaN;
+  return negative ? -Math.abs(n) : n;
 }
 
 export function normalizeDesc(s) {
@@ -155,7 +191,7 @@ function finalize({ mapping, raw }, mode) {
       continue;
     }
     const iso = toISODate(row[mapping.date], mode);
-    const amount = parseFloat(String(row[mapping.amount] ?? '').replace(',', '.'));
+    const amount = parseAmountValue(row[mapping.amount]);
     const description = String(row[mapping.description] ?? '').trim();
     if (!iso || isNaN(amount) || !description) {
       stats.invalid++;
@@ -166,13 +202,14 @@ function finalize({ mapping, raw }, mode) {
       continue;
     }
     stats.imported++;
+    const currency = mapping.currency ? String(row[mapping.currency] ?? 'EUR') : 'EUR';
     transactions.push({
       date: iso,
       description,
       amount,
       revolut_type: mapping.type ? String(row[mapping.type] ?? '') : null,
-      currency: mapping.currency ? String(row[mapping.currency] ?? 'EUR') : 'EUR',
-      dedup_key: `${iso}|${amount.toFixed(2)}|${normalizeDesc(description)}`,
+      currency,
+      dedup_key: `${iso}|${amount.toFixed(2)}|${currency}|${normalizeDesc(description)}`,
     });
   }
   return { transactions: assignDedupKeys(transactions), stats, mapping };
@@ -210,9 +247,11 @@ export function transactionsFromGrid(grid, spec) {
 
   const parseAmount = (v) => {
     if (v === '' || v == null) return NaN;
-    let s = String(v).trim().replace(/[€\s]/g, '');
-    if (decimal === ',') s = s.replace(/\./g, '').replace(',', '.');
-    return parseFloat(s);
+    if (decimal === ',') {
+      let s = String(v).trim().replace(/[€\s]/g, '').replace(/\./g, '').replace(',', '.');
+      return parseFloat(s);
+    }
+    return parseAmountValue(v);
   };
 
   const parseDate = (v) => {
@@ -220,21 +259,32 @@ export function transactionsFromGrid(grid, spec) {
     if (/^\d{5}(\.\d+)?$/.test(String(v)) || dateFormat === 'excel_serial') {
       const n = Number(v);
       if (isNaN(n)) return null;
-      return new Date(EXCEL_EPOCH + Math.floor(n) * 86400000).toISOString().slice(0, 10);
+      const d = new Date(EXCEL_EPOCH + Math.floor(n) * 86400000);
+      if (isNaN(d)) return null;
+      return d.toISOString().slice(0, 10);
     }
     const s = String(v).trim();
     let m;
     if (dateFormat === 'DD.MM.YYYY' || (dateFormat === 'auto' && (m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/)))) {
       m = m || s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-      if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+      if (m) {
+        if (validISODate(Number(m[3]), Number(m[2]), Number(m[1]))) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        return null;
+      }
     }
     if (dateFormat === 'DD/MM/YYYY' || (dateFormat === 'auto' && (m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)))) {
       m = m || s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+      if (m) {
+        if (validISODate(Number(m[3]), Number(m[2]), Number(m[1]))) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        return null;
+      }
     }
     if (dateFormat === 'MM/DD/YYYY') {
       m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+      if (m) {
+        if (validISODate(Number(m[3]), Number(m[1]), Number(m[2]))) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+        return null;
+      }
     }
     const d = new Date(s);
     return isNaN(d) ? null : d.toISOString().slice(0, 10);
@@ -274,13 +324,14 @@ export function transactionsFromGrid(grid, spec) {
       continue;
     }
     stats.imported++;
+    const currency = colCurrency != null ? String(row[colCurrency] ?? 'EUR') : 'EUR';
     transactions.push({
       date: iso,
       description,
       amount,
       revolut_type: colType != null ? String(row[colType] ?? '') : null,
-      currency: colCurrency != null ? String(row[colCurrency] ?? 'EUR') : 'EUR',
-      dedup_key: `${iso}|${amount.toFixed(2)}|${normalizeDesc(description)}`,
+      currency,
+      dedup_key: `${iso}|${amount.toFixed(2)}|${currency}|${normalizeDesc(description)}`,
     });
   }
   return { transactions: assignDedupKeys(transactions), stats };

@@ -10,7 +10,9 @@ same content while using the app.
 1. Open http://localhost:2026
 2. Create the first account (username + password). Each account gets its own
    private database, pre-seeded with the household structure.
-3. More accounts: log in, press **Add user** at the bottom of the sidebar.
+3. More accounts: log in as an admin and use **Admin → Users** in the sidebar.
+
+Passwords must be at least **8 characters**.
 
 ---
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'node:path';
+import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { db, als } from '../db.js';
 import { parseStatement, rawGrid, transactionsFromGrid } from '../services/parser.js';
@@ -30,17 +31,55 @@ const storage = multer.diskStorage({
     cb(null, `${token}-${file.originalname.replace(/[^\w.\-]+/g, '_')}`);
   },
 });
-const upload = multer({ storage });
+const upload = multer({ storage, limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
 
-// In-memory staging: token -> { file, spec? }
+// In-memory staging: token -> { path, username, spec? }
 const staged = new Map();
 
-function stageFile(file) {
+function stageFile(file, username) {
   const token = path.basename(file.filename).split('-')[0];
-  staged.set(token, { path: file.path });
-  while (staged.size > 20) staged.delete(staged.keys().next().value);
+  staged.set(token, { path: file.path, username });
+  // evict oldest entry, and remove its uploaded file so disk stays clean
+  while (staged.size > 20) {
+    const oldest = staged.keys().next().value;
+    const entry = staged.get(oldest);
+    try { fs.unlinkSync(entry.path); } catch {}
+    staged.delete(oldest);
+  }
   return token;
 }
+
+function removeStagedFile(token) {
+  const entry = staged.get(token);
+  if (entry) {
+    try { fs.unlinkSync(entry.path); } catch {}
+    staged.delete(token);
+  }
+}
+
+function getOwnedStage(req, token) {
+  const entry = staged.get(token);
+  if (!entry || entry.username !== req.username) return null;
+  return entry;
+}
+
+// Abandoned uploads (never confirmed) are swept on startup: files older than
+// 24h that are not referenced by a live staging token are removed.
+function sweepStaleUploads() {
+  let live = new Set();
+  for (const [, entry] of staged) live.add(entry.path);
+  const maxAge = 24 * 3600 * 1000;
+  fs.readdirSync(UPLOAD_DIR, { withFileTypes: true }).forEach((dirent) => {
+    if (!dirent.isFile()) return;
+    const full = path.join(UPLOAD_DIR, dirent.name);
+    if (live.has(full)) return;
+    try {
+      const stat = fs.statSync(full);
+      if (Date.now() - stat.mtimeMs > maxAge) fs.unlinkSync(full);
+    } catch {}
+  });
+}
+try { sweepStaleUploads(); } catch {}
 
 function previewParsed(parsed, conn) {
   const withCats = applyCategorization(parsed.transactions);
@@ -61,14 +100,24 @@ function previewParsed(parsed, conn) {
   };
 }
 
+// Validate the requested import account: explicit only, never silently pick
+// the first Revolut account. Returns the numeric id or null for "Unassigned".
+function resolveAccountId(conn, account_id) {
+  if (account_id == null || account_id === '' || account_id === 0) return null;
+  const acc = conn.prepare('SELECT id FROM accounts WHERE id = ?').get(Number(account_id));
+  if (!acc) return null;
+  return Number(account_id);
+}
+
 router.post('/upload', upload.single('file'), withCtx((req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
     const parsed = parseStatement(req.file.path);
-    const token = stageFile(req.file);
+    const token = stageFile(req.file, req.username);
     const { preview, summary } = previewParsed(parsed, req.impDb);
     res.json({ token, stats: parsed.stats, summary, preview, ai_spec: null });
   } catch (e) {
+    try { fs.unlinkSync(req.file.path); } catch {}
     res.status(400).json({
       error: `${e.message} — try “Analyze format with AI”.`,
       suggest_ai: true,
@@ -114,7 +163,7 @@ router.post('/smart', upload.single('file'), withCtx(async (req, res) => {
     const spec = parseJsonLoose(msg.content);
     const fullGrid = rawGrid(req.file.path, 1000000);
     const parsed = transactionsFromGrid(fullGrid, spec);
-    const token = stageFile(req.file);
+    const token = stageFile(req.file, req.username);
     staged.get(token).spec = spec;
 
     const { preview, summary } = previewParsed(parsed, req.impDb);
@@ -128,7 +177,30 @@ router.post('/smart', upload.single('file'), withCtx(async (req, res) => {
       model: cfg.model,
     });
   } catch (e) {
+    try { fs.unlinkSync(req.file.path); } catch {}
     res.status(e.status || 500).json({ error: e.message });
+  }
+}));
+
+// Recompute the preview for a staged file with a chosen account. Import
+// categorization depends on the account (account-scoped automation rules), so
+// the preview is refreshed whenever the user picks a different account.
+router.post('/preview', withCtx((req, res) => {
+  const { token, account_id = null } = req.body ?? {};
+  const stagedEntry = getOwnedStage(req, token);
+  if (!stagedEntry) return res.status(400).json({ error: 'Unknown or expired import token' });
+  const accId = resolveAccountId(req.impDb, account_id);
+  if (account_id && accId === null)
+    return res.status(400).json({ error: 'Unknown account — please pick a valid account' });
+  try {
+    const parsed = stagedEntry.spec
+      ? transactionsFromGrid(rawGrid(stagedEntry.path, 1000000), stagedEntry.spec)
+      : parseStatement(stagedEntry.path);
+    parsed.transactions.forEach((t) => { t.account_id = accId; });
+    const { preview, summary } = previewParsed(parsed, req.impDb);
+    res.json({ token, stats: parsed.stats, summary, preview });
+  } catch (e) {
+    res.status(400).json({ error: e.message, suggest_ai: true });
   }
 }));
 
@@ -138,17 +210,19 @@ function auditImport(conn, detail) {
 
 router.post('/confirm', withCtx((req, res) => {
   const { token, account_id = null } = req.body ?? {};
-  const stagedEntry = staged.get(token);
+  const stagedEntry = getOwnedStage(req, token);
   if (!stagedEntry) return res.status(400).json({ error: 'Unknown or expired import token' });
+  const accId = resolveAccountId(req.impDb, account_id);
+  if (account_id && accId === null)
+    return res.status(400).json({ error: 'Unknown account — please pick a valid account' });
   const filePath = stagedEntry.path;
-  const accId =
-    account_id && req.impDb.prepare('SELECT id FROM accounts WHERE id = ?').get(account_id)
-      ? Number(account_id)
-      : req.impDb.prepare(`SELECT id FROM accounts WHERE kind = 'revolut'`).get()?.id ?? null;
   try {
     const parsed = stagedEntry.spec
       ? transactionsFromGrid(rawGrid(filePath, 1000000), stagedEntry.spec)
       : parseStatement(filePath);
+    // Account-aware categorization: assign the chosen account BEFORE rules run,
+    // so account-scoped automation rules actually match on import.
+    parsed.transactions.forEach((t) => { t.account_id = accId; });
     const withCats = applyCategorization(parsed.transactions);
     const ins = req.impDb.prepare(`
       INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
@@ -170,7 +244,7 @@ router.post('/confirm', withCtx((req, res) => {
       );
       inserted += r.changes;
     }
-    staged.delete(token);
+    removeStagedFile(token);
     const remainingReview = req.impDb
       .prepare('SELECT COUNT(*) AS c FROM transactions WHERE needs_review = 1')
       .get().c;

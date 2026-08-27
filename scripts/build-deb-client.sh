@@ -38,6 +38,9 @@ cp client/public/icon.svg "$STAGE/usr/share/icons/hicolor/scalable/apps/budget-p
 cp packaging/client-control "$STAGE/DEBIAN/control"
 cp packaging/client-postinst "$STAGE/DEBIAN/postinst"
 chmod 755 "$STAGE/DEBIAN/postinst"
+# stamp the Debian metadata version from desktop-client/package.json so the
+# .deb filename and its control metadata can never drift apart again
+sed -i "s/^Version: .*/Version: $VERSION/" "$STAGE/DEBIAN/control"
 
 mkdir -p dist
 echo "==> dpkg-deb --build"

@@ -21,10 +21,8 @@ function upcoming(fromMonth, fromDay, count) {
     for (const r of recs) {
       const day = Math.min(r.day_of_month, dim);
       if (m === fromMonth && day < fromDay) continue;
-      if (r.last_posted_month && r.last_posted_month >= m && day <= fromDay && m === fromMonth) {
-        // already posted this month
-        continue;
-      }
+      // Already posted for this exact month. A manual post for a FUTURE month
+      // must not suppress the current month's item, so compare equality, not >=.
       if (r.last_posted_month === m) continue;
       items.push({
         recurrence_id: r.id,
@@ -58,7 +56,9 @@ function autoPost() {
   for (const r of recs) {
     const day = Math.min(r.day_of_month, daysInMonth(m));
     if (today < day) continue;
-    if (r.last_posted_month && r.last_posted_month >= m) continue;
+    // Skip only if the CURRENT month was already posted. A future-month manual
+    // post sets last_posted_month ahead, but must not suppress this month.
+    if (r.last_posted_month === m) continue;
     post(r, m, day);
     posted++;
   }
@@ -73,7 +73,14 @@ function post(r, month, day) {
      VALUES (?, ?, ?, 'Recurring', ?, ?, ?, 0, 'recurring', ?)
      ON CONFLICT(dedup_key) DO NOTHING`
   ).run(`${month}-${String(day).padStart(2, '0')}`, r.name, r.amount, getSetting('currency') || 'EUR', r.account_id, r.category_id, dedupKey);
-  db.prepare('UPDATE recurrences SET last_posted_month = ? WHERE id = ?').run(month, r.id);
+  // Never let last_posted_month move backwards (e.g. posting a past month).
+  db.prepare(
+    `UPDATE recurrences
+     SET last_posted_month = CASE
+       WHEN last_posted_month IS NULL OR ? > last_posted_month THEN ?
+       ELSE last_posted_month END
+     WHERE id = ?`
+  ).run(month, month, r.id);
 }
 
 router.get('/', (req, res) => {
@@ -127,7 +134,12 @@ router.patch('/:id', (req, res) => {
 router.post('/:id/post', (req, res) => {
   const r = db.prepare('SELECT * FROM recurrences WHERE id = ?').get(req.params.id);
   if (!r) return res.status(404).json({ error: 'Not found' });
-  const month = /^\d{4}-\d{2}$/.test(req.body?.month ?? '') ? req.body.month : currentMonth();
+  const raw = req.body?.month ?? currentMonth();
+  const match = /^(\d{4})-(\d{2})$/.exec(String(raw));
+  if (!match) return res.status(400).json({ error: 'month must be a valid YYYY-MM' });
+  const [, y, mo] = match;
+  if (Number(mo) < 1 || Number(mo) > 12) return res.status(400).json({ error: 'month must be a valid YYYY-MM' });
+  const month = `${y}-${mo}`;
   const day = Math.min(r.day_of_month, daysInMonth(month));
   post(r, month, day);
   res.json({ ok: true });

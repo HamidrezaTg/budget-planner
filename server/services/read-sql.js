@@ -1,10 +1,24 @@
 import { db } from '../db.js';
+import { constants as sqlite } from 'node:sqlite';
 
 // Strict read-only SQL execution for the finance chat.
 // Rules: single statement, must start with SELECT or WITH, no write/DDL
-// keywords anywhere, forced row limit.
+// keywords anywhere, only allowed tables, capped row limit.
 const FORBIDDEN =
-  /\b(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace|grant|revoke|rollback|begin|commit)\b/i;
+  /\b(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace|grant|revoke|rollback|begin|commit|load_extension)\b/i;
+
+// Tables the AI may query. Explicitly excludes `settings` (holds the AI API
+// key), `ai_audit_log` (internal), and anything not budget-related.
+const ALLOWED_TABLES = new Set([
+  'transactions', 'fx_rates', 'categories', 'category_groups', 'accounts',
+  'budget_lines', 'commitments', 'funds', 'fund_movements', 'income_sources',
+  'income_entries', 'balance_observations', 'category_rules',
+  'category_automation_rules', 'recurrences', 'attachments', 'monthly_reports',
+]);
+
+const MAX_AI_ROWS = 200;
+
+const TABLE_RE = /\bfrom\s+([a-z_][a-z0-9_]*)|join\s+([a-z_][a-z0-9_]*)/gi;
 
 export function validateReadOnlySql(query) {
   const q = String(query ?? '').trim();
@@ -13,13 +27,67 @@ export function validateReadOnlySql(query) {
   if (FORBIDDEN.test(q)) throw new Error('Query contains forbidden keywords');
   const stripped = q.replace(/;+\s*$/, '');
   if (/;/.test(stripped)) throw new Error('Only a single statement is allowed');
-  return /\blimit\b/i.test(stripped) ? stripped : `${stripped} LIMIT 500`;
+
+  // Restrict to the allowlist so credential-bearing tables stay out of reach.
+  const seen = new Set();
+  for (const m of stripped.matchAll(TABLE_RE)) {
+    const table = (m[1] || m[2]).toLowerCase();
+    seen.add(table);
+  }
+  if (seen.size === 0) throw new Error('Query must reference a table');
+  for (const t of seen) {
+    if (!ALLOWED_TABLES.has(t))
+      throw new Error(`Table "${t}" is not available to the assistant`);
+  }
+
+  // Cap user-supplied limits regardless of what the AI asked for.
+  const limitMatch = /\blimit\s+(\d+)/i.exec(stripped);
+  if (limitMatch) {
+    if (Number(limitMatch[1]) > MAX_AI_ROWS)
+      throw new Error(`LIMIT may not exceed ${MAX_AI_ROWS} rows`);
+    return stripped;
+  }
+  return `${stripped} LIMIT ${MAX_AI_ROWS}`;
 }
 
 export function runReadOnlySql(query) {
   const safe = validateReadOnlySql(query);
-  const rows = db.prepare(safe).all();
-  return JSON.parse(JSON.stringify(rows)); // plain JSON-safe values
+  let deniedTable = null;
+  db.setAuthorizer((action, param1, _param2, databaseName) => {
+    if (action === sqlite.SQLITE_READ) {
+      if (databaseName !== 'main' || !ALLOWED_TABLES.has(String(param1).toLowerCase())) {
+        deniedTable = String(param1 || 'unknown');
+        return sqlite.SQLITE_DENY;
+      }
+    }
+    if ([
+      sqlite.SQLITE_INSERT,
+      sqlite.SQLITE_UPDATE,
+      sqlite.SQLITE_DELETE,
+      sqlite.SQLITE_CREATE_INDEX,
+      sqlite.SQLITE_CREATE_TABLE,
+      sqlite.SQLITE_CREATE_TRIGGER,
+      sqlite.SQLITE_CREATE_VIEW,
+      sqlite.SQLITE_DROP_INDEX,
+      sqlite.SQLITE_DROP_TABLE,
+      sqlite.SQLITE_DROP_TRIGGER,
+      sqlite.SQLITE_DROP_VIEW,
+      sqlite.SQLITE_ATTACH,
+      sqlite.SQLITE_DETACH,
+      sqlite.SQLITE_ALTER_TABLE,
+      sqlite.SQLITE_PRAGMA,
+    ].includes(action)) return sqlite.SQLITE_DENY;
+    return sqlite.SQLITE_OK;
+  });
+  try {
+    const rows = db.prepare(safe).all();
+    return JSON.parse(JSON.stringify(rows)); // plain JSON-safe values
+  } catch (error) {
+    if (deniedTable) throw new Error(`Table "${deniedTable}" is not available to the assistant`);
+    throw error;
+  } finally {
+    db.setAuthorizer(null);
+  }
 }
 
 // Compact, accurate schema description injected into prompts.

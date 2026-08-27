@@ -122,12 +122,41 @@ npm run dev       # development mode with hot reload
 |---|---|---|
 | `PORT` | `2026` | HTTP port |
 | `DATA_DIR` | `./data` | Where databases and uploads live |
+| `BIND_IP` | all interfaces | Listen address (`127.0.0.1` for localhost-only) |
+| `SECURE_COOKIE` | off | Set to `1` when serving behind HTTPS so session cookies are marked `Secure` |
+| `TRUST_PROXY` | off | Set to `1` when behind a reverse proxy (for correct client IPs/rate limiting) |
+| `SETUP_TOKEN` | – | Optional token in `X-Setup-Token` for first-run setup from a non-localhost address |
 | `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | – | AI fallback if not set in Settings |
 
 AI providers are configured per user in Settings: OpenAI, Anthropic, OpenRouter,
 Groq, DeepSeek, Mistral, Together, Ollama (local), LM Studio (local), or any custom
 OpenAI-compatible endpoint. Everything is optional — the planner is fully usable
 without any AI.
+
+## Security
+
+- **Passwords**: at least **8 characters**; hashed with salted scrypt (async, so it
+  never blocks the server). All sessions are invalidated when you change your password.
+- **Login protection**: attempts are rate-limited per IP and username; setup is
+  rate-limited too and limited to localhost unless `SETUP_TOKEN` is supplied.
+  Session cookies are `HttpOnly` + `SameSite=Lax` and expire server-side after 30 days.
+- **Headers**: strict Content-Security-Policy (allows the app's inline theme
+  preloader via its hash), `X-Content-Type-Options`, `X-Frame-Options` and
+  `Referrer-Policy`; `X-Powered-By` is disabled. Production responses never leak
+  stack traces.
+- **AI safety**: the assistant's read-only SQL can only touch budget tables —
+  `settings` (your AI API key) and audit internals are unreachable.
+- **Import safety**: uploads are size-limited, dates are validated as real calendar
+  dates, and statement files are deleted after import.
+
+**Transport.** The server speaks plain HTTP by design (home LAN/Tailscale). On a
+hostile network (public Wi-Fi, the open internet) that exposes passwords and session
+cookies, so prefer one of:
+
+1. localhost-only (`BIND_IP=127.0.0.1`) for single-machine use;
+2. a private VPN such as Tailscale for devices anywhere;
+3. an HTTPS reverse proxy (e.g. Caddy) in front of the server — set
+   `SECURE_COOKIE=1` and `TRUST_PROXY=1` in `/etc/default/budget-planner`.
 
 ## Documentation
 

@@ -66,10 +66,19 @@ if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
     SELF="/tmp/budget-planner-install.sh"
     curl -fsSL "https://raw.githubusercontent.com/$REPO/main/scripts/install.sh?v=$(date +%s)" -o "$SELF"
   fi
-  exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$SELF" "$@"
+  # Rebuild the command-line flags: the argument loop above consumed $@, so a
+  # bare "$@" here would silently drop --client/--version/--quiet.
+  REEXEC_ARGS=()
+  [ "$WANT_CLIENT" = "1" ] && REEXEC_ARGS+=(--client)
+  [ "$QUIET" = "1" ] && REEXEC_ARGS+=(--quiet)
+  [ -n "$WANT_VERSION" ] && REEXEC_ARGS+=(--version "$WANT_VERSION")
+  exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$SELF" "${REEXEC_ARGS[@]}"
 fi
 
-TAG=$(echo "$RELEASE_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).tag_name||'')}catch{console.log('')}})" 2>/dev/null || true)
+# Parse the release JSON with grep/sed only — no Node required, so the script
+# still works on machines that have not installed Node yet (Node is only a
+# server dependency, never needed for the desktop client).
+TAG=$(printf '%s' "$RELEASE_JSON" | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
 [ -n "$TAG" ] || { echo "ERROR: release not found." >&2; exit 1; }
 echo "==> release: $TAG"
 
@@ -80,19 +89,8 @@ else
   PATTERN="budget-planner_[0-9.]*_all\.deb"
 fi
 
-ASSET_ID=$(echo "$RELEASE_JSON" | BP_PATTERN="$PATTERN" node -e "
-  let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
-    const re=new RegExp(process.env.BP_PATTERN);
-    const a=(JSON.parse(d).assets||[]).find(x=>re.test(x.name));
-    console.log(a?a.id:'');
-  })")
-ASSET_NAME=$(echo "$RELEASE_JSON" | BP_PATTERN="$PATTERN" node -e "
-  let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
-    const re=new RegExp(process.env.BP_PATTERN);
-    const a=(JSON.parse(d).assets||[]).find(x=>re.test(x.name));
-    console.log(a?a.name:'');
-  })")
-[ -n "$ASSET_ID" ] || { echo "ERROR: no matching .deb asset in release $TAG." >&2; exit 1; }
+ASSET_NAME=$(printf '%s' "$RELEASE_JSON" | grep -oE '"name"[[:space:]]*:[[:space:]]*"'"$PATTERN"'"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
+[ -n "$ASSET_NAME" ] || { echo "ERROR: no matching .deb asset in release $TAG." >&2; exit 1; }
 echo "==> asset: $ASSET_NAME"
 
 # ---- Node.js >= 22 is mandatory for the server --------------------------
@@ -177,8 +175,8 @@ if [ "$WANT_CLIENT" != "1" ] && [ "$QUIET" != "1" ] && { [ -t 0 ] || [ "${BP_WAN
         echo "  Username must be at least 2 valid characters."
       done
       while [ -z "$ADMIN_PW" ]; do
-        read -rsp "  Admin password (min 4 chars): " ADMIN_PW; echo
-        [ "${#ADMIN_PW}" -ge 4 ] || { echo "  Too short."; ADMIN_PW=""; }
+        read -rsp "  Admin password (min 8 chars): " ADMIN_PW; echo
+        [ "${#ADMIN_PW}" -ge 8 ] || { echo "  Too short."; ADMIN_PW=""; }
       done
     fi
   fi
@@ -187,12 +185,11 @@ fi
 # ---- download + install -------------------------------------------------
 OUT="/tmp/$ASSET_NAME"
 echo "==> downloading $ASSET_NAME"
+DL_URL="https://github.com/$REPO/releases/download/$TAG/$ASSET_NAME"
 if [ -n "${GH_TOKEN:-}" ]; then
-  curl -fSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" \
-    -o "$OUT" "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
+  curl -fSL -H "Authorization: Bearer $GH_TOKEN" -o "$OUT" "$DL_URL"
 else
-  curl -fSL -H "Accept: application/octet-stream" \
-    -o "$OUT" "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
+  curl -fSL -o "$OUT" "$DL_URL"
 fi
 [ "$(stat -c%s "$OUT")" -gt 10000 ] || { echo "ERROR: download too small — asset problem." >&2; exit 1; }
 
