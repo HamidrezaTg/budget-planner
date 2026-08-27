@@ -51,7 +51,8 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
   clean JSON 404s for unknown API routes.
 - **AI SQL allowlist** — the finance chat can only read budget tables; `settings`
   (AI API key) and internal audit tables are unreachable; SQLite authorizer checks
-  enforce the allowlist at execution time and row limits are capped.
+  enforce the allowlist at execution time on supported runtimes, with a Node 22
+  lexical fallback; row limits are capped.
 - **Upload limits** — import uploads are capped at 64 MB (single file).
 - **Parser resource limits** — CSV/XLSX imports are bounded to 100,000 rows, 256
   columns, 10 sheets, and 5,000,000 workbook cells.

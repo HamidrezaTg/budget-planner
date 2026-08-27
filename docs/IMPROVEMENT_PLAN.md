@@ -23,6 +23,8 @@ release and native artifacts still require verification.
   its parent. Parent deletion still cascades to children and attachment metadata.
 - Enforced the AI SQL table allowlist at execution time with SQLite's authorizer,
   including comma-join queries; write/DDL/PRAGMA/extension operations are denied.
+  Added a Node 22-compatible lexical fallback because `setAuthorizer` is only
+  available in newer Node runtimes.
 - Bound staged import tokens to the authenticated username.
 - Restricted first-run setup to loopback requests unless `SETUP_TOKEN` is supplied
   in the `X-Setup-Token` header.
