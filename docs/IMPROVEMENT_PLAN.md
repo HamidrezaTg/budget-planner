@@ -210,8 +210,8 @@ and zip-bomb protection remain.
 
 ### 5.8 File permissions and service hardening — MOSTLY DONE
 `umask 077` is set at startup and DATA_DIR/user/upload directories are chmod'ed
-owner-only; systemd already ships UMask. Health endpoint exists. Remaining:
-ownership verification on upgrade and deeper systemd hardening options.
+owner-only; the packaged systemd unit now also ships `UMask=0077`. Health endpoint
+exists. Remaining: ownership verification on upgrade and deeper systemd hardening options.
 
 ### 5.9 Resolve the `xlsx` vulnerability — MOSTLY DONE
 The vulnerable `xlsx@0.18.5` dependency was replaced with the API-compatible

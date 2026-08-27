@@ -25,6 +25,7 @@ ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target
