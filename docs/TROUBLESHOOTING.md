@@ -44,14 +44,15 @@ using the numeric IP.
   disable it, or use Tailscale on both.
 - Server firewall: `sudo ufw allow 2026/tcp` (or your port).
 
-### Android app says "Could not reach the server (Failed to fetch)"
+### Android app says "Can't reach your server"
 Checklist, in order:
 1. The same address opens in the phone's **browser**? Then the network is fine —
    make sure you're on **budget-planner ≥ v3.8.3** (older APKs couldn't probe or
    navigate cross-origin).
 2. Use the **IP address** form (`http://192.168.x.x:2026`), not the computer name.
 3. To change the server later: Android Settings → Apps → Budget Planner →
-   **Clear storage** (the address is remembered on first successful connect).
+   Use **Change server address** on the recovery screen (the address is
+   remembered on first successful connect).
 
 ### Linux desktop client shows the Electron welcome page
 You have the v3.8.0 client — its app files were packaged in the wrong directory.

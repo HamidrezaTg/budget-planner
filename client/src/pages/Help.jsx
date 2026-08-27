@@ -100,7 +100,7 @@ const PAGES = [
     title: 'Connecting from other devices',
     items: [
       ['Server address', 'Always the machine running the server, e.g. http://192.168.0.174:2026. Use the IP address or the .local name (lenovo.local) \u2014 phones usually cannot resolve bare computer names like \u201clenovo\u201d.'],
-      ['Android app', 'A pure client: on first launch it asks for the server address, verifies it, and remembers it. To change the server later, clear the app\u2019s storage (Android Settings \u2192 Apps \u2192 Budget Planner).'],
+      ['Android app', 'A pure client: on first launch it asks for the server address, verifies it, and remembers it. If the server is unreachable, the recovery screen offers “Try again” and “Change server address”.'],
       ['Linux desktop client', 'Also a pure client. Its server address lives in ~/.config/budget-planner-client/config.json \u2014 delete that file to see the setup screen again.'],
       ['Phone can\u2019t connect', 'Same Wi-Fi (or Tailscale on both)? Some routers isolate clients from each other. Firewall: allow the server port (sudo ufw allow 2026/tcp).'],
       ['Two different account lists?', 'You are talking to two different servers \u2014 compare with the numeric IP. See docs/TROUBLESHOOTING.md for the full checklist.'],

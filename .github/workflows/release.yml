@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm --prefix client ci
+
+      - name: Run server tests
+        run: npm test
+
+      - name: Build server .deb (builds the client too)
+        run: ./scripts/build-deb.sh
+
+      - name: Build client .deb
+        run: ./scripts/build-deb-client.sh
+
+      # Android release signing requires BP_ANDROID_KEYSTORE* secrets; without
+      # them this step is skipped and the release ships without a new APK.
+      - name: Check signing secret
+        id: signcheck
+        env:
+          HAS_KEY: ${{ secrets.BP_ANDROID_KEYSTORE != '' }}
+        run: echo "has_key=$HAS_KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed Android APK
+        if: steps.signcheck.outputs.has_key == 'true'
+        run: ./scripts/build-apk.sh
+        env:
+          BP_ANDROID_KEYSTORE: ${{ secrets.BP_ANDROID_KEYSTORE }}
+          BP_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.BP_ANDROID_KEYSTORE_PASSWORD }}
+          BP_ANDROID_KEY_ALIAS: ${{ secrets.BP_ANDROID_KEY_ALIAS }}
+          BP_ANDROID_KEY_PASSWORD: ${{ secrets.BP_ANDROID_KEY_PASSWORD }}
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum budget-planner_*.deb budget-planner-client_*.deb \
+            $( [ -f budget-planner-android.apk ] && echo budget-planner-android.apk ) \
+            > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          test "${GITHUB_REF_NAME}" = "${TAG}" || {
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${VERSION}"; exit 1;
+          }
+          ARGS=()
+          for f in dist/budget-planner_*_all.deb dist/budget-planner-client_*_amd64.deb dist/budget-planner-android.apk dist/SHA256SUMS.txt; do
+            [ -f "$f" ] && ARGS+=("$f")
+          done
+          gh release create "$TAG" "${ARGS[@]}" \
+            --title "v${VERSION}" \
+            --generate-notes

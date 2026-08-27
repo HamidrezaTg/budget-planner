@@ -1,6 +1,9 @@
 # The Math Behind the Numbers
 
-Every figure the app produces, defined exactly. All money values are EUR.
+Every figure the app produces, defined exactly. Amounts are stored in their
+original statement currency and converted to your display currency via monthly
+`fx_rates` (rate of the transaction's month; missing rate ⇒ 1:1, surfaced as a
+warning rather than silently wrong totals).
 
 ## Conventions
 
@@ -9,9 +12,10 @@ Every figure the app produces, defined exactly. All money values are EUR.
 - **Transaction amounts are signed**: negative = money out, positive = money in
   (a refund or credit).
 - **Actual cost is net of refunds**: for a category,
-  `actual = −(sum of all transaction amounts in that category that month)`.
-  A −50 purchase and a +50 refund cancel to 0. This is deliberate: a budget cares
-  about net cost, not gross flow. (Carried over from the Excel system, column D.)
+  `actual = −(Σ fx_rate(month, currency) × amount)` over that category's
+  transactions in the month. A −50 purchase and a +50 refund cancel to 0. This is
+  deliberate: a budget cares about net cost, not gross flow. (Carried over from
+  the Excel system, column D.)
 
 ## Budget figures (per month M)
 
@@ -93,7 +97,7 @@ Small model errors would otherwise compound for 96 months. So:
 
 1. When you record an observed balance for month A (summed over accounts),
    the projection finds the predicted total at A:
-   `predicted(A) = free(A) + committed(A)`
+   `predicted(A) = free(A) + net(A) + committed(A)`
 2. It computes the one-off drift: `variance = predicted(A) − observed(A)`
 3. It absorbs the drift at A: `free(A) ← free(A) + net(A) − variance`,
    so `total(A)` now equals exactly what the bank says.
@@ -105,8 +109,13 @@ instead of silently smearing into every future figure.
 ## Import rules
 
 ```
-dedup_key = ISO_date | amount(2dp) | lowercase-collapsed description
+dedup_key = ISO_date | amount(2dp) | currency | lowercase-collapsed description
 ```
+
+Two genuinely different purchases on the same day with the same amount and
+merchant share the first three fields; they get an occurrence index in file
+order (`|#1`, `|#2`, …) so both import while overlapping re-imports still
+deduplicate.
 
 - A row is skipped if its dedup_key already exists → overlapping statements are safe.
 - `State = REVERTED` → skipped.
@@ -129,7 +138,8 @@ contains the keyword.
 
 - Finance chat: single `SELECT`/`WITH` statement only; forbidden keywords
   (INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, ATTACH, PRAGMA, …) rejected anywhere
-  in the query; multiple statements rejected; `LIMIT 500` appended if absent.
+  in the query; multiple statements rejected; `LIMIT 200` appended (or a larger
+  user limit rejected) if absent.
 - Dev mode: the model can only emit one of 12 whitelisted proposal types. Each is
   validated server-side (names resolved to ids, amounts and months checked), shown
   to you, applied only on confirmation, and written to `ai_audit_log`.

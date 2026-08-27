@@ -6,6 +6,9 @@ same content while using the app.
 ---
 
 ## First run
+On a fresh install, account creation is limited to the server's own machine
+(localhost) unless a `SETUP_TOKEN` was configured — see the README's
+Configuration table.
 
 1. Open http://localhost:2026
 2. Create the first account (username + password). Each account gets its own
@@ -67,6 +70,9 @@ The month at a glance. Use **← / Today / →** to change months — every figu
   date + amount + description (plus an occurrence index for legitimate same-day twins,
   e.g. two identical coffees) and the database itself refuses duplicate fingerprints.
   The preview shows exactly which rows count as duplicates before you confirm.
+- **Rows that cannot be read** (bad date, unparseable amount, missing description)
+  are listed in the preview with row number and reason instead of being silently
+  dropped — fix or ignore them deliberately.
   Limitations: a bank that changes the merchant *wording* between statements can still
   slip past the fingerprint; same-day twins split across two different exports may
   occasionally collide.
@@ -102,6 +108,18 @@ The month at a glance. Use **← / Today / →** to change months — every figu
 - **Usual** — the recurring amount the projection uses when a month has no actual entry.
 - **Enter actual** — the real figure for that month. Actual income is always entered,
   never assumed.
+
+## Recurring
+
+Expected monthly transactions — rent, subscriptions, salary. They appear in the
+Upcoming panel on the Dashboard.
+
+- **Post now** — creates the real transaction for a month. Posting is idempotent:
+  posting the same month twice creates nothing the second time.
+- **auto-post** — posts itself on its day each month.
+- **Pause** (edit) — keep the rule but stop it from posting.
+- A future-month post never suppresses the current month's item, and the posting
+  pointer never moves backwards.
 
 ## Funds (sinking funds)
 
@@ -146,9 +164,25 @@ balance per month.
 
 ## Settings
 
+### AI assistant
 Provider → API key → **Load models** → pick a model → Save → Test connection.
 Supported: OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, Mistral, Together AI,
 Ollama (local, no key), LM Studio (local, no key), Custom.
+
+### Backup & restore
+- **Download full backup** — one SQLite file containing this user's entire budget.
+  Do it before upgrades; it is your migration path to a new server.
+- **Restore backup** — upload a downloaded backup. It is validated (SQLite
+  integrity, required tables, broken references) and the current database is
+  snapshotted before the swap; a failed restore rolls back automatically.
+- **Danger zone: reset** — deletes all transactions and attachments, keeps
+  budgets, rules, funds and income sources.
+
+### Password & theme
+Change your password (invalidates all sessions) and switch light/dark.
+
+### Multi-currency
+Transactions keep the currency they were recorded in (from your statements). Everything
 
 ### Multi-currency
 

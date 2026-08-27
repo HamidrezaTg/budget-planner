@@ -43,8 +43,9 @@ to it as clients — over your LAN or a VPN such as Tailscale:
   [Releases](https://github.com/HamidrezaTg/budget-planner/releases) and sideload it.
   On first launch it asks for the server's address — use the **IP form**
   (`http://192.168.x.x:2026`; computer names rarely resolve on phones), it verifies
-  reachability and remembers it. To change the server later: Android Settings → Apps
-  → Budget Planner → Clear storage. (A PWA install via "Add to Home Screen" works too.)
+  reachability, remembers it, and auto-connects from then on. If the server is
+  unreachable, the app offers **Try again** and **Change server address**.
+  (A PWA install via "Add to Home Screen" works too.)
 - **Linux desktop** — download `budget-planner-client_<version>_amd64.deb` from
   Releases (v3.8.3+ — the v3.8.0 package had a packaging bug showing the default
   Electron page). Enter the server address on first launch; stored per user in
@@ -126,7 +127,7 @@ npm run dev       # development mode with hot reload
 | `SECURE_COOKIE` | off | Set to `1` when serving behind HTTPS so session cookies are marked `Secure` |
 | `TRUST_PROXY` | off | Set to `1` when behind a reverse proxy (for correct client IPs/rate limiting) |
 | `SETUP_TOKEN` | – | Optional token in `X-Setup-Token` for first-run setup from a non-localhost address |
-| `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | – | AI fallback if not set in Settings |
+| `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | – | AI fallback if not set in Settings (`AI_MODEL` defaults to `gpt-4o-mini`) |
 
 AI providers are configured per user in Settings: OpenAI, Anthropic, OpenRouter,
 Groq, DeepSeek, Mistral, Together, Ollama (local), LM Studio (local), or any custom
@@ -141,9 +142,14 @@ without any AI.
   rate-limited too and limited to localhost unless `SETUP_TOKEN` is supplied.
   Session cookies are `HttpOnly` + `SameSite=Lax` and expire server-side after 30 days.
 - **Headers**: strict Content-Security-Policy (allows the app's inline theme
-  preloader via its hash), `X-Content-Type-Options`, `X-Frame-Options` and
-  `Referrer-Policy`; `X-Powered-By` is disabled. Production responses never leak
-  stack traces.
+  preloader via its hash), `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy` and `Permissions-Policy`; `X-Powered-By` is disabled.
+  Production responses never leak stack traces; every response carries an
+  `X-Request-Id` for matching server log lines (see Troubleshooting).
+- **Liveness**: `GET /healthz` answers without authentication for systemd and
+  uptime monitors.
+- **Downloads**: the installer verifies artifacts against the release's
+  `SHA256SUMS.txt` before installing.
 - **AI safety**: the assistant's read-only SQL can only touch budget tables —
   `settings` (your AI API key) and audit internals are unreachable.
 - **Import safety**: uploads are size-limited, dates are validated as real calendar

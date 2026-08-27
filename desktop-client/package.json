@@ -1,6 +1,6 @@
 {
   "name": "budget-planner-client",
-  "version": "3.9.1",
+  "version": "3.9.2",
   "description": "Desktop client for a self-hosted Budget Planner server (no backend included)",
   "main": "main.js",
   "private": true

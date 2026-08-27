@@ -3,6 +3,71 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.9.2] — 2026-08-27
+
+Full-project review outcomes (server, client, packaging, docs).
+
+### Fixed (data integrity)
+- **Username collision** — the legacy filename sanitizer collapsed distinct
+  usernames ("a.b", "a!b" → "a_b") onto the SAME database file: the second
+  user opened the first user's data. Filenames are now collision-free
+  (`%XX` encoding), existing legacy files are renamed automatically on first
+  open, and new usernames reject `.` and `-`.
+- **Rollover accumulates** — underspend older than one month is no longer
+  silently lost; the carry chain compounds (lookback capped at 24 months).
+- **Settings** — the currency switch (which wipes FX rates) can no longer run
+  before another field's validation fails; `model: 123` no longer 500s.
+- **Category retirement** is validated first and applied in one transaction —
+  a name conflict no longer leaves it retired with rules destroyed.
+- **Import confirm** runs in a single transaction (large imports are orders of
+  magnitude faster and can no longer half-apply).
+- **Timezone off-by-one** — non-ISO statement dates ("Aug 27, 2026") parsed via
+  `Date` no longer shift back a day on UTC+1/+2 machines (also fixed the
+  resulting dedup keys).
+
+### Fixed (client)
+- **FX-rate delete** from Settings was broken (wrong `api.del` payload) — it
+  always failed with 400.
+- **"Show needs-review only"** toggle now actually refilters the list, and
+  deep links (`?review=1`, `?month=`) react while the page is open.
+- **Rollover toggle** displays the real state and can be turned off again
+  (the budgets endpoint now returns `roll_overs`).
+- **Editing a source's usual amount** no longer silently deletes that month's
+  actual income entry.
+- Clearing a commitment's end month works (`null` is no longer ignored).
+- Transactions: newest request wins (no stale-response races), bulk-apply
+  reports partial failures, modal focus trap ignores hidden file inputs,
+  logout works offline.
+
+### Fixed (server quality)
+- FK index coverage: `transactions.split_of`, `attachments.transaction_id`,
+  `sessions.username`, `fund_movements(fund_id, month)` — the transactions
+  list no longer does per-row full scans.
+- `PATCH /recurrences` and `PATCH /commitments` validate like their POST
+  counterparts; clearing a commitment's end month is possible again.
+- Monthly snapshot capture moved off the dashboard request path and logs
+  failures instead of silently disabling itself.
+- `fx/fetch` caps external calls at 60 per request and reports remaining work.
+- Import staging eviction prefers the current user's oldest upload.
+
+### Fixed (security)
+- **CSV/Excel formula injection** — export cells starting with `=` `+` `-` `@`
+  are neutralized.
+- **Login timing** no longer enumerates usernames (unknown users get identical
+  scrypt work); per-IP login bucket added; password change rate-limited.
+- AI outbound calls have explicit timeouts.
+- Electron client: runtime pinned (no longer "whatever npm view returns"),
+  zip verified against official `SHASUMS256.txt`, server-redirect navigation
+  guard, all permission requests denied.
+- Android: cloud/device backups of app data disabled; `allowMixedContent`
+  removed; debug-key APKs can no longer be produced under the release
+  filename without an explicit opt-in.
+- The installer fails hard (instead of warning) when checksums are missing or
+  mismatched; the server deb always builds the client fresh; Electron client
+  deb gets full X11/GTK dependency set and a `chrome-sandbox` SUID fix.
+- `DATA_DIR` must be explicit for the CLI admin creator; all cwd-dependent
+  path fallbacks removed.
+
 ## [3.9.1] — 2026-08-27
 
 ### Android app (major UX rework, verified on an emulator)
@@ -117,46 +182,9 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - `scripts/build-apk.sh` builds a signed release APK when `BP_ANDROID_KEYSTORE`,
   `BP_ANDROID_KEYSTORE_PASSWORD` and `BP_ANDROID_KEY_ALIAS` are set, and a clearly
   labeled debug-key build otherwise; keystores are provided via environment only.
-- The installer verifies downloaded artifacts against the release's
-  `SHA256SUMS.txt` before installing.
-- **AI endpoint protection** — per-user rate limit (30/min), client-supplied chat
-  history capped (16 messages, 8,000 chars each), proposal application capped at
-  50 per call.
-- **Attachment content checks** — uploaded files are verified against their
-  declared mimetype via magic bytes before being stored.
-- Every response carries an `X-Request-Id`, echoed in 5xx error logs for support.
-- **Accessible dialogs everywhere** — the Transactions split editor and attachment
-  manager now use a shared modal with focus trap, Escape, focus restore and ARIA
-  labelling; split form controls are labeled.
-- **Row-level import errors** — rows the parser cannot read (bad date, bad amount,
-  missing description) are listed in the preview with row number and reason
-  instead of being silently dropped.
-- **Android app rework** — the client shell now: auto-connects to the saved
-  server on launch (previously every launch showed the setup form again);
-  shows a "Can't reach your server" recovery screen with *Try again* and
-  *Change server address* instead of a raw connection error (changing servers
-  no longer requires clearing app storage); and handles the back button —
-  back inside the planner walks in-app history instead of instantly exiting,
-  and back from the planner's first page returns to the connect screen.
-  All flows verified on an Android emulator.
-- **Mobile web layout rework** (verified on an emulator against seeded data):
-  - the sidebar becomes a sticky top app bar with a hamburger drawer on
-    phones — the old layout wrapped all 13 nav links into five rows that
-    covered half the screen, and the "Local planner" box overlapped the
-    theme toggle and profile;
-  - the projection chart now shows ~8 x-axis labels instead of all 96
-    months painting over each other into an unreadable smear (Reports
-    charts likewise capped at ~6);
-  - wide tables scroll inside their card and stop wrapping mid-value
-    ("2026-08" breaking across lines); the page itself can no longer scroll
-    horizontally;
-  - inline forms (Recurring add form) stack full-width on phones instead of
-    clipping the amount placeholder.
-
 ### Added
-- Test suite (`npm test`, 41 tests) covering parser, DB integrity,
-  projection, security, restore failure/round-trip, re-import behavior, XLSX
-  export round-trip and an end-to-end HTTP flow.
+- Test suite (`npm test`, 31 tests at release) covering parser, DB integrity,
+  projection, security, and an end-to-end HTTP flow.
 - GitHub Actions CI: server tests, client build, dependency audit, version checks.
 - `docs/IMPROVEMENT_PLAN.md` — the validated improvement plan this release implements.
 - Unauthenticated `/healthz` liveness endpoint for systemd/uptime monitors.

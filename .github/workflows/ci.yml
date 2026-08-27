@@ -5,9 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -29,14 +37,26 @@ jobs:
         run: npm run build
 
       - name: Dependency audit (high+ blocks)
-        run: npm audit --omit=dev --audit-level=high
+        run: |
+          npm audit --omit=dev --audit-level=high
+          # The client bundle ships to browsers; its runtime deps are audited too.
+          npm --prefix client audit --omit=dev --audit-level=high
+
+      - name: Shellcheck (release-critical bash)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -S warning scripts/*.sh
+
+      - name: Packaging smoke (server deb builds from a clean checkout)
+        run: ./scripts/build-deb.sh
 
       - name: Version metadata consistency
         run: |
           ROOT=$(node -p "require('./package.json').version")
           DESKTOP=$(node -p "require('./desktop-client/package.json').version")
           MOBILE=$(node -p "require('./mobile/package.json').version")
-          echo "root=$ROOT desktop=$DESKTOP mobile=$MOBILE"
+          CHANGELOG=$(head -1 CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "$ROOT")
+          echo "root=$ROOT desktop=$DESKTOP mobile=$MOBILE changelog=$CHANGELOG"
           test "$ROOT" = "$DESKTOP"
           test "$ROOT" = "$MOBILE"
           echo "versions consistent"
