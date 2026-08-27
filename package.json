@@ -14,7 +14,7 @@
     "express": "^5.2.1",
     "multer": "^2.2.0",
     "papaparse": "^5.5.3",
-    "xlsx": "^0.18.5"
+    "xlsx": "npm:@e965/xlsx@0.20.3"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

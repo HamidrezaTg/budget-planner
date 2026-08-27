@@ -28,10 +28,8 @@ jobs:
       - name: Build the client
         run: npm run build
 
-      # xlsx has an unfixed HIGH advisory (prototype pollution / ReDoS). It is
-      # being replaced; until then only CRITICAL findings block CI.
-      - name: Dependency audit (critical+ blocks)
-        run: npm audit --omit=dev --audit-level=critical
+      - name: Dependency audit (high+ blocks)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Version metadata consistency
         run: |

@@ -39,8 +39,9 @@ The server runs plain HTTP for home LAN / Tailscale use. Over untrusted networks
 (public Wi-Fi, the open internet) this exposes credentials — use an HTTPS reverse
 proxy (`SECURE_COOKIE=1`, `TRUST_PROXY=1`), Tailscale, or bind to `127.0.0.1`.
 
-## Known dependency advisories
+## Spreadsheet dependency
 
-- `xlsx` (used for spreadsheet import/export) has an unfixed HIGH advisory
-  (prototype pollution / ReDoS). It is scheduled for replacement; until then imports
-  are size-limited and treated as untrusted. See `docs/IMPROVEMENT_PLAN.md`.
+- Spreadsheet import/export uses the API-compatible `@e965/xlsx@0.20.3` package
+  through the `xlsx` npm alias. Import files remain untrusted and are bounded by
+  file, row, column, sheet, and workbook-cell limits. `npm audit --omit=dev`
+  currently reports no vulnerabilities.

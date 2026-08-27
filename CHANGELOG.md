@@ -55,6 +55,8 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - **Upload limits** — import uploads are capped at 64 MB (single file).
 - **Parser resource limits** — CSV/XLSX imports are bounded to 100,000 rows, 256
   columns, 10 sheets, and 5,000,000 workbook cells.
+- **Spreadsheet dependency** — replaced vulnerable `xlsx@0.18.5` with the
+  API-compatible `@e965/xlsx@0.20.3` npm alias; high-severity audit is clean.
 - **Import staging isolation** — staged import tokens are bound to their owning user.
 - **First-run setup** — setup is limited to localhost unless `SETUP_TOKEN` is used.
 

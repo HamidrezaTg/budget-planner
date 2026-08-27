@@ -5,12 +5,13 @@
 
 ## Current Progress
 
-The current worktree contains the v3.9.0 implementation changes, but they are not
-committed or published as a release yet.
+The v3.9.0 implementation changes are committed on `main`, but a tagged/public
+release and native artifacts still require verification.
 
 - Verification: `npm test` passes 34 tests; `npm run build` passes; `git diff --check` passes.
 - CI now installs both root and client dependencies before testing/building.
-- `npm audit --omit=dev` still reports one unfixed HIGH advisory in `xlsx`.
+- `npm audit --omit=dev --audit-level=high` reports zero vulnerabilities after the
+  spreadsheet dependency replacement.
 - The client build succeeds but emits a bundle-size warning for the main 762 kB chunk.
 
 ### 2026-08-27 Progress Log
@@ -29,6 +30,8 @@ committed or published as a release yet.
   and rename-based rollback.
 - Added bounded import parsing: 64 MB files, 100,000 rows, 256 columns, 10 sheets,
   and 5,000,000 workbook cells maximum.
+- Replaced vulnerable `xlsx@0.18.5` with the API-compatible `@e965/xlsx@0.20.3`
+  npm alias; dependency audit is now clean.
 - Added regression coverage for these paths; the suite increased from 31 to 34 tests.
 
 ## 1. Goals
@@ -185,10 +188,10 @@ limits, private filesystem permissions, extension/content validation, and zip-bo
 `umask 077`; private DB/upload permissions; verify ownership on install/upgrade; systemd hardening;
 health endpoint; startup diagnostics.
 
-### 5.9 Resolve the `xlsx` vulnerability — NOT DONE
-Inventory usage; build fixtures; evaluate maintained replacement (e.g. `exceljs` or official SheetJS tarball);
-test dates/German numbers/sheets/exports/large files; if replacing, isolate parsing + enforce limits;
-document temporary risk otherwise.
+### 5.9 Resolve the `xlsx` vulnerability — MOSTLY DONE
+The vulnerable `xlsx@0.18.5` dependency was replaced with the API-compatible
+`@e965/xlsx@0.20.3` npm alias and parser resource limits were added. Dedicated
+XLSX import/export fixtures and long-term replacement maintenance review remain.
 
 ## 6. Phase 3: Client UX and Accessibility
 
@@ -241,8 +244,8 @@ compatibility, client, packaging, APK, and release tests are still missing.
 - Commit a real `tests/` suite: unit (dates, dedup, FX, rollover, projection), DB integration (temp dirs),
   API (auth, isolation), import, restore, client components (dialog/destructive), packaging smoke.
 - Mandatory regression tests for every confirmed defect (see findings list).
-- GitHub Actions: Node 22, `npm ci`, server tests, client build, package metadata checks, debug APK build,
-  `npm audit`, artifact version validation. Decide audit-severity gate while the xlsx fix is unavailable.
+- GitHub Actions: Node 22, root/client `npm ci`, server tests, client build, package metadata checks, debug APK build,
+  `npm audit` with HIGH findings blocking, and artifact version validation.
 
 ## 10. Phase 7: Documentation and Help
 
@@ -260,7 +263,7 @@ package metadata mismatches).
 3. Resolve parser ambiguity, row/sheet/cell limits, explicit import-account UX, and missing-rate warnings.
 4. Resolve refund/fund-goal/review-count/export semantics.
 5. Harden API-key storage, AI endpoint limits, upload permissions, `umask`, health checks, request IDs, and systemd service settings.
-6. Resolve or isolate the `xlsx` dependency.
+6. Add XLSX import/export fixtures and review the replacement dependency's maintenance path.
 7. Fix Electron IPC/navigation security and produce a properly signed Android release.
 8. Make version stamping single-source and build server `.deb`, client `.deb`, APK, checksums, and manifests reproducibly.
 9. Complete accessibility, responsive UX, and client tests.
