@@ -86,11 +86,17 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - **Attachment content checks** — uploaded files are verified against their
   declared mimetype via magic bytes before being stored.
 - Every response carries an `X-Request-Id`, echoed in 5xx error logs for support.
+- **Accessible dialogs everywhere** — the Transactions split editor and attachment
+  manager now use a shared modal with focus trap, Escape, focus restore and ARIA
+  labelling; split form controls are labeled.
+- **Row-level import errors** — rows the parser cannot read (bad date, bad amount,
+  missing description) are listed in the preview with row number and reason
+  instead of being silently dropped.
 
 ### Added
-- Test suite (`npm test`, 40 tests) covering parser, DB integrity,
-  projection, security, restore failure/round-trip, re-import behavior and an
-  end-to-end HTTP flow.
+- Test suite (`npm test`, 41 tests) covering parser, DB integrity,
+  projection, security, restore failure/round-trip, re-import behavior, XLSX
+  export round-trip and an end-to-end HTTP flow.
 - GitHub Actions CI: server tests, client build, dependency audit, version checks.
 - `docs/IMPROVEMENT_PLAN.md` — the validated improvement plan this release implements.
 - Unauthenticated `/healthz` liveness endpoint for systemd/uptime monitors.

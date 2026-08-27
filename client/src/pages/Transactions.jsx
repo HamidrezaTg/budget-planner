@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, eur, currentMonth, monthLabel } from '../api.js';
-import { useDialogs } from '../components/Dialog.jsx';
+import { Modal, useDialogs } from '../components/Dialog.jsx';
 
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
@@ -281,95 +281,103 @@ export default function Transactions() {
       </div>
 
       {splitTx && (
-        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setSplitTx(null)}>
-          <div className="modal-card" style={{ width: 520 }}>
-            <h3 className="modal-title">Split — {splitTx.description}</h3>
-            <p className="modal-message">
-              Original amount: <b className={splitTx.amount >= 0 ? 'income' : 'expense'}>{eur(splitTx.amount)}</b> ·
-              parts must add up to it.
-            </p>
-            {splitParts.map((p, i) => (
-              <div key={i} className="split-row">
-                <select
-                  value={p.category_id}
-                  onChange={(e) => {
-                    const next = [...splitParts];
-                    next[i] = { ...p, category_id: e.target.value };
-                    setSplitParts(next);
-                  }}
-                >
-                  <option value="">Category…</option>
-                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <input
-                  type="number" step="0.01" placeholder="Amount"
-                  value={p.amount}
-                  onChange={(e) => {
-                    const next = [...splitParts];
-                    next[i] = { ...p, amount: e.target.value };
-                    setSplitParts(next);
-                  }}
-                />
-                {splitParts.length > 2 && (
-                  <button className="btn ghost small" onClick={() => setSplitParts(splitParts.filter((_, j) => j !== i))}>✕</button>
-                )}
-              </div>
-            ))}
-            <div className="split-summary">
-              <span className={Math.abs(splitParts.reduce((s, p) => s + (Number(p.amount) || 0), 0) - splitTx.amount) <= 0.01 ? 'good' : 'bad'}>
-                {eur(splitParts.reduce((s, p) => s + (Number(p.amount) || 0), 0))} of {eur(splitTx.amount)}
-              </span>
-              <button className="btn ghost small" onClick={() => setSplitParts([...splitParts, { category_id: '', amount: '' }])}>
-                + Add part
-              </button>
+        <Modal
+          title={`Split — ${splitTx.description}`}
+          onClose={() => setSplitTx(null)}
+          width={520}
+        >
+          <p className="modal-message">
+            Original amount: <b className={splitTx.amount >= 0 ? 'income' : 'expense'}>{eur(splitTx.amount)}</b> ·
+            parts must add up to it.
+          </p>
+          {splitParts.map((p, i) => (
+            <div key={i} className="split-row">
+              <select
+                aria-label={`Part ${i + 1} category`}
+                value={p.category_id}
+                onChange={(e) => {
+                  const next = [...splitParts];
+                  next[i] = { ...p, category_id: e.target.value };
+                  setSplitParts(next);
+                }}
+              >
+                <option value="">Category…</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <input
+                type="number" step="0.01" placeholder="Amount"
+                aria-label={`Part ${i + 1} amount`}
+                value={p.amount}
+                onChange={(e) => {
+                  const next = [...splitParts];
+                  next[i] = { ...p, amount: e.target.value };
+                  setSplitParts(next);
+                }}
+              />
+              {splitParts.length > 2 && (
+                <button
+                  className="btn ghost small"
+                  aria-label={`Remove part ${i + 1}`}
+                  onClick={() => setSplitParts(splitParts.filter((_, j) => j !== i))}
+                >✕</button>
+              )}
             </div>
-            {splitError && <div className="error" style={{ margin: '8px 0' }}>{splitError}</div>}
-            <div className="modal-actions">
-              <button className="btn ghost" onClick={() => setSplitTx(null)}>Cancel</button>
-              <button className="btn primary" onClick={submitSplit}>Save split</button>
-            </div>
+          ))}
+          <div className="split-summary">
+            <span className={Math.abs(splitParts.reduce((s, p) => s + (Number(p.amount) || 0), 0) - splitTx.amount) <= 0.01 ? 'good' : 'bad'}>
+              {eur(splitParts.reduce((s, p) => s + (Number(p.amount) || 0), 0))} of {eur(splitTx.amount)}
+            </span>
+            <button className="btn ghost small" onClick={() => setSplitParts([...splitParts, { category_id: '', amount: '' }])}>
+              + Add part
+            </button>
           </div>
-        </div>
+          {splitError && <div className="error" role="alert" style={{ margin: '8px 0' }}>{splitError}</div>}
+          <div className="modal-actions">
+            <button className="btn ghost" onClick={() => setSplitTx(null)}>Cancel</button>
+            <button className="btn primary" onClick={submitSplit}>Save split</button>
+          </div>
+        </Modal>
       )}
 
       {attTx && (
-        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setAttTx(null)}>
-          <div className="modal-card" style={{ width: 520 }}>
-            <h3 className="modal-title">Attachments — {attTx.description}</h3>
-            <p className="modal-message">
-              <b className={attTx.amount >= 0 ? 'income' : 'expense'}>{eur(attTx.amount)}</b> on {attTx.date} ·
-              PDF, PNG, JPEG, WebP or CSV up to 10 MB.
-            </p>
-            {attList === null ? (
-              <div className="muted" style={{ margin: '10px 0' }}>Loading…</div>
-            ) : attList.length === 0 ? (
-              <div className="muted" style={{ margin: '10px 0' }}>No attachments yet.</div>
-            ) : (
-              <div className="att-list">
-                {attList.map((a) => (
-                  <div key={a.id} className="att-row">
-                    <div className="att-main">
-                      <strong>{a.original_name}</strong>
-                      <small className="muted">{formatSize(a.size)} · {a.created_at.slice(0, 10)}</small>
-                    </div>
-                    <div className="env-actions">
-                      <a className="btn small" href={`/api/attachments/${a.id}/file`}>Download</a>
-                      <button className="btn danger small" onClick={() => deleteAttachment(a)}>Delete</button>
-                    </div>
+        <Modal
+          title={`Attachments — ${attTx.description}`}
+          onClose={() => setAttTx(null)}
+          width={520}
+        >
+          <p className="modal-message">
+            <b className={attTx.amount >= 0 ? 'income' : 'expense'}>{eur(attTx.amount)}</b> on {attTx.date} ·
+            PDF, PNG, JPEG, WebP or CSV up to 10 MB.
+          </p>
+          {attList === null ? (
+            <div className="muted" style={{ margin: '10px 0' }}>Loading…</div>
+          ) : attList.length === 0 ? (
+            <div className="muted" style={{ margin: '10px 0' }}>No attachments yet.</div>
+          ) : (
+            <div className="att-list">
+              {attList.map((a) => (
+                <div key={a.id} className="att-row">
+                  <div className="att-main">
+                    <strong>{a.original_name}</strong>
+                    <small className="muted">{formatSize(a.size)} · {a.created_at.slice(0, 10)}</small>
                   </div>
-                ))}
-              </div>
-            )}
-            {attError && <div className="error" style={{ margin: '8px 0' }}>{attError}</div>}
-            <div className="modal-actions">
-              <label className="btn primary file-btn">
-                Add file…
-                <input type="file" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,.csv" onChange={uploadAttachment} />
-              </label>
-              <button className="btn ghost" onClick={() => setAttTx(null)}>Close</button>
+                  <div className="env-actions">
+                    <a className="btn small" href={`/api/attachments/${a.id}/file`}>Download</a>
+                    <button className="btn danger small" onClick={() => deleteAttachment(a)}>Delete</button>
+                  </div>
+                </div>
+              ))}
             </div>
+          )}
+          {attError && <div className="error" role="alert" style={{ margin: '8px 0' }}>{attError}</div>}
+          <div className="modal-actions">
+            <label className="btn primary file-btn">
+              Add file…
+              <input type="file" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,.csv" onChange={uploadAttachment} />
+            </label>
+            <button className="btn ghost" onClick={() => setAttTx(null)}>Close</button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -125,6 +125,21 @@ export default function ImportPage() {
         </div>
       )}
 
+      {/* Rows the parser could not read: never silently dropped — show what and why. */}
+      {result?.errors?.length > 0 && (
+        <div className="card warn-box" role="alert">
+          <b>{result.errors.at(-1)?.truncated
+            ? `${result.stats.invalid} row(s) could not be read`
+            : `${result.errors.length} row(s) could not be read`}.</b>{' '}
+            Check the file — these were skipped:
+          <ul style={{ margin: '8px 0 0 18px' }}>
+            {result.errors.filter((e) => !e.truncated).map((e, i) => (
+              <li key={i}>row {e.row}: {e.reason}{e.value ? ` — "${e.value}"` : ''}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {result && (
         <>
           <div className="stats-row">

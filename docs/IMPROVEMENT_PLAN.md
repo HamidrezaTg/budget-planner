@@ -8,7 +8,7 @@
 The v3.9.0 implementation changes are committed on `main`, but a tagged/public
 release and native artifacts still require verification.
 
-- Verification: `npm test` passes 40 tests; `npm run build` passes; `git diff --check` passes.
+- Verification: `npm test` passes 41 tests; `npm run build` passes; `git diff --check` passes.
 - CI now installs both root and client dependencies before testing/building.
 - `npm audit --omit=dev --audit-level=high` reports zero vulnerabilities after the
   spreadsheet dependency replacement.
@@ -65,6 +65,14 @@ release and native artifacts still require verification.
   user-reported id maps to a journalctl line.
 - Added a re-import regression test: two identical rows in one file both
   import; re-importing the same file inserts nothing.
+- Extracted a reusable accessible `Modal` (focus trap, Escape, aria labels,
+  focus restore) and rebuilt the Transactions split/attachment dialogs on it;
+  split form controls now carry labels.
+- Import preview and confirm return row-level parse errors (row number,
+  reason, sample value, capped at 50); the import page lists them in a warning
+  box instead of silently dropping rows.
+- Added an XLSX export round-trip integration test through the maintained
+  spreadsheet package.
 
 ## 1. Goals
 
@@ -235,9 +243,10 @@ maintenance review remain.
 
 ## 6. Phase 3: Client UX and Accessibility
 
-**Status: PARTIAL.** Shared dialog improvements and destructive confirmations are
-implemented, but custom overlays, full form labeling, page error handling, and
-responsive/accessibility coverage remain.
+**Status: MOSTLY DONE.** Shared dialog improvements, destructive confirmations, and
+the new reusable accessible `Modal` cover the split/attachment overlays and all
+destructive flows. Remaining: full form labeling audit, page error handling, and
+responsive/accessibility coverage.
 
 - Dialog: `aria-labelledby`/`aria-describedby`, real labels, initial focus, focus trap + restore, Escape
   everywhere, no accidental overlay dismissal on destructive actions, busy/error states, `aria-live` toasts.
@@ -280,9 +289,9 @@ published artifact verification remain open.
 
 ## 9. Phase 6: Automated Tests and CI
 
-**Status: PARTIAL.** The server suite currently present in the worktree has 40 passing tests and
-CI now installs client dependencies; restore, recurrence, and re-import paths are
-covered, but client component, packaging, APK, and release tests are still missing.
+**Status: PARTIAL.** The server suite currently present in the worktree has 41 passing tests and
+CI now installs client dependencies; restore, recurrence, re-import, and XLSX export
+paths are covered, but client component, packaging, APK, and release tests are still missing.
 
 - Commit a real `tests/` suite: unit (dates, dedup, FX, rollover, projection), DB integration (temp dirs),
   API (auth, isolation), import, restore, client components (dialog/destructive), packaging smoke.

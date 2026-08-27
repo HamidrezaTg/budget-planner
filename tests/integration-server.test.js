@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import XLSX from 'xlsx';
 import { freshDataDir, cleanup, startServer } from './helpers.js';
 
 const dir = freshDataDir();
@@ -323,6 +324,24 @@ test('re-importing the same statement inserts nothing; duplicates within one fil
   const secondDone = await api('/import/confirm', 'POST', { token: second.token, account_id: null }, cookies);
   assert.equal(secondDone.inserted, 0);
   assert.equal(secondDone.skippedDuplicates, 2);
+});
+
+test('xlsx monthly export round-trips through the maintained spreadsheet package', async () => {
+  const r = await fetch(`${srv.url}/api/reports/export/monthly/2026-05.xlsx`, {
+    headers: { Cookie: cookies },
+  });
+  assert.equal(r.status, 200);
+  assert.equal(
+    r.headers.get('content-type'),
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+  const wb = XLSX.read(Buffer.from(await r.arrayBuffer()), { type: 'buffer' });
+  assert.equal(wb.SheetNames[0], 'Transactions');
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets['Transactions']);
+  const coffee = rows.filter((row) => row.Description === 'Coffee Bar');
+  assert.equal(coffee.length, 2);
+  assert.equal(coffee[0].Amount, -4.5);
+  assert.equal(coffee[0].Currency, 'EUR');
 });
 
 async function api(path, method, body, cookie) {

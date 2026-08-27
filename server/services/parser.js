@@ -221,6 +221,8 @@ function finalize({ mapping, raw }, mode) {
   const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
   const transactions = [];
+  const errors = [];
+  const MAX_PARSE_ERRORS = 50;
   const stats = {
     total: 0,
     imported: 0,
@@ -229,7 +231,9 @@ function finalize({ mapping, raw }, mode) {
     invalid: 0,
   };
 
+  let dataRow = 0;
   for (const row of raw) {
+    dataRow++;
     stats.total++;
     const state = String(row[mapping.state] ?? '').trim().toLowerCase();
     if (state === 'reverted') {
@@ -241,6 +245,14 @@ function finalize({ mapping, raw }, mode) {
     const description = String(row[mapping.description] ?? '').trim();
     if (!iso || isNaN(amount) || !description) {
       stats.invalid++;
+      if (errors.length < MAX_PARSE_ERRORS) {
+        const reason = !iso
+          ? 'unrecognized date'
+          : isNaN(amount)
+            ? 'unrecognized amount'
+            : 'missing description';
+        errors.push({ row: dataRow, reason, value: String(row[mapping.date] ?? '').slice(0, 40) });
+      }
       continue;
     }
     if (state === 'pending' && iso >= currentMonthStart) {
@@ -258,7 +270,8 @@ function finalize({ mapping, raw }, mode) {
       dedup_key: `${iso}|${amount.toFixed(2)}|${currency}|${normalizeDesc(description)}`,
     });
   }
-  return { transactions: assignDedupKeys(transactions), stats, mapping };
+  if (stats.invalid > errors.length) errors.push({ truncated: stats.invalid - errors.length });
+  return { transactions: assignDedupKeys(transactions), stats, errors, mapping };
 }
 
 // -------------------------------------------------------------- AI file doctor
@@ -348,6 +361,8 @@ export function transactionsFromGrid(grid, spec) {
   const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
   const transactions = [];
+  const errors = [];
+  const MAX_PARSE_ERRORS = 50;
   const stats = { total: 0, imported: 0, skippedReverted: 0, skippedPendingCurrentMonth: 0, invalid: 0 };
 
   for (let i = headerRow + 1; i < grid.length; i++) {
@@ -371,6 +386,14 @@ export function transactionsFromGrid(grid, spec) {
     const description = String(row[colDesc] ?? '').trim();
     if (!iso || isNaN(amount) || !description) {
       stats.invalid++;
+      if (errors.length < MAX_PARSE_ERRORS) {
+        const reason = !iso
+          ? 'unrecognized date'
+          : isNaN(amount)
+            ? 'unrecognized amount'
+            : 'missing description';
+        errors.push({ row: i - headerRow, reason, value: String(row[colDate] ?? '').slice(0, 40) });
+      }
       continue;
     }
     if (state === 'pending' && iso >= currentMonthStart) {
@@ -388,5 +411,6 @@ export function transactionsFromGrid(grid, spec) {
       dedup_key: `${iso}|${amount.toFixed(2)}|${currency}|${normalizeDesc(description)}`,
     });
   }
-  return { transactions: assignDedupKeys(transactions), stats };
+  if (stats.invalid > errors.length) errors.push({ truncated: stats.invalid - errors.length });
+  return { transactions: assignDedupKeys(transactions), stats, errors };
 }

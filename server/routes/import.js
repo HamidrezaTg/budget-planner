@@ -115,7 +115,7 @@ router.post('/upload', upload.single('file'), withCtx((req, res) => {
     const parsed = parseStatement(req.file.path);
     const token = stageFile(req.file, req.username);
     const { preview, summary } = previewParsed(parsed, req.impDb);
-    res.json({ token, stats: parsed.stats, summary, preview, ai_spec: null });
+    res.json({ token, stats: parsed.stats, errors: parsed.errors ?? [], summary, preview, ai_spec: null });
   } catch (e) {
     try { fs.unlinkSync(req.file.path); } catch {}
     res.status(400).json({
@@ -198,7 +198,7 @@ router.post('/preview', withCtx((req, res) => {
       : parseStatement(stagedEntry.path);
     parsed.transactions.forEach((t) => { t.account_id = accId; });
     const { preview, summary } = previewParsed(parsed, req.impDb);
-    res.json({ token, stats: parsed.stats, summary, preview });
+    res.json({ token, stats: parsed.stats, errors: parsed.errors ?? [], summary, preview });
   } catch (e) {
     res.status(400).json({ error: e.message, suggest_ai: true });
   }
@@ -248,7 +248,7 @@ router.post('/confirm', withCtx((req, res) => {
     const remainingReview = req.impDb
       .prepare('SELECT COUNT(*) AS c FROM transactions WHERE needs_review = 1')
       .get().c;
-    res.json({ inserted, skippedDuplicates: withCats.length - inserted, remainingReview });
+    res.json({ inserted, skippedDuplicates: withCats.length - inserted, remainingReview, errors: parsed.errors ?? [] });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

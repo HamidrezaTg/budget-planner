@@ -72,6 +72,16 @@ manually in that case.
 It's in **needs review** (Transactions page). Assign once — a keyword rule is learned
 and applied retroactively to matching rows.
 
+### "Something went wrong" — getting support with a request id
+Every response carries an `X-Request-Id` header. If a server error mentions one
+(or your browser devtools Network tab shows it), find the matching server line with:
+
+```bash
+journalctl -u budget-planner | grep <request-id>
+```
+
+That line contains the full error detail without exposing stack traces to clients.
+
 ## Multi-currency
 
 ### Foreign-currency totals look wrong (1:1)

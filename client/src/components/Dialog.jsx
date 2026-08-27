@@ -162,3 +162,70 @@ export function DialogProvider({ children }) {
 export function useDialogs() {
   return useContext(DialogContext);
 }
+
+// Generic accessible modal for custom dialogs that need richer content than
+// confirm/prompt (split editor, attachment manager, …). Provides the same
+// guarantees as the provider's dialog: aria-labelledby/describedby wiring,
+// initial focus, Tab trapping, Escape to close, focus restore on unmount.
+// Children receive no special props — render form content freely inside.
+export function Modal({ title, onClose, children, width }) {
+  const panelRef = useRef(null);
+  const lastFocus = useRef(null);
+  const titleId = useRef(`modal-title-${++idCounter}`);
+
+  useEffect(() => {
+    lastFocus.current = document.activeElement;
+    const focusable = panelRef.current?.querySelector(
+      'input, select, textarea, button:not(:disabled), a[href]'
+    );
+    (focusable || panelRef.current)?.focus();
+    return () => {
+      lastFocus.current?.focus?.();
+    };
+  }, []);
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      e.preventDefault();
+      onClose();
+      return;
+    }
+    if (e.key === 'Tab' && panelRef.current) {
+      const focusables = panelRef.current.querySelectorAll(
+        'input, select, textarea, button:not(:disabled), a[href]'
+      );
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+
+  return (
+    <div
+      className="overlay"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        ref={panelRef}
+        className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId.current}
+        style={width ? { width } : undefined}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+      >
+        <h3 className="modal-title" id={titleId.current}>{title}</h3>
+        {children}
+      </div>
+    </div>
+  );
+}
