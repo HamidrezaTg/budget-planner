@@ -46,6 +46,17 @@ function createWindow() {
   win.webContents.on('will-navigate', (event, url) => {
     if (!isAllowedOrigin(url, getUrl())) event.preventDefault();
   });
+  // will-navigate does not fire for server-initiated redirects; without this
+  // guard a 302 from the server could silently move the window to another
+  // origin — the classic Electron escape hatch.
+  win.webContents.on('will-redirect', (event, url) => {
+    if (!isAllowedOrigin(url, getUrl())) event.preventDefault();
+  });
+  // Remote content gets no privileged permissions (geolocation, notifications,
+  // media, …) — a finance shell needs none of them.
+  win.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => {
+    callback(false);
+  });
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url) && !isAllowedOrigin(url, getUrl())) {
       shell.openExternal(url);

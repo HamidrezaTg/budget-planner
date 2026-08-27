@@ -12,6 +12,13 @@ if (!name || !pw) {
   console.error('BP_USER and BP_PW environment variables are required');
   process.exit(1);
 }
+// DATA_DIR must be explicit: without it db.js falls back to ./data relative to
+// the working directory, and a typo'd cwd would silently create the admin in
+// an empty database the running service never sees (it prints "success"!).
+if (!process.env.DATA_DIR) {
+  console.error('DATA_DIR must be set explicitly (e.g. DATA_DIR=/var/lib/budget-planner)');
+  process.exit(1);
+}
 if (hasAnyUser()) {
   console.error('An account already exists — refusing to create another via CLI.');
   process.exit(1);

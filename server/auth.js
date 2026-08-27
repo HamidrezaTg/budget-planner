@@ -39,8 +39,10 @@ function verifyPasswordAsync(password, storedHash) {
 
 export async function createUser(username, password, role = 'user') {
   const name = String(username ?? '').trim().toLowerCase();
-  if (!/^[a-z0-9_.-]{2,32}$/.test(name))
-    throw new Error('Username must be 2–32 chars: letters, numbers, . _ -');
+  // "." and "-" are excluded: they collided with "_" under the legacy
+  // filename sanitizer and must never enter the system again (new usernames).
+  if (!/^[a-z0-9_]{2,32}$/.test(name))
+    throw new Error('Username must be 2–32 chars: letters, numbers, _');
   if (!password || password.length < PASSWORD_MIN)
     throw new Error(`Password must be at least ${PASSWORD_MIN} characters`);
   master
@@ -52,21 +54,30 @@ export async function createUser(username, password, role = 'user') {
   return name;
 }
 
+// Constant-time-ish login: an unknown username must cost the same scrypt work
+// as a known one, or response timing reveals which usernames exist.
+// Format matches hashPasswordAsync (`salt:hash`) so it runs full scrypt work
+// and never matches any password.
+const DUMMY_HASH =
+  'TgUqIPyhFmzoIhLhX8FGyw==:5fd9cd424d71a2c3f48e4566788ab09d12e3f4a5b6c7d8910e2f4c3adeaf90b2';
+export async function verifyLogin(username, password) {
+  const row = master
+    .prepare('SELECT username, password_hash FROM users WHERE username = ?')
+    .get(String(username ?? '').trim().toLowerCase());
+  if (!row) {
+    await verifyPasswordAsync(password ?? '', DUMMY_HASH);
+    return null;
+  }
+  const ok = await verifyPasswordAsync(password ?? '', row.password_hash);
+  return ok ? row.username : null;
+}
+
 // Admin-only guard, used after requireAuth.
 export function requireAdmin(req, res, next) {
   if (!isAdmin(req.username)) {
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();
-}
-
-export async function verifyLogin(username, password) {
-  const row = master
-    .prepare('SELECT username, password_hash FROM users WHERE username = ?')
-    .get(String(username ?? '').trim().toLowerCase());
-  if (!row) return null;
-  const ok = await verifyPasswordAsync(password ?? '', row.password_hash);
-  return ok ? row.username : null;
 }
 
 export function userExists(username) {

@@ -61,7 +61,13 @@ export default function Income() {
                         initial: String(s.current_amount),
                       });
                       if (v === null) return;
-                      await api.put(`/income/${month}/${s.id}`, { current_amount: Number(v) || 0 });
+                      // Include the month's current entry: a PUT without an
+                      // `amount` means "remove this month's actual entry" on
+                      // the server, which silently wiped real income.
+                      await api.put(`/income/${month}/${s.id}`, {
+                        current_amount: Number(v) || 0,
+                        amount: s.entry_amount ?? null,
+                      });
                       load();
                     }}
                   >✎</button>

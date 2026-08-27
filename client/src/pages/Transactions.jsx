@@ -21,14 +21,29 @@ export default function Transactions() {
   const [attError, setAttError] = useState('');
   const { confirm } = useDialogs();
 
+  // The URL is the source of truth for the filter: the toggle button updates
+  // the params, and this effect keeps the state (and list) in sync — clicking
+  // a "needs review" link while already on the page now refilters too.
+  useEffect(() => {
+    setReviewOnly(params.get('review') === '1');
+    setMonth(params.get('month') || '');
+  }, [params]);
+
+  // A request-sequence guard: the newest request wins, so fast month/filter
+  // switching can never let an older response clobber a newer one.
+  const loadSeq = React.useRef(0);
   const load = () => {
+    const seq = ++loadSeq.current;
     const q = new URLSearchParams();
     if (month) q.set('month', month);
     if (review) q.set('review', '1');
     api.get(`/transactions?${q}`).then((d) => {
+      if (seq !== loadSeq.current) return;
       setRows(d.rows);
       setTotal(d.total);
-    }).catch((e) => setError(e.message));
+    }).catch((e) => {
+      if (seq === loadSeq.current) setError(e.message);
+    });
   };
 
   useEffect(() => {
@@ -139,9 +154,17 @@ export default function Transactions() {
 
   const applyMany = async (minConfidence) => {
     const list = suggestions.filter((s) => s.confidence >= minConfidence);
+    let applied = 0;
+    let failed = 0;
     for (const s of list) {
-      await api.patch(`/transactions/${s.id}`, { category_id: s.category_id, remember: true });
+      try {
+        await api.patch(`/transactions/${s.id}`, { category_id: s.category_id, remember: true });
+        applied++;
+      } catch {
+        failed++;
+      }
     }
+    if (failed) setError(`${applied} applied, ${failed} failed — try again for the rest.`);
     setSuggestions((p) => (p ?? []).filter((s) => s.confidence < minConfidence));
     load();
   };

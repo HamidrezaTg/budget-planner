@@ -18,7 +18,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --client) WANT_CLIENT=1 ;;
     --quiet) QUIET=1 ;;
-    --version) WANT_VERSION="$2"; shift ;;
+    --version) [ $# -ge 2 ] || { echo "ERROR: --version requires a value" >&2; exit 1; }; WANT_VERSION="$2"; shift ;;
     --version=*) WANT_VERSION="${1#*=}" ;;
     *) echo "Unknown flag: $1" >&2; exit 1 ;;
   esac
@@ -206,7 +206,10 @@ if [ -s "$SUMS" ]; then
   EXPECTED=$(grep -E "^[0-9a-f]{64}[[:space:]]+${ASSET_NAME}\$" "$SUMS" | awk '{print $1}')
   ACTUAL=$(sha256sum "$OUT" | awk '{print $1}')
   if [ -z "$EXPECTED" ]; then
-    echo "WARNING: $ASSET_NAME not listed in SHA256SUMS.txt — cannot verify checksum." >&2
+    echo "ERROR: $ASSET_NAME not listed in SHA256SUMS.txt — refusing to install." >&2
+    echo "       (Set INSTALLER_SKIP_CHECKSUM=1 to override this check.)" >&2
+    rm -f "$OUT" "$SUMS"
+    [ "${INSTALLER_SKIP_CHECKSUM:-0}" = "1" ] || exit 1
   elif [ "$EXPECTED" != "$ACTUAL" ]; then
     echo "ERROR: checksum mismatch for $ASSET_NAME" >&2
     echo "  expected: $EXPECTED" >&2
@@ -218,7 +221,9 @@ if [ -s "$SUMS" ]; then
   fi
   rm -f "$SUMS"
 else
-  echo "WARNING: SHA256SUMS.txt unavailable for $TAG — skipping checksum verification." >&2
+  echo "ERROR: could not download SHA256SUMS.txt for $TAG — refusing to install unverified." >&2
+  echo "       (Set INSTALLER_SKIP_CHECKSUM=1 to override this check.)" >&2
+  [ "${INSTALLER_SKIP_CHECKSUM:-0}" = "1" ] || exit 1
 fi
 
 echo "==> installing $ASSET_NAME"

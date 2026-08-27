@@ -52,7 +52,8 @@ export function DialogProvider({ children }) {
     if (dialog) {
       lastFocus.current = document.activeElement;
       const focusable = panelRef.current?.querySelector(
-        'input, select, textarea, button:not(:disabled)'
+        'input:not([type="hidden"]):not([hidden]):not(:disabled), ' +
+        'select:enabled, textarea:enabled, button:enabled, a[href]'
       );
       (focusable || panelRef.current)?.focus();
     }
@@ -75,7 +76,8 @@ export function DialogProvider({ children }) {
     }
     if (e.key === 'Tab' && panelRef.current) {
       const focusables = panelRef.current.querySelectorAll(
-        'input, select, textarea, button:not(:disabled)'
+        'input:not([type="hidden"]):not([hidden]):not(:disabled), ' +
+        'select:enabled, textarea:enabled, button:enabled, a[href]'
       );
       if (!focusables.length) return;
       const first = focusables[0];
@@ -176,7 +178,8 @@ export function Modal({ title, onClose, children, width }) {
   useEffect(() => {
     lastFocus.current = document.activeElement;
     const focusable = panelRef.current?.querySelector(
-      'input, select, textarea, button:not(:disabled), a[href]'
+      'input:not([type="hidden"]):not([hidden]):not(:disabled), ' +
+      'select:enabled, textarea:enabled, button:enabled, a[href]'
     );
     (focusable || panelRef.current)?.focus();
     return () => {
@@ -193,7 +196,8 @@ export function Modal({ title, onClose, children, width }) {
     }
     if (e.key === 'Tab' && panelRef.current) {
       const focusables = panelRef.current.querySelectorAll(
-        'input, select, textarea, button:not(:disabled), a[href]'
+        'input:not([type="hidden"]):not([hidden]):not(:disabled), ' +
+      'select:enabled, textarea:enabled, button:enabled, a[href]'
       );
       if (!focusables.length) return;
       const first = focusables[0];

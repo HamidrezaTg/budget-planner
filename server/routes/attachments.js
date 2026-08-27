@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { als, DATA_DIR } from '../db.js';
+import { als, DATA_DIR, safeDbFilename } from '../db.js';
 
 const router = Router();
 
@@ -34,7 +34,7 @@ function contentMatchesDeclared(buffer, mime) {
 
 function userUploadDir(username) {
   // same sanitization as getUserDb
-  const safe = username.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  const safe = safeDbFilename(username);
   return path.join(DATA_DIR, 'uploads', safe);
 }
 

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db, DATA_DIR } from '../db.js';
+import { db, DATA_DIR, safeDbFilename } from '../db.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import { learnRule, categorizeTransaction, createAutomationRule } from '../services/categorizer.js';
@@ -78,7 +78,7 @@ router.delete('/:id', (req, res) => {
     .prepare(`SELECT filename FROM attachments WHERE transaction_id IN (${placeholders})`)
     .all(...ids);
   if (files.length) {
-    const dir = path.join(DATA_DIR, 'uploads', req.username.replace(/[^a-zA-Z0-9_\-]/g, '_'));
+    const dir = path.join(DATA_DIR, 'uploads', safeDbFilename(req.username));
     for (const f of files) {
       const resolved = path.resolve(dir, f.filename);
       if (resolved.startsWith(path.resolve(dir) + path.sep)) {
@@ -158,7 +158,7 @@ router.post('/:id/unsplit', (req, res) => {
     const files = db
       .prepare(`SELECT filename FROM attachments WHERE transaction_id IN (${placeholders})`)
       .all(...ids);
-    const dir = path.join(DATA_DIR, 'uploads', req.username.replace(/[^a-zA-Z0-9_\-]/g, '_'));
+    const dir = path.join(DATA_DIR, 'uploads', safeDbFilename(req.username));
     for (const f of files) {
       const resolved = path.resolve(dir, f.filename);
       if (resolved.startsWith(path.resolve(dir) + path.sep)) {

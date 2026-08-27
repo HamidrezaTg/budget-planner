@@ -24,10 +24,16 @@ sed -i \
   -e "s/^        versionCode .*/        versionCode ${VERSION_CODE}/" \
   -e "s/^        versionName \".*\"/        versionName \"${ROOT_VERSION}\"/" \
   android/app/build.gradle
+# Verify the stamp actually landed (a formatting change upstream would
+# otherwise leave the version stale, silently).
+grep -q "versionCode ${VERSION_CODE}" android/app/build.gradle || { echo "ERROR: version stamping failed" >&2; exit 1; }
+grep -q "versionName \"${ROOT_VERSION}\"" android/app/build.gradle || { echo "ERROR: versionName stamping failed" >&2; exit 1; }
 echo "==> stamped version ${ROOT_VERSION} (code ${VERSION_CODE})"
 
-grep -q usesCleartextTraffic android/app/src/main/AndroidManifest.xml || \
-  sed -i 's/<application$/<application\n        android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
+grep -q 'android:usesCleartextTraffic="true"' android/app/src/main/AndroidManifest.xml || {
+  echo "ERROR: AndroidManifest.xml is missing usesCleartextTraffic (needed for LAN self-hosting)" >&2
+  exit 1
+}
 npx cap sync android > /dev/null
 
 # ---- Android SDK bootstrap (only if missing) ----
@@ -63,11 +69,23 @@ if [ "$SIGNED_RELEASE" = true ]; then
   ( cd android && ./gradlew assembleRelease --no-daemon -q )
   cp android/app/build/outputs/apk/release/app-release.apk ../dist/budget-planner-android.apk
 else
-  echo "==> gradle assembleDebug (no BP_ANDROID_KEYSTORE configured — local test build)"
+  # A debug-key build must NEVER land under the release filename: users
+  # sideload updates by filename, and the public debug key would let anyone
+  # craft a signed "update" for them. Only an explicit opt-in overrides this.
+  if [ "${BP_ALLOW_DEBUG_APK:-0}" != "1" ]; then
+    echo "ERROR: no signing environment (BP_ANDROID_KEYSTORE...) and BP_ALLOW_DEBUG_APK!=1." >&2
+    echo "       Refusing to produce a debug-key APK as dist/budget-planner-android.apk." >&2
+    exit 1
+  fi
+  echo "==> gradle assembleDebug (BP_ALLOW_DEBUG_APK=1 — local test build only)"
   ( cd android && ./gradlew assembleDebug --no-daemon -q )
-  cp android/app/build/outputs/apk/debug/app-debug.apk ../dist/budget-planner-android.apk
+  cp android/app/build/outputs/apk/debug/app-debug.apk ../dist/budget-planner-android-debug.apk
 fi
 
-echo "==> done: dist/budget-planner-android.apk"
-echo "    install:  adb install dist/budget-planner-android.apk"
+if [ "$SIGNED_RELEASE" = true ]; then
+  echo "==> done: dist/budget-planner-android.apk (signed release)"
+else
+  echo "==> done: dist/budget-planner-android-debug.apk (debug key — do not distribute)"
+fi
+echo "    install:  adb install dist/<apk>"
 echo "    (or copy to the phone and open it — allow 'unknown sources')"

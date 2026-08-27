@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getSetting, setSetting, db, als, getUserDb, closeUserDb, DATA_DIR, initUserSchema } from '../db.js';
+import { getSetting, setSetting, db, als, getUserDb, closeUserDb, DATA_DIR, initUserSchema, safeDbFilename } from '../db.js';
 import { getAiConfig, chatComplete } from '../services/ai.js';
 import { requireAuth } from '../auth.js';
 import fs from 'node:fs';
@@ -76,9 +76,17 @@ router.get('/', (req, res) => {
 
 router.put('/', (req, res) => {
   const { provider, api_key, model, base_url, currency } = req.body ?? {};
+  // Validate EVERYTHING before mutating anything: the currency change wipes
+  // all FX rates, and that must never happen when another field is invalid.
+  if (currency !== undefined && !CURRENCIES.includes(currency))
+    return res.status(400).json({ error: 'Unknown currency' });
+  if (provider !== undefined && !PROVIDERS[provider])
+    return res.status(400).json({ error: 'Unknown provider' });
+  if (model !== undefined && typeof model !== 'string')
+    return res.status(400).json({ error: 'model must be a string' });
+
   let ratesCleared = false;
   if (currency !== undefined) {
-    if (!CURRENCIES.includes(currency)) return res.status(400).json({ error: 'Unknown currency' });
     const previous = getSetting('currency') || 'EUR';
     setSetting('currency', currency);
     // FX rates are stored relative to the OLD base currency; a switch makes
@@ -89,16 +97,11 @@ router.put('/', (req, res) => {
     }
   }
   if (provider !== undefined) {
-    if (!PROVIDERS[provider]) return res.status(400).json({ error: 'Unknown provider' });
     setSetting('ai_provider', provider);
     setSetting('ai_base_url', baseUrlFor(provider, base_url));
   }
   if (api_key) setSetting('ai_api_key', api_key.trim());
   if (model !== undefined) setSetting('ai_model', model.trim());
-  if (currency !== undefined) {
-    if (!CURRENCIES.includes(currency)) return res.status(400).json({ error: 'Unknown currency' });
-    setSetting('currency', currency);
-  }
   let ai;
   try {
     ai = masked(getAiConfig());
@@ -173,7 +176,7 @@ router.delete('/fx', (req, res) => {
 router.post('/fx/fetch', async (req, res) => {
   const base = getSetting('currency') || 'EUR';
   const overwrite = req.body?.overwrite === true;
-  const rows = overwrite
+  let rows = overwrite
     ? db.prepare('SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t WHERE t.currency != ?').all(base)
     : db
         .prepare(
@@ -182,6 +185,12 @@ router.post('/fx/fetch', async (req, res) => {
            WHERE t.currency != ? AND f.month IS NULL`
         )
         .all(base);
+  // Cap the work per call: years of foreign-currency data would otherwise
+  // hang the request for minutes and hammer frankfurter.dev. The response
+  // reports what remains so the client can offer another round.
+  const MAX_PER_CALL = 60;
+  const remaining = Math.max(0, rows.length - MAX_PER_CALL);
+  if (rows.length > MAX_PER_CALL) rows = rows.slice(0, MAX_PER_CALL);
 
   const lastDay = (m) => {
     const [y, mo] = m.split('-').map(Number);
@@ -208,7 +217,7 @@ router.post('/fx/fetch', async (req, res) => {
       failed.push({ month: row.month, currency: row.currency, error: e.message });
     }
   }
-  res.json({ ok: failed.length === 0, filled, attempted: rows.length, failed });
+  res.json({ ok: failed.length === 0, filled, attempted: rows.length, remaining, failed });
 });
 
 // Download a full backup of this user's database.
@@ -230,7 +239,7 @@ router.delete('/spending', (req, res) => {
   const n = db.prepare('SELECT COUNT(*) AS c FROM transactions').get().c;
   const files = db.prepare('SELECT filename FROM attachments').all();
   if (files.length) {
-    const dir = path.join(DATA_DIR, 'uploads', req.username.replace(/[^a-zA-Z0-9_\-]/g, '_'));
+    const dir = path.join(DATA_DIR, 'uploads', safeDbFilename(req.username));
     for (const f of files) {
       const resolved = path.resolve(dir, f.filename);
       if (resolved.startsWith(path.resolve(dir) + path.sep)) {
@@ -283,7 +292,7 @@ router.post('/restore', restoreUpload.single('file'), (req, res) => {
     check = null;
 
     const username = req.username;
-    const safe = username.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const safe = safeDbFilename(username);
     const target = path.join(dataDir, 'users', `${safe}.db`);
 
     // Apply any pending schema migrations to a writable staging copy so an
@@ -345,6 +354,7 @@ router.post('/models', async (req, res) => {
 
     const r = await fetch(`${url}/models`, {
       headers: needsKey ? { Authorization: `Bearer ${key}` } : {},
+      signal: AbortSignal.timeout(20000),
     });
     if (!r.ok) {
       const text = await r.text().catch(() => '');

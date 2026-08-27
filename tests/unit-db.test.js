@@ -1,6 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
+import { existsSync } from 'node:fs';
 import { freshDataDir, cleanup, loadDb } from './helpers.js';
 
 const dir = freshDataDir();
@@ -51,24 +52,43 @@ test('dedup keys are migrated to a currency-aware format once', () => {
   const cat = raw.prepare('SELECT id FROM categories ORDER BY id LIMIT 1').get().id;
   raw.prepare(`INSERT INTO transactions (date, description, amount, currency, category_id, dedup_key)
                VALUES ('2026-05-01','Coffee',-4.5,'EUR',?,'2026-05-01|-4.50|coffee')`).run(cat);
-   raw.prepare(`INSERT INTO transactions (date, description, amount, currency, category_id, dedup_key)
-                VALUES ('2026-05-02','Coffee',-4.5,'USD',?,'2026-05-02|-4.50|coffee')`).run(cat);
-   raw.prepare(`INSERT INTO transactions (date, description, amount, currency, category_id, dedup_key)
-                VALUES ('2026-05-03','Recurring',-10,'EUR',?,'rec|7|2026-05')`).run(cat);
-   raw.prepare(`INSERT INTO transactions (date, description, amount, currency, category_id, dedup_key)
-                VALUES ('2026-05-04','Split part',-5,'EUR',?,'split|7|0')`).run(cat);
-   raw.close();
+  raw.prepare(`INSERT INTO transactions (date, description, amount, currency, category_id, dedup_key)
+               VALUES ('2026-05-02','Coffee',-4.5,'USD',?,'2026-05-02|-4.50|coffee')`).run(cat);
+  raw.prepare(`INSERT INTO transactions (date, description, amount, currency, category_id, dedup_key)
+               VALUES ('2026-05-03','Recurring',-10,'EUR',?,'rec|7|2026-05')`).run(cat);
+  raw.prepare(`INSERT INTO transactions (date, description, amount, currency, category_id, dedup_key)
+               VALUES ('2026-05-04','Split part',-5,'EUR',?,'split|7|0')`).run(cat);
+  raw.close();
 
   const db = dbm.getUserDb('mig-user');
   const keys = db.prepare('SELECT dedup_key FROM transactions ORDER BY id').all().map((r) => r.dedup_key);
-   assert.deepEqual(keys, [
-     '2026-05-01|-4.50|EUR|coffee',
-     '2026-05-02|-4.50|USD|coffee',
-     'rec|7|2026-05',
-     'split|7|0',
-   ]);
+  assert.deepEqual(keys, [
+    '2026-05-01|-4.50|EUR|coffee',
+    '2026-05-02|-4.50|USD|coffee',
+    'rec|7|2026-05',
+    'split|7|0',
+  ]);
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, 1);
   // A re-import computes the same key, so it deduplicates against migrated rows.
   assert.equal(db.prepare("SELECT COUNT(*) c FROM transactions WHERE dedup_key = '2026-05-01|-4.50|EUR|coffee'").get().c, 1);
   dbm.closeUserDb('mig-user');
+});
+
+test('usernames that collided under the legacy sanitizer get distinct databases', () => {
+  // Legacy mapping collapsed "user.1" onto "user_1"'s file. Now they must be
+  // separate files with separate data.
+  const dot = dbm.getUserDb('user.1');
+  dbm.als.run(dot, () => {
+    dot.prepare("INSERT INTO categories (name) VALUES ('DotUserMark')").run();
+  });
+  const plain = dbm.getUserDb('user_1');
+  dbm.als.run(plain, () => {
+    const hasMark = plain.prepare("SELECT COUNT(*) c FROM categories WHERE name = 'DotUserMark'").get().c;
+    assert.equal(hasMark, 0, 'user_1 must not see user.1 data');
+  });
+  dbm.closeUserDb('user.1');
+  dbm.closeUserDb('user_1');
+  // Distinct files on disk.
+  assert.ok(existsSync(`${dir}/users/user%2E1.db`));
+  assert.ok(existsSync(`${dir}/users/user_1.db`));
 });

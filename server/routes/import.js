@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { db, als } from '../db.js';
+import { db, als, DATA_DIR } from '../db.js';
 import { parseStatement, rawGrid, transactionsFromGrid } from '../services/parser.js';
 import { applyCategorization } from '../services/categorizer.js';
 import { getAiConfig, chatComplete, parseJsonLoose } from '../services/ai.js';
@@ -20,9 +20,7 @@ router.use((req, _res, next) => {
 });
 const withCtx = (handler) => (req, res) => als.run(req.impDb, () => handler(req, res));
 
-const UPLOAD_DIR = process.env.DATA_DIR
-  ? path.join(process.env.DATA_DIR, 'uploads')
-  : path.join(process.cwd(), 'data', 'uploads');
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 
 const storage = multer.diskStorage({
   destination: UPLOAD_DIR,
@@ -39,9 +37,15 @@ const staged = new Map();
 function stageFile(file, username) {
   const token = path.basename(file.filename).split('-')[0];
   staged.set(token, { path: file.path, username });
-  // evict oldest entry, and remove its uploaded file so disk stays clean
+  // Evict the oldest entry when the global cap is hit — but prefer evicting
+  // the SAME user's oldest upload first: evicting another user's in-progress
+  // import mid-flow would delete their staged file out from under them.
   while (staged.size > 20) {
-    const oldest = staged.keys().next().value;
+    let oldest = null;
+    for (const k of staged.keys()) {
+      if (staged.get(k).username === username) { oldest = k; break; }
+    }
+    if (oldest === null) oldest = staged.keys().next().value;
     const entry = staged.get(oldest);
     try { fs.unlinkSync(entry.path); } catch {}
     staged.delete(oldest);
@@ -228,21 +232,31 @@ router.post('/confirm', withCtx((req, res) => {
       INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(dedup_key) DO NOTHING`);
+    // One transaction for the whole file: row-by-row autocommit means a WAL
+    // fsync per row (minutes on large statements) and a partially imported
+    // file if the request dies halfway.
+    req.impDb.exec('BEGIN');
     let inserted = 0;
-    for (const tx of withCats) {
-      const r = ins.run(
-        tx.date,
-        tx.description,
-        tx.amount,
-        tx.revolut_type,
-        tx.currency,
-        accId,
-        tx.suggested_category_id,
-        tx.needs_review,
-        path.basename(filePath),
-        tx.dedup_key
-      );
-      inserted += r.changes;
+    try {
+      for (const tx of withCats) {
+        const r = ins.run(
+          tx.date,
+          tx.description,
+          tx.amount,
+          tx.revolut_type,
+          tx.currency,
+          accId,
+          tx.suggested_category_id,
+          tx.needs_review,
+          path.basename(filePath),
+          tx.dedup_key
+        );
+        inserted += r.changes;
+      }
+      req.impDb.exec('COMMIT');
+    } catch (e) {
+      req.impDb.exec('ROLLBACK');
+      throw e;
     }
     removeStagedFile(token);
     const remainingReview = req.impDb

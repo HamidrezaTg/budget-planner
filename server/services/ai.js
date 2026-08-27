@@ -25,6 +25,9 @@ async function post(path, body, cfg, extra = {}) {
       ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}),
     },
     body: JSON.stringify({ ...body, ...extra }),
+    // A hung provider must not hold a request (and its session) for the
+    // undici default of several minutes.
+    signal: AbortSignal.timeout(120000),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { hasAnyUser, getUserDb, als, listUsers, deleteUser, closeUserDb, isAdmin, master } from '../db.js';
+import { hasAnyUser, getUserDb, als, listUsers, deleteUser, closeUserDb, isAdmin, master, safeDbFilename, DATA_DIR } from '../db.js';
 import {
   createUser,
   verifyLogin,
@@ -69,8 +69,11 @@ router.post(
 // error so usernames cannot be enumerated.
 router.post('/login', async (req, res) => {
   const username = String(req.body?.username ?? '').trim().toLowerCase();
+  // Two buckets: per-IP+username AND a wider per-IP bucket, so rotating
+  // usernames cannot dodge the per-username throttle.
   const key = `${req.ip}|${username}`;
-  if (consume(key, 60 * 1000, 10))
+  const ipKey = `ip|${req.ip}`;
+  if (consume(ipKey, 60 * 1000, 30) || consume(key, 60 * 1000, 10))
     return res.status(429).json({ error: 'Too many attempts — try again in a minute' });
   const user = await verifyLogin(username, req.body?.password);
   if (!user) return res.status(401).json({ error: 'Wrong username or password' });
@@ -92,7 +95,9 @@ router.get('/me', requireAuth, (req, res) => {
   });
 });
 
-router.post('/change-password', requireAuth, async (req, res) => {
+// Throttled: it verifies the current password, so an attacker with a hijacked
+// session must not be able to brute-force it without limit.
+router.post('/change-password', requireAuth, rateLimit({ windowMs: 60 * 1000, max: 5, key: (req) => `pw|${req.username}` }), async (req, res) => {
   const { current_password, new_password } = req.body ?? {};
   try {
     await changePassword(req.username, current_password, new_password);
@@ -144,8 +149,8 @@ router.delete('/users/:username', requireAuth, requireAdmin, (req, res) => {
   closeUserDb(target);
   deleteUser(target);
   // remove their database file as well
-  const safe = target.replace(/[^a-zA-Z0-9_\-]/g, '_');
-  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+  const safe = safeDbFilename(target);
+  const dataDir = DATA_DIR;
   for (const suffix of ['', '-wal', '-shm']) {
     try {
       fs.unlinkSync(path.join(dataDir, 'users', `${safe}.db${suffix}`));

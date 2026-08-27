@@ -51,31 +51,41 @@ router.patch('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM categories WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   const b = req.body ?? {};
-  // Retiring a category also retires its plan and rules (spec §10.3 / D1)
-  if (b.is_active === false && row.is_active) {
-    db.prepare('DELETE FROM budget_lines WHERE category_id = ?').run(row.id);
-    db.prepare('DELETE FROM category_rules WHERE category_id = ?').run(row.id);
-    db.prepare('DELETE FROM category_automation_rules WHERE category_id = ?').run(row.id);
-    db.prepare(
-      'UPDATE commitments SET monthly_amount = 0 WHERE category_id = ? AND end_month IS NULL'
-    ).run(row.id);
-  }
+  // Validate FIRST: a name conflict must not leave the category retired with
+  // its budget lines and rules already destroyed.
   const err = validateCategory({ ...row, ...b }, row.id);
   if (err) return res.status(400).json({ error: err });
-  db.prepare(
-    `UPDATE categories SET name=?, group_id=?, account_id=?, monthly_budget=?, active_from=?, active_to=?, is_active=?, roll_overs=?
-     WHERE id=?`
-  ).run(
-    b.name ?? row.name,
-    b.group_id ?? row.group_id,
-    b.account_id !== undefined ? b.account_id : row.account_id,
-    Number(b.monthly_budget ?? row.monthly_budget) || 0,
-    b.active_from !== undefined ? b.active_from : row.active_from,
-    b.active_to !== undefined ? b.active_to : row.active_to,
-    b.is_active !== undefined ? (b.is_active ? 1 : 0) : row.is_active,
-    b.roll_overs !== undefined ? (b.roll_overs ? 1 : 0) : row.roll_overs,
-    req.params.id
-  );
+
+  // Retiring a category also retires its plan and rules (spec §10.3 / D1).
+  db.exec('BEGIN');
+  try {
+    if (b.is_active === false && row.is_active) {
+      db.prepare('DELETE FROM budget_lines WHERE category_id = ?').run(row.id);
+      db.prepare('DELETE FROM category_rules WHERE category_id = ?').run(row.id);
+      db.prepare('DELETE FROM category_automation_rules WHERE category_id = ?').run(row.id);
+      db.prepare(
+        'UPDATE commitments SET monthly_amount = 0 WHERE category_id = ? AND end_month IS NULL'
+      ).run(row.id);
+    }
+    db.prepare(
+      `UPDATE categories SET name=?, group_id=?, account_id=?, monthly_budget=?, active_from=?, active_to=?, is_active=?, roll_overs=?
+       WHERE id=?`
+    ).run(
+      b.name ?? row.name,
+      b.group_id ?? row.group_id,
+      b.account_id !== undefined ? b.account_id : row.account_id,
+      Number(b.monthly_budget ?? row.monthly_budget) || 0,
+      b.active_from !== undefined ? b.active_from : row.active_from,
+      b.active_to !== undefined ? b.active_to : row.active_to,
+      b.is_active !== undefined ? (b.is_active ? 1 : 0) : row.is_active,
+      b.roll_overs !== undefined ? (b.roll_overs ? 1 : 0) : row.roll_overs,
+      req.params.id
+    );
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
   res.json(db.prepare('SELECT * FROM categories WHERE id = ?').get(row.id));
 });
 

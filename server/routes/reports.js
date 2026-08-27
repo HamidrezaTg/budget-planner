@@ -14,10 +14,19 @@ router.get('/history', (_req, res) => {
 // ------------------------------------------------------------ excel exports
 function sendXlsx(res, filename, sheets) {
   // raw amounts + currency codes (same policy as CSV: conversion is a
-  // reporting concern; statements stay raw)
+  // reporting concern; statements stay raw). Cell text is sanitized against
+  // formula injection the same way as the CSV export.
+  const safe = (v) => {
+    if (typeof v !== 'string') return v;
+    return /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+  };
   const wb = XLSX.utils.book_new();
   for (const { name, rows } of sheets) {
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name.slice(0, 31));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.map((r) => {
+      const out = {};
+      for (const [k, v] of Object.entries(r)) out[k] = safe(v);
+      return out;
+    })), name.slice(0, 31));
   }
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -145,7 +154,14 @@ router.get('/yearly/:year', (req, res) => {
 // CSV exports keep the ORIGINAL stored amounts and currency codes —
 // conversion is a reporting concern, raw statements stay raw.
 function sendCsv(res, filename, rows) {
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  // Escape quotes AND neutralize formula injection: bank-statement text is
+  // attacker-controlled, and a cell starting with = + - @ executes in Excel
+  // and LibreOffice when the export is opened.
+  const esc = (v) => {
+    let s = String(v ?? '').replace(/"/g, '""');
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return `"${s}"`;
+  };
   const header = 'date,description,amount,currency,category';
   const body = rows.map((r) =>
     [r.date, esc(r.description), r.amount, r.currency, esc(r.category)].join(',')

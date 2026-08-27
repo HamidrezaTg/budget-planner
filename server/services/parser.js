@@ -162,7 +162,14 @@ export function toISODate(value, mode) {  if (value instanceof Date && !isNaN(va
     return null; // impossible date like 31/31/2026 — reject instead of storing it
   }
   const parsed = new Date(s);
-  if (!isNaN(parsed)) return parsed.toISOString().slice(0, 10);
+  if (!isNaN(parsed)) {
+    // Use LOCAL calendar parts: toISOString() would shift a "Aug 27, 2026"
+    // style date back a day on UTC+1/+2 machines (and corrupt the dedup key).
+    const y = parsed.getFullYear();
+    const mo = String(parsed.getMonth() + 1).padStart(2, '0');
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${dd}`;
+  }
   return null;
 }
 
@@ -354,7 +361,11 @@ export function transactionsFromGrid(grid, spec) {
       }
     }
     const d = new Date(s);
-    return isNaN(d) ? null : d.toISOString().slice(0, 10);
+    if (isNaN(d)) return null;
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${dd}`;
   };
 
   const now = new Date();

@@ -17,6 +17,9 @@ router.get('/:month', (req, res) => {
     account: c.account_name,
     standing_plan: c.monthly_budget,
     planned: plannedForCategory(c, month),
+    // The client's rollover toggle reads this — omitting it made the toggle
+    // always display "off" and always re-enable rollover.
+    roll_overs: !!c.roll_overs,
     has_override:
       !!db
         .prepare('SELECT 1 FROM budget_lines WHERE category_id = ? AND month = ?')

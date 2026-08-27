@@ -71,7 +71,9 @@ export default function Layout({ me }) {
   };
 
   const logout = async () => {
-    await api.post('/auth/logout');
+    // The session cookie is server-side anyway — always land on /login, even
+    // if the logout call itself fails (e.g. offline).
+    try { await api.post('/auth/logout'); } catch {}
     window.location.href = '/login';
   };
 

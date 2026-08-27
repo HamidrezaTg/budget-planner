@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   username TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(username);
 `);
 
 // migration: role column; the first account ever created becomes admin
@@ -79,10 +80,34 @@ export function deleteUser(username) {
   master.prepare('DELETE FROM users WHERE username = ?').run(username);
 }
 
+// One-to-one username → filename encoding. The legacy sanitizer mapped every
+// character outside [a-zA-Z0-9_-] to "_", so "a.b" and "a!b" collided with
+// "a_b" — a cross-user data bleed. ("-" was always preserved and never
+// collided.) Everything outside that safe set now becomes %XX, making the
+// mapping reversible and collision-free.
+export function safeDbFilename(username) {
+  return String(username).replace(/[^a-zA-Z0-9_\-]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+}
+
 export function getUserDb(username, opts = {}) {
   if (dbCache.has(username)) return dbCache.get(username);
-  const safe = username.replace(/[^a-zA-Z0-9_\-]/g, '_');
-  const inst = new DatabaseSync(path.join(USERS_DIR, `${safe}.db`));
+  const safe = safeDbFilename(username);
+  const target = path.join(USERS_DIR, `${safe}.db`);
+  // Data-preserving migration: a username without "."/"-" keeps its old file
+  // name (identical encoding); one WITH such characters gets its legacy file
+  // renamed to the new encoding on first open.
+  if (!fs.existsSync(target)) {
+    const legacy = path.join(USERS_DIR, `${username.replace(/[^a-zA-Z0-9_\-]/g, '_')}.db`);
+    if (legacy !== target && fs.existsSync(legacy)) {
+      try {
+        fs.renameSync(legacy, target);
+        for (const suffix of ['-wal', '-shm']) {
+          try { fs.renameSync(legacy + suffix, target + suffix); } catch {}
+        }
+      } catch {}
+    }
+  }
+  const inst = new DatabaseSync(target);
   initUserSchema(inst, opts);
   inst.exec('PRAGMA journal_mode = WAL;');
   // Foreign-key enforcement: declared ON DELETE CASCADE / SET NULL rules now
@@ -196,6 +221,7 @@ CREATE TABLE IF NOT EXISTS fund_movements (
   note TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_fund_mov ON fund_movements(fund_id, month);
 
 CREATE TABLE IF NOT EXISTS income_sources (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -239,6 +265,10 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_tx_cat ON transactions(category_id);
+-- FK columns used in correlated subqueries and cascades have no automatic
+-- index in SQLite: without these, a page of transactions scans attachments
+-- and split children once per row.
+CREATE INDEX IF NOT EXISTS idx_tx_split_of ON transactions(split_of);
 
 CREATE TABLE IF NOT EXISTS category_rules (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -280,6 +310,7 @@ CREATE TABLE IF NOT EXISTS attachments (
   size INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_att_tx ON attachments(transaction_id);
 
 -- Multi-currency support: monthly reference rates converting transaction
 -- currency to the user's base (display) currency. rate = base units per

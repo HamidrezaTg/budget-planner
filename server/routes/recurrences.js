@@ -117,6 +117,11 @@ router.patch('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM recurrences WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   const b = req.body ?? {};
+  // Same validation as POST: PATCH must not become the path around it.
+  if (b.day_of_month !== undefined && !(Number(b.day_of_month) >= 1 && Number(b.day_of_month) <= 28))
+    return res.status(400).json({ error: 'day_of_month must be 1-28' });
+  if (b.amount !== undefined && !Number.isFinite(Number(b.amount)))
+    return res.status(400).json({ error: 'amount must be a number' });
   db.prepare(
     'UPDATE recurrences SET name=?, amount=?, day_of_month=?, account_id=?, category_id=?, auto_post=?, active=? WHERE id=?'
   ).run(

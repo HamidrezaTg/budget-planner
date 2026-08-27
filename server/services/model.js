@@ -26,8 +26,11 @@ export function monthsLeftTo(month, target) {
 // Planned amount for a category in a month: explicit budget line overrides,
 // otherwise the category's standing monthly plan. Inactive categories plan 0.
 // With roll_overs enabled, last month's underspend (only if that month had
-// activity in the category) is added to this month's plan.
-export function plannedForCategory(cat, month) {
+// activity in the category) is added to this month's plan — and that carry
+// accumulates: the previous month's effective plan already contains its own
+// carry, so underspend survives multiple quiet months. Lookback is capped at
+// 24 months to bound the recursion in long projections.
+export function plannedForCategory(cat, month, depth = 24) {
   const active =
     cat.is_active &&
     (!cat.active_from || month >= cat.active_from) &&
@@ -47,12 +50,11 @@ export function plannedForCategory(cat, month) {
         `SELECT 1 FROM transactions WHERE category_id = ? AND substr(date,1,7) = ? AND ${NOT_PARENT('transactions')} LIMIT 1`
       )
       .get(cat.id, prev);
-  if (!hadActivity) return base;
+  if (!hadActivity || depth <= 0) return base;
 
-  const prevLine = db
-    .prepare('SELECT planned_amount FROM budget_lines WHERE category_id = ? AND month = ?')
-    .get(cat.id, prev);
-  const prevPlan = prevLine ? prevLine.planned_amount : cat.monthly_budget;
+  // Previous month's EFFECTIVE plan (base + its own carry), not its base —
+  // otherwise underspend older than one month silently vanished.
+  const prevPlan = plannedForCategory(cat, prev, depth - 1);
   const prevActual = actualForCategoryMonth(cat.id, prev);
   const carry = Math.max(0, prevPlan - prevActual);
   return base + Math.round(carry * 100) / 100;

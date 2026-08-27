@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Financial data must not ride along in cloud backups or device-to-device
+     transfers: the WebView localStorage holds the saved server address, and
+     nothing in this app is worth extracting off-device. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

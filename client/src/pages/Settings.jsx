@@ -120,7 +120,7 @@ export default function Settings() {
       confirmLabel: 'Delete rate',
     });
     if (!ok) return;
-    await api.del('/settings/fx', { body: { month, currency: cur } });
+    await api.del('/settings/fx', { month, currency: cur });
     loadFx();
   };
 
