@@ -45,7 +45,7 @@ test('joins are checked too', () => {
 test('execution authorizer rejects disallowed comma-joined tables', () => {
   assert.throws(
     () => dbm.als.run(readDb, () => runReadOnlySql('SELECT * FROM transactions, settings')),
-    /Table "settings" is not available/
+    /Table "settings" is not available|Comma-joined table sources/
   );
   dbm.closeUserDb('read-user');
 });

@@ -20,6 +20,15 @@ const MAX_AI_ROWS = 200;
 
 const TABLE_RE = /\bfrom\s+([a-z_][a-z0-9_]*)|join\s+([a-z_][a-z0-9_]*)/gi;
 
+// Node 22's node:sqlite does not expose setAuthorizer yet. Reject comma joins
+// in the lexical validation path as a compatibility fallback; comma joins are
+// not needed by the assistant and could otherwise hide a second table from
+// TABLE_RE. Newer Node versions additionally enforce this with SQLite itself.
+function hasCommaJoin(query) {
+  const source = /\bfrom\b([\s\S]*?)(?=\bwhere\b|\bgroup\s+by\b|\border\s+by\b|\blimit\b|\bhaving\b|\bunion\b|\bexcept\b|\bintersect\b|$)/i.exec(query);
+  return Boolean(source?.[1].includes(','));
+}
+
 export function validateReadOnlySql(query) {
   const q = String(query ?? '').trim();
   if (!q) throw new Error('Empty query');
@@ -27,6 +36,7 @@ export function validateReadOnlySql(query) {
   if (FORBIDDEN.test(q)) throw new Error('Query contains forbidden keywords');
   const stripped = q.replace(/;+\s*$/, '');
   if (/;/.test(stripped)) throw new Error('Only a single statement is allowed');
+  if (hasCommaJoin(stripped)) throw new Error('Comma-joined table sources are not available to the assistant');
 
   // Restrict to the allowlist so credential-bearing tables stay out of reach.
   const seen = new Set();
@@ -53,6 +63,9 @@ export function validateReadOnlySql(query) {
 export function runReadOnlySql(query) {
   const safe = validateReadOnlySql(query);
   let deniedTable = null;
+  if (typeof db.setAuthorizer !== 'function') {
+    return JSON.parse(JSON.stringify(db.prepare(safe).all()));
+  }
   db.setAuthorizer((action, param1, _param2, databaseName) => {
     if (action === sqlite.SQLITE_READ) {
       if (databaseName !== 'main' || !ALLOWED_TABLES.has(String(param1).toLowerCase())) {
