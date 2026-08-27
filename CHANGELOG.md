@@ -92,6 +92,14 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - **Row-level import errors** — rows the parser cannot read (bad date, bad amount,
   missing description) are listed in the preview with row number and reason
   instead of being silently dropped.
+- **Android app rework** — the client shell now: auto-connects to the saved
+  server on launch (previously every launch showed the setup form again);
+  shows a "Can't reach your server" recovery screen with *Try again* and
+  *Change server address* instead of a raw connection error (changing servers
+  no longer requires clearing app storage); and handles the back button —
+  back inside the planner walks in-app history instead of instantly exiting,
+  and back from the planner's first page returns to the connect screen.
+  All flows verified on an Android emulator.
 
 ### Added
 - Test suite (`npm test`, 41 tests) covering parser, DB integrity,

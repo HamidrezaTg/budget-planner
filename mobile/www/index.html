@@ -11,10 +11,11 @@
       margin: 0; min-height: 100vh; display: grid; place-items: center;
       font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
       background: #f5f3ec; color: #162037;
+      padding: 24px 16px;
     }
     @media (prefers-color-scheme: dark) { body { background: #10162a; color: #e9edf8; } }
     .card {
-      width: min(420px, calc(100vw - 40px));
+      width: min(420px, 100%);
       background: #fffefa; border: 1px solid #e3e0d7; border-radius: 18px;
       padding: 28px 24px; box-shadow: 0 12px 40px rgba(20,30,54,0.08);
     }
@@ -27,69 +28,197 @@
       width: 100%; padding: 11px 12px; font-size: 15px; border-radius: 10px;
       border: 1px solid #c9c6bb; background: transparent; color: inherit;
     }
+    input:focus { outline: 2px solid #3157d5; outline-offset: 1px; border-color: transparent; }
     button {
       width: 100%; margin-top: 14px; padding: 12px; font-size: 15px; font-weight: 600;
       border: 0; border-radius: 10px; background: #3157d5; color: #fff; cursor: pointer;
+      min-height: 44px;
     }
+    button.ghost {
+      background: transparent; color: #3157d5; margin-top: 8px; padding: 9px;
+      border: 1px solid transparent; font-weight: 500;
+    }
+    @media (prefers-color-scheme: dark) { button.ghost { color: #9db4f2; } }
     button:disabled { opacity: 0.55; }
-    .err { color: #ef6b6e; font-size: 12.5px; margin-top: 10px; min-height: 16px; }
+    .err { color: #ef6b6e; font-size: 12.5px; margin-top: 10px; }
     .mark { width: 34px; height: 34px; border-radius: 9px; background: #c9ed52;
-            display: inline-flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 12px; }
+            display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; }
     .mark i { display: block; width: 3px; border-radius: 2px; background: #141e36; margin: 0 1.5px; }
     .mark i:nth-child(1) { height: 12px; } .mark i:nth-child(2) { height: 16px; } .mark i:nth-child(3) { height: 9px; }
+    .mark.busy i { animation: pulse 0.9s ease-in-out infinite; }
+    .mark.busy i:nth-child(2) { animation-delay: 0.15s; }
+    .mark.busy i:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes pulse { 0%, 100% { transform: scaleY(0.55); } 50% { transform: scaleY(1.35); } }
+    .saved-line { font-size: 13px; color: inherit; font-weight: 600; word-break: break-all;
+                  margin: 10px 0 2px; }
+    .actions { display: grid; gap: 8px; margin-top: 14px; }
+    .actions button { margin: 0; }
+    details { margin-top: 16px; }
+    summary { font-size: 12.5px; color: #72798a; cursor: pointer; user-select: none; }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <div class="card">
-    <span class="mark"><i></i><i></i><i></i></span>
-    <h1>Budget Planner</h1>
-    <p>
-      This app is a client for your self-hosted planner. Enter the address of the machine
-      running the server — e.g. <b>http://192.168.1.10:2026</b> (home LAN) or your Tailscale
-      address. The server itself never runs on this device.
-    </p>
-    <label for="server">Server address</label>
-    <input id="server" type="url" inputmode="url" autocomplete="off"
-           placeholder="http://192.168.1.10:2026" />
-    <div class="err" id="err"></div>
-    <button id="go">Connect</button>
+    <span class="mark" id="mark"><i></i><i></i><i></i></span>
+    <h1 id="title">Budget Planner</h1>
+
+    <!-- State A: connecting to the saved server -->
+    <div id="view-connecting" class="hidden">
+      <p style="margin-bottom: 0">Connecting to <b class="saved-line" id="connecting-url"></b>…</p>
+    </div>
+
+    <!-- State B: saved server unreachable -->
+    <div id="view-offline" class="hidden">
+      <p style="color: #ef6b6e; font-weight: 600; margin-bottom: 4px;">Can't reach your server</p>
+      <p class="saved-line" id="offline-url" style="margin-bottom: 10px;"></p>
+      <p id="offline-hint">
+        Check that the server machine is on and the phone is on the same Wi-Fi or VPN.
+      </p>
+      <div class="actions">
+        <button id="retry">Try again</button>
+        <button id="edit-saved" class="ghost">Change server address</button>
+      </div>
+    </div>
+
+    <!-- State C: setup / change server -->
+    <div id="view-setup" class="hidden">
+      <p id="setup-intro">
+        This app is a client for your self-hosted planner. Enter the address of the machine
+        running the server — e.g. <b>http://192.168.1.10:2026</b> (home LAN) or your Tailscale
+        address. The server itself never runs on this device.
+      </p>
+      <label for="server">Server address</label>
+      <input id="server" type="url" inputmode="url" autocomplete="off"
+             placeholder="http://192.168.1.10:2026" />
+      <div class="err" id="err"></div>
+      <button id="go">Connect</button>
+      <button id="forget" class="ghost hidden">Forget this server</button>
+    </div>
   </div>
+
   <script>
     const KEY = 'bp-server-url';
+
+    const views = {
+      connecting: document.getElementById('view-connecting'),
+      offline: document.getElementById('view-offline'),
+      setup: document.getElementById('view-setup'),
+    };
+    const mark = document.getElementById('mark');
     const input = document.getElementById('server');
     const err = document.getElementById('err');
-    const btn = document.getElementById('go');
-    const saved = localStorage.getItem(KEY);
-    if (saved) input.value = saved;
+    const goBtn = document.getElementById('go');
+    const retryBtn = document.getElementById('retry');
+    const editBtn = document.getElementById('edit-saved');
+    const forgetBtn = document.getElementById('forget');
+    const savedUrl = localStorage.getItem(KEY);
 
-    async function connect() {
+    function show(name) {
+      for (const k of Object.keys(views)) views[k].classList.toggle('hidden', k !== name);
+    }
+    function busy(on) {
+      mark.classList.toggle('busy', on);
+      goBtn.disabled = on;
+      retryBtn.disabled = on;
+    }
+
+    async function probe(url) {
+      // The shell runs from the Capacitor origin, so probing the server is a
+      // cross-origin request: no-cors resolves when the host answers and
+      // rejects when it cannot be reached.
+      await fetch(url + '/api/auth/status', { mode: 'no-cors', signal: AbortSignal.timeout(8000) });
+    }
+
+    async function connectTo(url) {
+      try {
+        await probe(url);
+        localStorage.setItem(KEY, url);
+        window.location.href = url + '/';
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    // Returning here via the Android back button must NOT auto-connect —
+    // otherwise back becomes a loop: server page -> shell -> auto-connect ->
+    // server page. Two signals mean "show the manual view": the WebView's own
+    // history navigation (back_forward) or the native shell asking for the
+    // picker explicitly via #server-picker.
+    const navType = performance.getEntriesByType('navigation')[0]?.type;
+    const returnedHere = navType === 'back_forward' || location.hash === '#server-picker';
+
+    if (savedUrl && !returnedHere) {
+      // Auto-connect to the saved server; fall back to a recovery view.
+      document.getElementById('connecting-url').textContent = savedUrl;
+      show('connecting');
+      busy(true);
+      connectTo(savedUrl).then((ok) => {
+        busy(false);
+        if (ok) return;
+        document.getElementById('offline-url').textContent = savedUrl;
+        show('offline');
+      });
+    } else {
+      // Setup view — prefilled when a server is already known.
+      if (savedUrl) {
+        input.value = savedUrl;
+        document.getElementById('setup-intro').textContent =
+          'Your planner lives at the address below. Connect, or change it if you moved servers.';
+        forgetBtn.classList.remove('hidden');
+      }
+      show('setup');
+    }
+
+    goBtn.addEventListener('click', async () => {
       let url = input.value.trim().replace(/\/+$/, '');
       err.textContent = '';
       if (!/^https?:\/\/.+/i.test(url)) {
         err.textContent = 'Enter a full address starting with http:// or https://';
         return;
       }
-      btn.disabled = true;
-      btn.textContent = 'Checking…';
-      try {
-        // The launcher runs from the Capacitor origin, so probing the server is
-        // a cross-origin request: use no-cors (resolves when the host answers,
-        // rejects when it cannot be reached).
-        await fetch(url + '/api/auth/status', { mode: 'no-cors', signal: AbortSignal.timeout(8000) });
-        localStorage.setItem(KEY, url);
-        window.location.href = url + '/';
-      } catch (e) {
+      busy(true);
+      goBtn.textContent = 'Checking…';
+      const ok = await connectTo(url);
+      busy(false);
+      goBtn.textContent = 'Connect';
+      if (!ok) {
         err.textContent =
           'Could not reach ' + url + '. Check: the address is an IP like 192.168.x.x '
-          + '(a computer name like “lenovo” usually does not resolve on phones) '
-          + 'or lenovo.local; phone and server are on the same Wi-Fi or VPN; '
-          + 'and the server is running. To change the server later, clear the app’s storage.';
-        btn.disabled = false;
-        btn.textContent = 'Connect';
+          + '(a computer name like “lenovo” usually does not resolve on phones); '
+          + 'phone and server are on the same Wi-Fi or VPN; and the server is running.';
       }
-    }
-    btn.addEventListener('click', connect);
-    input.addEventListener('keydown', (e) => e.key === 'Enter' && connect());
+    });
+    document.getElementById('server').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') goBtn.click();
+    });
+
+    retryBtn.addEventListener('click', async () => {
+      show('connecting');
+      document.getElementById('connecting-url').textContent = savedUrl;
+      busy(true);
+      const ok = await connectTo(savedUrl);
+      busy(false);
+      if (!ok) {
+        document.getElementById('offline-url').textContent = savedUrl;
+        show('offline');
+      }
+    });
+
+    editBtn.addEventListener('click', () => {
+      input.value = savedUrl || '';
+      document.getElementById('setup-intro').textContent =
+        'Enter the new address of the machine running the server.';
+      forgetBtn.classList.remove('hidden');
+      show('setup');
+      input.focus();
+    });
+
+    forgetBtn.addEventListener('click', () => {
+      localStorage.removeItem(KEY);
+      location.reload();
+    });
   </script>
 </body>
 </html>

@@ -73,6 +73,14 @@ release and native artifacts still require verification.
   box instead of silently dropping rows.
 - Added an XLSX export round-trip integration test through the maintained
   spreadsheet package.
+- Reworked the Android client shell after emulator testing exposed four real
+  defects: no auto-connect on relaunch, raw connection errors with no recovery
+  path, changing a server requiring app-storage clearing, and the back button
+  exiting the app instantly (Capacitor loads the server page without WebView
+  history). The shell now auto-connects, shows a recovery view, offers
+  "Forget this server", and back walks in-app history or returns to the
+  connect screen. All states verified with screenshots on an Android 15
+  emulator against a live server.
 
 ## 1. Goals
 
@@ -261,9 +269,10 @@ responsive/accessibility coverage.
 
 ## 7. Phase 4: Desktop and Android Clients
 
-**Status: PARTIAL.** The clients build/connect; Electron is hardened, Android
-release signing is now supported via environment-based keystores. Outstanding:
-generating the actual release keystore/publishing artifacts and verifying them.
+**Status: MOSTLY DONE.** The clients build/connect; Electron is hardened; the
+Android shell was reworked and verified on an emulator (auto-connect, recovery,
+back handling). Outstanding: publishing a release with the reworked APK and
+verifying it on a physical phone.
 
 - Electron: move reachability check into the main process via IPC (avoids permissive CORS), validate/save
   URLs in main, navigation `will-navigate` + `setWindowOpenHandler` allowlist, `shell.openExternal`,
