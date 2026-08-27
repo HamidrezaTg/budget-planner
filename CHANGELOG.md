@@ -53,6 +53,8 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
   (AI API key) and internal audit tables are unreachable; SQLite authorizer checks
   enforce the allowlist at execution time and row limits are capped.
 - **Upload limits** — import uploads are capped at 64 MB (single file).
+- **Parser resource limits** — CSV/XLSX imports are bounded to 100,000 rows, 256
+  columns, 10 sheets, and 5,000,000 workbook cells.
 - **Import staging isolation** — staged import tokens are bound to their owning user.
 - **First-run setup** — setup is limited to localhost unless `SETUP_TOKEN` is used.
 
@@ -65,7 +67,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - CI installs root and client dependencies before running tests and the client build.
 
 ### Added
-- Test suite (`npm test`, 33 tests) covering parser, DB integrity,
+- Test suite (`npm test`, 34 tests) covering parser, DB integrity,
   projection, security, import rules and an end-to-end HTTP flow.
 - GitHub Actions CI: server tests, client build, dependency audit, version checks.
 - `docs/IMPROVEMENT_PLAN.md` — the validated improvement plan this release implements.

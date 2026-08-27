@@ -56,3 +56,20 @@ test('dedup keys include the currency so same-date/amount/desc rows in different
   assert.ok(transactions[0].dedup_key.includes('|EUR|coffee'));
   assert.ok(transactions[1].dedup_key.includes('|USD|coffee'));
 });
+
+test('AI-imported grids enforce row and column limits', () => {
+  const spec = {
+    header_row_index: 0,
+    col_date: 0,
+    col_description: 1,
+    col_amount: 2,
+  };
+  assert.throws(
+    () => transactionsFromGrid(Array.from({ length: 100_002 }, () => []), spec),
+    /100000-row limit/
+  );
+  assert.throws(
+    () => transactionsFromGrid([Array.from({ length: 257 }, () => '')], spec),
+    /maximum 256/
+  );
+});

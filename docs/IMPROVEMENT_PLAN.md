@@ -8,7 +8,7 @@
 The current worktree contains the v3.9.0 implementation changes, but they are not
 committed or published as a release yet.
 
-- Verification: `npm test` passes 33 tests; `npm run build` passes; `git diff --check` passes.
+- Verification: `npm test` passes 34 tests; `npm run build` passes; `git diff --check` passes.
 - CI now installs both root and client dependencies before testing/building.
 - `npm audit --omit=dev` still reports one unfixed HIGH advisory in `xlsx`.
 - The client build succeeds but emits a bundle-size warning for the main 762 kB chunk.
@@ -27,7 +27,9 @@ committed or published as a release yet.
   in the `X-Setup-Token` header.
 - Hardened restore snapshots with a WAL checkpoint, mandatory pre-restore copy,
   and rename-based rollback.
-- Added regression coverage for these paths; the suite increased from 31 to 33 tests.
+- Added bounded import parsing: 64 MB files, 100,000 rows, 256 columns, 10 sheets,
+  and 5,000,000 workbook cells maximum.
+- Added regression coverage for these paths; the suite increased from 31 to 34 tests.
 
 ## 1. Goals
 
@@ -131,7 +133,8 @@ diagnostics, semantics, and parser-safety items remain open.
 - Validate real calendar dates; reject impossible dates; don't silently guess ambiguous slash dates.
 - Support ISO, DMY, MDY, dotted, Excel serials.
 - Parse German `1.234,56`, `1,234.56`, currency symbols, paren negatives, split debit/credit columns.
-- Show row-level errors in the preview instead of silently dropping rows.
+- Import row/sheet/cell limits are now enforced; row-level errors and an explicit
+  ambiguous-date decision remain open.
 
 ### 4.10 Product semantics (decisions needed before changing math)
 
@@ -175,9 +178,8 @@ cap limits; rate-limit AI endpoints; cap history/response size; encrypt API keys
 or store only in protected config; never leak keys through SQL/AI output.
 
 ### 5.7 Upload and parser limits — PARTIAL
-Per-endpoint limits for import/restore/attachment size, row/sheet/cell counts, staging storage;
-private upload dirs; random server-generated filenames; strict cleanup; extension/content validation;
-zip-bomb protection.
+Import file/row/sheet/cell limits and staging cleanup are implemented. Restore and attachment
+limits, private filesystem permissions, extension/content validation, and zip-bomb protection remain.
 
 ### 5.8 File permissions and service hardening — NOT DONE
 `umask 077`; private DB/upload permissions; verify ownership on install/upgrade; systemd hardening;
@@ -232,7 +234,7 @@ published artifact verification remain open.
 
 ## 9. Phase 6: Automated Tests and CI
 
-**Status: PARTIAL.** The server suite currently present in the worktree has 33 passing tests and
+**Status: PARTIAL.** The server suite currently present in the worktree has 34 passing tests and
 CI now installs client dependencies, but restore-failure, recurrence, migration
 compatibility, client, packaging, APK, and release tests are still missing.
 

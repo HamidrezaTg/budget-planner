@@ -5,6 +5,12 @@ import xlsxModule from 'xlsx';
 const XLSX = xlsxModule.default ?? xlsxModule;
 const Papa = papaparse.default ?? papaparse;
 
+const MAX_IMPORT_ROWS = 100_000;
+const MAX_IMPORT_COLUMNS = 256;
+const MAX_IMPORT_SHEETS = 10;
+const MAX_IMPORT_CELLS = 5_000_000;
+const MAX_IMPORT_FILE_BYTES = 64 * 1024 * 1024;
+
 const REVOLUT_COLUMNS = {
   date: ['Started Date', 'started date'],
   completedDate: ['Completed Date'],
@@ -29,7 +35,11 @@ function detectFormat(filePath) {
 function parseSheetRows(rows) {
   // rows: array of objects keyed by header names (from either parser)
   if (!rows.length) return { mapping: null, raw: [] };
+  if (rows.length > MAX_IMPORT_ROWS)
+    throw new Error(`Import exceeds the ${MAX_IMPORT_ROWS}-row limit`);
   const headers = Object.keys(rows[0]);
+  if (headers.length > MAX_IMPORT_COLUMNS)
+    throw new Error(`Import has too many columns (maximum ${MAX_IMPORT_COLUMNS})`);
   const findCol = (candidates) =>
     candidates.find((c) => headers.some((h) => h.trim() === c));
 
@@ -59,6 +69,36 @@ function parseSheetRows(rows) {
 
 const EXCEL_EPOCH = Date.UTC(1899, 11, 30);
 
+function readWorkbook(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  if (buffer.length > MAX_IMPORT_FILE_BYTES)
+    throw new Error(`Import file exceeds the 64 MB limit`);
+  const wb = XLSX.read(buffer, {
+    type: 'buffer',
+    // Avoid materializing unbounded row counts before the range checks below.
+    sheetRows: MAX_IMPORT_ROWS + 1,
+  });
+  if (wb.SheetNames.length > MAX_IMPORT_SHEETS)
+    throw new Error(`Workbook has too many sheets (maximum ${MAX_IMPORT_SHEETS})`);
+
+  let cells = 0;
+  for (const name of wb.SheetNames) {
+    const ref = wb.Sheets[name]?.['!ref'];
+    if (!ref) continue;
+    const range = XLSX.utils.decode_range(ref);
+    const rows = range.e.r - range.s.r + 1;
+    const columns = range.e.c - range.s.c + 1;
+    if (rows > MAX_IMPORT_ROWS)
+      throw new Error(`Workbook sheet "${name}" exceeds the ${MAX_IMPORT_ROWS}-row limit`);
+    if (columns > MAX_IMPORT_COLUMNS)
+      throw new Error(`Workbook sheet "${name}" exceeds the ${MAX_IMPORT_COLUMNS}-column limit`);
+    cells += rows * columns;
+    if (cells > MAX_IMPORT_CELLS)
+      throw new Error(`Workbook exceeds the ${MAX_IMPORT_CELLS}-cell limit`);
+  }
+  return wb;
+}
+
 export function parseStatement(filePath) {
   const format = detectFormat(filePath);
   let rows;
@@ -66,12 +106,18 @@ export function parseStatement(filePath) {
   if (format === 'xlsx') {
     // no cellDates: keep raw serial numbers and convert with UTC math,
     // otherwise SheetJS shifts dates through the local timezone
-    const wb = XLSX.read(fs.readFileSync(filePath), { type: 'buffer' });
+    const wb = readWorkbook(filePath);
     const sheet = wb.Sheets[wb.SheetNames[0]];
     rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
   } else {
     const text = fs.readFileSync(filePath, 'utf8');
-    const parsed = Papa.parse(text.trim(), { header: true, skipEmptyLines: true });
+    const parsed = Papa.parse(text.trim(), {
+      header: true,
+      skipEmptyLines: true,
+      preview: MAX_IMPORT_ROWS + 1,
+    });
+    if (parsed.data.length > MAX_IMPORT_ROWS)
+      throw new Error(`Import exceeds the ${MAX_IMPORT_ROWS}-row limit`);
     rows = parsed.data;
   }
   return finalize(parseSheetRows(rows), format === 'xlsx' ? 'date' : 'string');
@@ -221,17 +267,25 @@ function finalize({ mapping, raw }, mode) {
 export function rawGrid(filePath, maxRows = 25) {
   const format = detectFormat(filePath);
   if (format === 'xlsx') {
-    const wb = XLSX.read(fs.readFileSync(filePath), { type: 'buffer' });
+    const wb = readWorkbook(filePath);
     const sheet = wb.Sheets[wb.SheetNames[0]];
     return XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' })
-      .slice(0, maxRows);
+      .slice(0, Math.min(maxRows, MAX_IMPORT_ROWS + 1));
   }
   const text = fs.readFileSync(filePath, 'utf8');
-  return Papa.parse(text.trim(), { skipEmptyLines: false }).data.slice(0, maxRows);
+  return Papa.parse(text.trim(), {
+    skipEmptyLines: false,
+    preview: Math.min(maxRows, MAX_IMPORT_ROWS + 1),
+  }).data.slice(0, Math.min(maxRows, MAX_IMPORT_ROWS + 1));
 }
 
 // Build normalized transactions from a full grid using an AI-proposed spec.
 export function transactionsFromGrid(grid, spec) {
+  if (!Array.isArray(grid) || grid.length > MAX_IMPORT_ROWS + 1)
+    throw new Error(`Import exceeds the ${MAX_IMPORT_ROWS}-row limit`);
+  if (grid.some((row) => Array.isArray(row) && row.length > MAX_IMPORT_COLUMNS))
+    throw new Error(`Import has too many columns (maximum ${MAX_IMPORT_COLUMNS})`);
+
   const colDate = Number(spec.col_date);
   const colDesc = Number(spec.col_description);
   const colAmount = spec.col_amount != null && spec.col_amount !== '' ? Number(spec.col_amount) : null;
