@@ -28,7 +28,7 @@ curl -fL --retry 2 -o "$ZIP" \
 # this ~110 MB blob runs with full user privileges.
 curl -fL --retry 2 -o "$SUMS" \
   "https://github.com/electron/electron/releases/download/v${ELECTRON_VERSION}/SHASUMS256.txt"
-grep -qE "^[0-9a-f]{64}[[:space:]]+electron-v${ELECTRON_VERSION}-linux-x64\.zip\$" "$SUMS" || {
+grep -qE "^[0-9a-f]{64}[[:space:]]*\*?electron-v${ELECTRON_VERSION}-linux-x64\.zip\$" "$SUMS" || {
   echo "ERROR: electron zip not listed in SHASUMS256.txt" >&2; exit 1;
 }
 (cd "$STAGE" && sha256sum -c --ignore-missing SHASUMS256.txt) || {
