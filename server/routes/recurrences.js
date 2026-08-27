@@ -59,8 +59,7 @@ function autoPost() {
     // Skip only if the CURRENT month was already posted. A future-month manual
     // post sets last_posted_month ahead, but must not suppress this month.
     if (r.last_posted_month === m) continue;
-    post(r, m, day);
-    posted++;
+    if (post(r, m, day)) posted++;
   }
   return posted;
 }
@@ -68,7 +67,9 @@ function autoPost() {
 function post(r, month, day) {
   const dedupKey = `rec|${r.id}|${month}`;
   // Recurring amounts are planning figures — they live in the base currency.
-  db.prepare(
+  // Returns true only when a row was actually created; re-attempts hit the
+  // dedup key (e.g. a future month was posted early) and must not count.
+  const ins = db.prepare(
     `INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
      VALUES (?, ?, ?, 'Recurring', ?, ?, ?, 0, 'recurring', ?)
      ON CONFLICT(dedup_key) DO NOTHING`
@@ -81,6 +82,7 @@ function post(r, month, day) {
        ELSE last_posted_month END
      WHERE id = ?`
   ).run(month, month, r.id);
+  return ins.changes > 0;
 }
 
 router.get('/', (req, res) => {

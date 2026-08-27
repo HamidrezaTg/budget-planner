@@ -78,7 +78,26 @@ export function getUserDb(username, opts = {}) {
   // (which may carry a REFERENCES clause) are not blocked by SQLite.
   inst.exec('PRAGMA foreign_keys = ON;');
   dbCache.set(username, inst);
+  reportFkViolations(username, inst);
   return inst;
+}
+
+// Startup diagnostics: a legacy database can contain rows that predate
+// foreign-key enforcement (orphans). Report them loudly instead of silently
+// carrying broken references; repair is a deliberate, backed-up operation.
+function reportFkViolations(username, inst) {
+  try {
+    const violations = inst.prepare('PRAGMA foreign_key_check').all();
+    if (!violations.length) return;
+    const detail = violations
+      .slice(0, 20)
+      .map((v) => `${v.table}#${v.rowid}`)
+      .join(', ');
+    console.error(
+      `[fk-check] ${username}: ${violations.length} orphaned row(s) ` +
+      `(first: ${detail}). Run "PRAGMA foreign_key_check" on the database and back up before repairing.`
+    );
+  } catch {}
 }
 
 // Close and forget a user's cached handle (used when deleting a user, so a

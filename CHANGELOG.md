@@ -58,6 +58,8 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
   columns, 10 sheets, and 5,000,000 workbook cells.
 - **Spreadsheet dependency** — replaced vulnerable `xlsx@0.18.5` with the
   API-compatible `@e965/xlsx@0.20.3` npm alias; high-severity audit is clean.
+- **Recurrence auto-post reporting** — duplicate-safe re-attempts no longer count
+  as newly posted items.
 - **Import staging isolation** — staged import tokens are bound to their owning user.
 - **First-run setup** — setup is limited to localhost unless `SETUP_TOKEN` is used.
 
@@ -68,12 +70,18 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
   re-exec; it no longer requires Node to parse release JSON; assets are downloaded
   via the direct release URL.
 - CI installs root and client dependencies before running tests and the client build.
+- **Desktop client hardening** — sandbox enabled, navigation locked to the
+  configured server origin, new windows denied (external links open in the system
+  browser), and IPC requests validated against the app's own window.
 
 ### Added
-- Test suite (`npm test`, 35 tests) covering parser, DB integrity,
+- Test suite (`npm test`, 37 tests) covering parser, DB integrity,
   projection, security, import rules and an end-to-end HTTP flow.
 - GitHub Actions CI: server tests, client build, dependency audit, version checks.
 - `docs/IMPROVEMENT_PLAN.md` — the validated improvement plan this release implements.
+- Unauthenticated `/healthz` liveness endpoint for systemd/uptime monitors.
+- Startup diagnostics: orphaned foreign-key rows in legacy databases are reported
+  via `PRAGMA foreign_key_check` on first open of each user database.
 
 ### Removed
 - Dead `client/src/pages/Savings.jsx` (referenced non-existent `/envelopes` routes).

@@ -51,6 +51,12 @@ app.use((_req, res, next) => {
   next();
 });
 
+// Unauthenticated health probe for systemd/uptime monitors. No data, no auth
+// side effects — just liveness.
+app.get('/healthz', (_req, res) => {
+  res.json({ ok: true, uptime: process.uptime() });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', requireAuth, categoryRoutes);
 app.use('/api/transactions', requireAuth, transactionRoutes);

@@ -162,6 +162,73 @@ test('unknown API routes return a JSON 404', async () => {
   assert.deepEqual(await r.json(), { error: 'Not found' });
 });
 
+test('healthz responds without authentication', async () => {
+  const r = await fetch(`${srv.url}/healthz`);
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.equal(body.ok, true);
+  assert.ok(typeof body.uptime === 'number');
+});
+
+test('recurrence posting is idempotent and future posts do not suppress the current month', async () => {
+  const accs = await api('/accounts', 'GET', null, cookies).catch(() => null);
+  // /api/accounts may not exist; the categories route is enough for a valid category
+  const cats = await api('/categories', 'GET', null, cookies);
+  const catId = cats.find?.((c) => c.id)?.id ?? cat.id;
+
+  const rec = await api('/recurrences', 'POST', {
+    name: 'Integration Rent',
+    amount: -50,
+    day_of_month: 1,
+    account_id: null,
+    category_id: catId,
+    auto_post: true,
+  }, cookies);
+  assert.ok(rec.id);
+
+  // Invalid month is rejected before any transaction exists.
+  const bad = await fetch(`${srv.url}/api/recurrences/${rec.id}/post`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ month: 'not-a-month' }),
+  });
+  assert.equal(bad.status, 400);
+
+  // Post a FUTURE month explicitly.
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const nextMonth = now.getMonth() === 11
+    ? `${now.getFullYear() + 1}-01`
+    : `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, '0')}`;
+  const posted = await api(`/recurrences/${rec.id}/post`, 'POST', { month: nextMonth }, cookies);
+  assert.equal(posted.ok, true);
+
+  // Listing runs autoPost: the CURRENT month must still be posted even though
+  // last_posted_month now points at the future month (never moves backwards,
+  // and a future post must not suppress this month).
+  const list = await api('/recurrences', 'GET', null, cookies);
+  assert.equal(list.autoPosted >= 1, true);
+  const mine = list.recurrences.find((r) => r.id === rec.id);
+  assert.equal(mine.last_posted_month, nextMonth);
+
+  // Both months exist exactly once — re-listing must not duplicate anything.
+  const before = (await api('/transactions?limit=1000', 'GET', null, cookies))
+    .rows.filter((t) => t.description === 'Integration Rent').length;
+  const listed2 = await api('/recurrences', 'GET', null, cookies);
+  const after = (await api('/transactions?limit=1000', 'GET', null, cookies))
+    .rows.filter((t) => t.description === 'Integration Rent').length;
+  assert.equal(listed2.autoPosted, 0); // nothing due anymore this run
+  assert.equal(after, before);
+
+  // Posting the same future month again changes nothing (idempotent dedup).
+  await api(`/recurrences/${rec.id}/post`, 'POST', { month: nextMonth }, cookies);
+  const finalCount = (await api('/transactions?limit=1000', 'GET', null, cookies))
+    .rows.filter((t) => t.description === 'Integration Rent').length;
+  assert.equal(finalCount, after);
+
+  await api(`/recurrences/${rec.id}`, 'DELETE', null, cookies);
+});
+
 async function api(path, method, body, cookie) {
   const r = await fetch(`${srv.url}/api${path}`, {
     method,
