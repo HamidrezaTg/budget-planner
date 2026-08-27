@@ -35,6 +35,8 @@ jobs:
         run: |
           ROOT=$(node -p "require('./package.json').version")
           DESKTOP=$(node -p "require('./desktop-client/package.json').version")
-          echo "root=$ROOT desktop=$DESKTOP"
+          MOBILE=$(node -p "require('./mobile/package.json').version")
+          echo "root=$ROOT desktop=$DESKTOP mobile=$MOBILE"
           test "$ROOT" = "$DESKTOP"
+          test "$ROOT" = "$MOBILE"
           echo "versions consistent"

@@ -47,6 +47,12 @@ release and native artifacts still require verification.
   and a full backup→restore round trip preserving live data.
 - Restricted process umask (0077) and chmod'ed DATA_DIR, user DB, and upload
   directories to owner-only; file creation is now private by default.
+- Synced the mobile package metadata to 3.9.0 and extended the CI version check
+  to root/desktop/mobile.
+- Added opt-in Android release signing: `build-apk.sh` builds a signed release
+  APK when `BP_ANDROID_KEYSTORE*` environment variables are present and falls
+  back to a clearly labeled debug-key build otherwise; gradle reads signing from
+  the same environment so keystores never enter git.
 
 ## 1. Goals
 
@@ -232,8 +238,9 @@ responsive/accessibility coverage remain.
 
 ## 7. Phase 4: Desktop and Android Clients
 
-**Status: LARGELY NOT DONE.** The clients build/connect, but Electron navigation and
-IPC hardening plus Android release signing are still outstanding.
+**Status: PARTIAL.** The clients build/connect; Electron is hardened, Android
+release signing is now supported via environment-based keystores. Outstanding:
+generating the actual release keystore/publishing artifacts and verifying them.
 
 - Electron: move reachability check into the main process via IPC (avoids permissive CORS), validate/save
   URLs in main, navigation `will-navigate` + `setWindowOpenHandler` allowlist, `shell.openExternal`,
@@ -247,7 +254,9 @@ IPC hardening plus Android release signing are still outstanding.
 are fixed; reproducible multi-artifact releases, version stamping, checksums, and
 published artifact verification remain open.
 
-- Single version source (root `package.json`); stamp server/client/Android metadata from it.
+- Single version source (root `package.json`); root/desktop/mobile package metadata are
+  synced at 3.9.0 and CI enforces consistency; the Android build.gradle versionName should
+  be stamped from the same source in a follow-up release-script pass.
 - One reproducible release command: npm ci, build client, build server `.deb`, client `.deb`, Android APK,
   SHA-256 checksums, metadata validation, manifest; fail on version mismatch.
 - Installer fixes: preserve flags across sudo re-exec, don't parse JSON with Node before Node exists,

@@ -73,6 +73,11 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - **Desktop client hardening** — sandbox enabled, navigation locked to the
   configured server origin, new windows denied (external links open in the system
   browser), and IPC requests validated against the app's own window.
+- Mobile package metadata synced with the release version (3.9.0); the CI version
+  check now covers root, desktop, and mobile.
+- `scripts/build-apk.sh` builds a signed release APK when `BP_ANDROID_KEYSTORE`,
+  `BP_ANDROID_KEYSTORE_PASSWORD` and `BP_ANDROID_KEY_ALIAS` are set, and a clearly
+  labeled debug-key build otherwise; keystores are provided via environment only.
 
 ### Added
 - Test suite (`npm test`, 39 tests) covering parser, DB integrity,

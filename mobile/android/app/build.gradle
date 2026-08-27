@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+// Release signing is opt-in via environment so keystores never enter git:
+//   BP_ANDROID_KEYSTORE           path to the .keystore/.jks file
+//   BP_ANDROID_KEYSTORE_PASSWORD  keystore password
+//   BP_ANDROID_KEY_ALIAS          key alias
+//   BP_ANDROID_KEY_PASSWORD       key password (optional: falls back to keystore password)
+// Without these, `assembleRelease` falls back to the debug key for local testing
+// only — CI must always provide the environment or publish nothing.
+def keystorePath = System.getenv("BP_ANDROID_KEYSTORE")
+def hasReleaseSigning = false
+if (keystorePath != null && file(keystorePath).exists() && System.getenv("BP_ANDROID_KEYSTORE_PASSWORD") && System.getenv("BP_ANDROID_KEY_ALIAS")) {
+    hasReleaseSigning = true
+}
+
 android {
     namespace = "com.hamidreza.budgetplanner"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +29,26 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv("BP_ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("BP_ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("BP_ANDROID_KEY_PASSWORD") ?: System.getenv("BP_ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn("BP_ANDROID_KEYSTORE not set — building an unsigned-in-practice (debug-key) release APK; do not distribute it.")
+                signingConfig signingConfigs.debug
+            }
         }
     }
 }
