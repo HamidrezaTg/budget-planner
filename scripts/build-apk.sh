@@ -14,6 +14,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/../mobile"
 
+# ---- Version stamping (single source: root package.json) ----
+ROOT_VERSION=$(node -p "require('../package.json').version")
+VERSION_CODE=$(node -p "
+  const [maj, min, pat] = '$ROOT_VERSION'.split('.').map(Number);
+  maj * 10000 + min * 100 + (pat || 0);
+")
+sed -i \
+  -e "s/^        versionCode .*/        versionCode ${VERSION_CODE}/" \
+  -e "s/^        versionName \".*\"/        versionName \"${ROOT_VERSION}\"/" \
+  android/app/build.gradle
+echo "==> stamped version ${ROOT_VERSION} (code ${VERSION_CODE})"
+
 grep -q usesCleartextTraffic android/app/src/main/AndroidManifest.xml || \
   sed -i 's/<application$/<application\n        android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 npx cap sync android > /dev/null
