@@ -3,6 +3,45 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.9.1] — 2026-08-27
+
+### Android app (major UX rework, verified on an emulator)
+- The client shell now **auto-connects** to the saved server on launch —
+  previously every launch showed the setup form again.
+- **Recovery screen**: if the server is unreachable you get "Can't reach your
+  server" with *Try again* and *Change server address*; changing servers no
+  longer requires clearing app storage ("Forget this server" included).
+- **Back button works**: back inside the planner walks in-app history instead
+  of instantly exiting (Capacitor loads the server page without WebView
+  history); back from the planner's first page returns to the connect screen.
+
+### Mobile web layout (verified on an emulator against seeded data)
+- **Sidebar → top app bar with hamburger drawer** on phones. Previously all 13
+  nav links wrapped into five rows covering half the screen, and the "Local
+  planner" box overlapped the theme toggle and profile.
+- **Charts**: the projection chart shows ~8 x-axis labels instead of all 96
+  months painting over each other into a black smear; Reports charts are
+  capped at ~6.
+- **Tables** scroll inside their card and never wrap mid-value ("2026-08"
+  breaking across lines); the page itself can no longer scroll horizontally.
+- **Forms** (e.g. Recurring) stack full-width on phones instead of clipping
+  the amount placeholder.
+- Transactions split/attachment dialogs now use a shared accessible modal
+  (focus trap, Escape, ARIA labelling, focus restore).
+
+### Security & robustness
+- The **installer verifies downloaded artifacts** against the release's
+  `SHA256SUMS.txt` before installing.
+- **AI endpoints**: per-user rate limit (30/min), chat history capped
+  (16 messages × 8,000 chars), `/dev-apply` capped at 50 proposals.
+- **Attachments**: uploaded files verified against their declared mimetype via
+  magic bytes before being stored.
+- Every response carries an **`X-Request-Id`**, echoed in 5xx error logs.
+- The packaged systemd unit now ships `UMask=0077`.
+- Import preview lists **row-level parse errors** (row, reason, sample) instead
+  of silently dropping unreadable rows; re-import regression covered.
+- New XLSX export round-trip test; suite grew to 41 tests, all green.
+
 ## [3.9.0] — 2026-08-27
 
 ### Fixed (data integrity)
