@@ -8,7 +8,7 @@
 The v3.9.0 implementation changes are committed on `main`, but a tagged/public
 release and native artifacts still require verification.
 
-- Verification: `npm test` passes 37 tests; `npm run build` passes; `git diff --check` passes.
+- Verification: `npm test` passes 39 tests; `npm run build` passes; `git diff --check` passes.
 - CI now installs both root and client dependencies before testing/building.
 - `npm audit --omit=dev --audit-level=high` reports zero vulnerabilities after the
   spreadsheet dependency replacement.
@@ -43,6 +43,10 @@ release and native artifacts still require verification.
 - Fixed recurrence auto-post counting: re-attempts that hit the dedup key no
   longer report `autoPosted: 1`; only actual inserts count. Regression tests now
   cover recurrence idempotency and future-post semantics.
+- Added restore regression coverage: garbage files, non-budget SQLite databases,
+  and a full backup→restore round trip preserving live data.
+- Restricted process umask (0077) and chmod'ed DATA_DIR, user DB, and upload
+  directories to owner-only; file creation is now private by default.
 
 ## 1. Goals
 
@@ -104,7 +108,10 @@ diagnostics, semantics, and parser-safety items remain open.
   unsplit removes children and restores the parent. Re-import behavior still needs
   a dedicated regression test.
 
-### 4.3 Make restore atomic — MOSTLY DONE
+### 4.3 Make restore atomic — DONE
+
+Garbage files, foreign SQLite databases, and the full backup→restore round trip
+are covered by regression tests; schema migration-on-restore is applied.
 
 - Validate: size, SQLite format, required tables, `integrity_check`, `foreign_key_check`, schema compat.
 - Close the live handle, snapshot the current DB (timestamped `.pre-restore`), rename staging into place,
@@ -191,12 +198,14 @@ cap limits; rate-limit AI endpoints; cap history/response size; encrypt API keys
 or store only in protected config; never leak keys through SQL/AI output.
 
 ### 5.7 Upload and parser limits — PARTIAL
-Import file/row/sheet/cell limits and staging cleanup are implemented. Restore and attachment
-limits, private filesystem permissions, extension/content validation, and zip-bomb protection remain.
+Import file/row/sheet/cell limits, staging cleanup, umask 0077, and owner-only data
+directories are implemented. Attachment size limits, extension/content validation,
+and zip-bomb protection remain.
 
-### 5.8 File permissions and service hardening — NOT DONE
-`umask 077`; private DB/upload permissions; verify ownership on install/upgrade; systemd hardening;
-health endpoint; startup diagnostics.
+### 5.8 File permissions and service hardening — MOSTLY DONE
+`umask 077` is set at startup and DATA_DIR/user/upload directories are chmod'ed
+owner-only; systemd already ships UMask. Health endpoint exists. Remaining:
+ownership verification on upgrade and deeper systemd hardening options.
 
 ### 5.9 Resolve the `xlsx` vulnerability — MOSTLY DONE
 The vulnerable `xlsx@0.18.5` dependency was replaced with the API-compatible
@@ -248,10 +257,9 @@ published artifact verification remain open.
 
 ## 9. Phase 6: Automated Tests and CI
 
-**Status: PARTIAL.** The server suite currently present in the worktree has 37 passing tests and
-CI now installs client dependencies, but restore-failure, migration
-compatibility, client, packaging, APK, and release tests are still missing. Recurrence
-posting is covered; restore-failure and migration-compatibility coverage remain open.
+**Status: PARTIAL.** The server suite currently present in the worktree has 39 passing tests and
+CI now installs client dependencies; restore-failure and recurrence paths are
+covered, but client component, packaging, APK, and release tests are still missing.
 
 - Commit a real `tests/` suite: unit (dates, dedup, FX, rollover, projection), DB integration (temp dirs),
   API (auth, isolation), import, restore, client components (dialog/destructive), packaging smoke.

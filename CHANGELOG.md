@@ -75,8 +75,8 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
   browser), and IPC requests validated against the app's own window.
 
 ### Added
-- Test suite (`npm test`, 37 tests) covering parser, DB integrity,
-  projection, security, import rules and an end-to-end HTTP flow.
+- Test suite (`npm test`, 39 tests) covering parser, DB integrity,
+  projection, security, restore failure/round-trip and an end-to-end HTTP flow.
 - GitHub Actions CI: server tests, client build, dependency audit, version checks.
 - `docs/IMPROVEMENT_PLAN.md` — the validated improvement plan this release implements.
 - Unauthenticated `/healthz` liveness endpoint for systemd/uptime monitors.

@@ -1,5 +1,9 @@
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { freshDataDir, cleanup, startServer } from './helpers.js';
 
 const dir = freshDataDir();
@@ -227,6 +231,64 @@ test('recurrence posting is idempotent and future posts do not suppress the curr
   assert.equal(finalCount, after);
 
   await api(`/recurrences/${rec.id}`, 'DELETE', null, cookies);
+});
+
+test('restore rejects garbage and table-less files without touching live data', async () => {
+  const before = (await api('/transactions?limit=1', 'GET', null, cookies)).total;
+
+  const notDbFd = new FormData();
+  notDbFd.append('file', new Blob(['this is definitely not a sqlite database']), 'garbage.db');
+  const notDb = await fetch(`${srv.url}/api/settings/restore`, {
+    method: 'POST',
+    headers: { Cookie: cookies },
+    body: notDbFd,
+  });
+  assert.equal(notDb.status, 400);
+  const dbErr = (await notDb.json()).error;
+  assert.match(dbErr, /not a database|valid budget backup|integrity|missing|Not a valid/i);
+
+  // A valid SQLite file that is NOT a budget backup must be refused too.
+  const tmp = mkdtempSync(path.join(tmpdir(), 'restore-'));
+  const emptyPath = path.join(tmp, 'empty.db');
+  const e = new DatabaseSync(emptyPath);
+  e.exec('CREATE TABLE unrelated (x)');
+  e.close();
+  const emptyFd = new FormData();
+  emptyFd.append('file', new Blob([readFileSync(emptyPath)]), 'empty.db');
+  const emptyRestore = await fetch(`${srv.url}/api/settings/restore`, {
+    method: 'POST',
+    headers: { Cookie: cookies },
+    body: emptyFd,
+  });
+  assert.equal(emptyRestore.status, 400);
+  assert.match((await emptyRestore.json()).error, /missing/);
+  rmSync(tmp, { recursive: true, force: true });
+
+  const after = (await api('/transactions?limit=1', 'GET', null, cookies)).total;
+  assert.equal(after, before); // live data untouched
+});
+
+test('backup → restore round trip preserves the data', async () => {
+  const txBefore = (await api('/transactions?limit=1', 'GET', null, cookies)).total;
+
+  const backup = await fetch(`${srv.url}/api/settings/backup`, { headers: { Cookie: cookies } });
+  assert.equal(backup.status, 200);
+  const buf = Buffer.from(await backup.arrayBuffer());
+
+  const restoreFd = new FormData();
+  restoreFd.append('file', new Blob([buf]), 'budget-backup.db');
+  const restore = await fetch(`${srv.url}/api/settings/restore`, {
+    method: 'POST',
+    headers: { Cookie: cookies },
+    body: restoreFd,
+  });
+  assert.equal(restore.status, 200);
+  const body = await restore.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.transactions, txBefore);
+
+  const after = (await api('/transactions?limit=1', 'GET', null, cookies)).total;
+  assert.equal(after, txBefore);
 });
 
 async function api(path, method, body, cookie) {

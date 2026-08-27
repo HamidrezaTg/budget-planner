@@ -6,10 +6,23 @@ import { fileURLToPath } from 'node:url';
 import { normalizeDesc } from './services/parser.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Restrict every file this process creates (databases, WAL sidecars, staged
+// uploads, backups) to owner-only access. The systemd unit sets UMask=0077 as
+// well; this protects manual/dev runs where no unit file is involved.
+process.umask(0o077);
+
 export const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const USERS_DIR = path.join(DATA_DIR, 'users');
 fs.mkdirSync(USERS_DIR, { recursive: true });
 fs.mkdirSync(path.join(DATA_DIR, 'uploads'), { recursive: true });
+
+// Defense in depth for the service account: financial data must not be
+// readable by other local users. systemd ships UMask=0077 too; this covers
+// manual/`npm start` runs where no unit file is involved.
+for (const dir of [DATA_DIR, USERS_DIR, path.join(DATA_DIR, 'uploads')]) {
+  try { fs.chmodSync(dir, 0o700); } catch {}
+}
 
 // Master DB: user accounts + sessions only.
 export const master = new DatabaseSync(path.join(DATA_DIR, 'master.db'));
