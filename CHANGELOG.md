@@ -69,7 +69,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - CI installs root and client dependencies before running tests and the client build.
 
 ### Added
-- Test suite (`npm test`, 34 tests) covering parser, DB integrity,
+- Test suite (`npm test`, 35 tests) covering parser, DB integrity,
   projection, security, import rules and an end-to-end HTTP flow.
 - GitHub Actions CI: server tests, client build, dependency audit, version checks.
 - `docs/IMPROVEMENT_PLAN.md` — the validated improvement plan this release implements.

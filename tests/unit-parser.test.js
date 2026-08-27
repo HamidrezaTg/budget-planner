@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toISODate, parseAmountValue, transactionsFromGrid } from '../server/services/parser.js';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import XLSX from 'xlsx';
+import { parseStatement, toISODate, parseAmountValue, transactionsFromGrid } from '../server/services/parser.js';
 
 test('toISODate rejects impossible calendar dates', () => {
   assert.equal(toISODate('31/31/2026', 'string'), null);
@@ -72,4 +76,31 @@ test('AI-imported grids enforce row and column limits', () => {
     () => transactionsFromGrid([Array.from({ length: 257 }, () => '')], spec),
     /maximum 256/
   );
+});
+
+test('XLSX import remains compatible with the maintained spreadsheet package', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'bp-xlsx-'));
+  const file = path.join(dir, 'statement.xlsx');
+  try {
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ['Date', 'Description', 'Amount', 'Currency'],
+      ['2026-05-01', 'Coffee', '-4,50', 'EUR'],
+    ]);
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Transactions');
+    writeFileSync(file, XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+
+    const parsed = parseStatement(file);
+    assert.equal(parsed.transactions.length, 1);
+    assert.deepEqual(parsed.transactions[0], {
+      date: '2026-05-01',
+      description: 'Coffee',
+      amount: -4.5,
+      revolut_type: null,
+      currency: 'EUR',
+      dedup_key: '2026-05-01|-4.50|EUR|coffee',
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

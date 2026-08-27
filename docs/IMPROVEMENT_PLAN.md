@@ -8,7 +8,7 @@
 The v3.9.0 implementation changes are committed on `main`, but a tagged/public
 release and native artifacts still require verification.
 
-- Verification: `npm test` passes 34 tests; `npm run build` passes; `git diff --check` passes.
+- Verification: `npm test` passes 35 tests; `npm run build` passes; `git diff --check` passes.
 - CI now installs both root and client dependencies before testing/building.
 - `npm audit --omit=dev --audit-level=high` reports zero vulnerabilities after the
   spreadsheet dependency replacement.
@@ -32,7 +32,7 @@ release and native artifacts still require verification.
   and 5,000,000 workbook cells maximum.
 - Replaced vulnerable `xlsx@0.18.5` with the API-compatible `@e965/xlsx@0.20.3`
   npm alias; dependency audit is now clean.
-- Added regression coverage for these paths; the suite increased from 31 to 34 tests.
+- Added an XLSX compatibility fixture and regression coverage for these paths; the suite increased from 31 to 35 tests.
 
 ## 1. Goals
 
@@ -190,8 +190,9 @@ health endpoint; startup diagnostics.
 
 ### 5.9 Resolve the `xlsx` vulnerability — MOSTLY DONE
 The vulnerable `xlsx@0.18.5` dependency was replaced with the API-compatible
-`@e965/xlsx@0.20.3` npm alias and parser resource limits were added. Dedicated
-XLSX import/export fixtures and long-term replacement maintenance review remain.
+`@e965/xlsx@0.20.3` npm alias and parser resource limits were added. XLSX import
+compatibility is covered; dedicated export fixtures and long-term replacement
+maintenance review remain.
 
 ## 6. Phase 3: Client UX and Accessibility
 
@@ -237,7 +238,7 @@ published artifact verification remain open.
 
 ## 9. Phase 6: Automated Tests and CI
 
-**Status: PARTIAL.** The server suite currently present in the worktree has 34 passing tests and
+**Status: PARTIAL.** The server suite currently present in the worktree has 35 passing tests and
 CI now installs client dependencies, but restore-failure, recurrence, migration
 compatibility, client, packaging, APK, and release tests are still missing.
 
