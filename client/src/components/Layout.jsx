@@ -44,6 +44,7 @@ export default function Layout({ me }) {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('bp-collapsed') === '1'
   );
+  const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState(
     () => document.documentElement.dataset.theme || 'light'
   );
@@ -52,6 +53,15 @@ export default function Layout({ me }) {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('bp-theme', theme);
   }, [theme]);
+
+  // Close the mobile drawer whenever a desktop-width viewport is (re)entered.
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth > 900) setMenuOpen(false);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const toggleCollapse = () => {
     setCollapsed((c) => {
@@ -78,8 +88,20 @@ export default function Layout({ me }) {
 
   return (
     <div className={`shell${collapsed ? ' collapsed' : ''}`}>
-      <aside className="sidebar">
-        <button className="brand" onClick={toggleCollapse} title={collapsed ? 'Expand menu' : 'Collapse menu'}>
+      <aside className={`sidebar${menuOpen ? ' nav-open' : ''}`}>
+        <button
+          className="menu-btn"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          {menuOpen ? '✕' : '☰'}
+        </button>
+        <button
+          className="brand"
+          onClick={() => { setMenuOpen(false); toggleCollapse(); }}
+          title={collapsed ? 'Expand menu' : 'Collapse menu'}
+        >
           <span className="brand-mark"><i></i><i></i><i></i></span>
           <span className="brand-name">Budget Planner</span>
         </button>
@@ -94,6 +116,7 @@ export default function Layout({ me }) {
                   to={l.to}
                   end={l.end}
                   title={l.label}
+                  onClick={() => setMenuOpen(false)}
                   className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
                 >
                   <span className="glyph">{l.glyph}</span>

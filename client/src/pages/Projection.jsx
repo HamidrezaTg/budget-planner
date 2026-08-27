@@ -54,7 +54,13 @@ export default function Projection() {
       <div className="card chart-card" style={{ marginTop: 14 }}>
         <ResponsiveContainer width="100%" height={360}>
           <ComposedChart data={chart}>
-            <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={2} />
+            {/* ~8 x labels maximum: with all 96 months rendered the axis was a
+                solid black smear on phone-width charts. */}
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 10 }}
+              interval={Math.max(Math.ceil(chart.length / 8) - 1, 0)}
+            />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip formatter={(v) => eur(v)} />
             <Legend />

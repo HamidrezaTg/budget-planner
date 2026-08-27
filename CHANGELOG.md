@@ -100,6 +100,19 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
   back inside the planner walks in-app history instead of instantly exiting,
   and back from the planner's first page returns to the connect screen.
   All flows verified on an Android emulator.
+- **Mobile web layout rework** (verified on an emulator against seeded data):
+  - the sidebar becomes a sticky top app bar with a hamburger drawer on
+    phones — the old layout wrapped all 13 nav links into five rows that
+    covered half the screen, and the "Local planner" box overlapped the
+    theme toggle and profile;
+  - the projection chart now shows ~8 x-axis labels instead of all 96
+    months painting over each other into an unreadable smear (Reports
+    charts likewise capped at ~6);
+  - wide tables scroll inside their card and stop wrapping mid-value
+    ("2026-08" breaking across lines); the page itself can no longer scroll
+    horizontally;
+  - inline forms (Recurring add form) stack full-width on phones instead of
+    clipping the amount placeholder.
 
 ### Added
 - Test suite (`npm test`, 41 tests) covering parser, DB integrity,

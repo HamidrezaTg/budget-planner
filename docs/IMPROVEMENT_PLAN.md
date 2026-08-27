@@ -81,6 +81,11 @@ release and native artifacts still require verification.
   "Forget this server", and back walks in-app history or returns to the
   connect screen. All states verified with screenshots on an Android 15
   emulator against a live server.
+- Reworked the phone layout of the web client (found via the user's phone
+  screenshots, verified on the emulator with seeded data): sticky top app bar
+  with hamburger drawer instead of 13 wrapped nav pills, chart x-axes capped
+  to ~6-8 labels, tables scrolling inside their cards with no page-level
+  horizontal scroll, and full-width stacked forms.
 
 ## 1. Goals
 

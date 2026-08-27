@@ -161,6 +161,13 @@ code {
 .nav-link.active span.glyph { color: var(--lime); }
 
 .sidebar-bottom { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; }
+
+/* Hamburger only exists on the phone top bar (see the ≤900px block). */
+.menu-btn { display: none; }
+
+/* Nothing may widen the page itself; wide tables scroll inside their card. */
+body { overflow-x: clip; }
+.content { min-width: 0; }
 .sync-card {
   display: flex;
   gap: 10px;
@@ -253,22 +260,94 @@ code {
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .shell.collapsed { grid-template-columns: 1fr; }
+
+  /* The sidebar becomes a sticky top app bar; the nav lives in a drawer that
+     the hamburger opens. 13 nav links can never fit a phone screen — the old
+     "wrap them into rows" layout ate half of every page. */
   .sidebar {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 40;
     height: auto;
-    flex-direction: column;
-    padding: 14px 14px 12px;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 12px;
+    overflow-y: visible;
+    box-shadow: 0 2px 14px rgba(10, 16, 34, 0.25);
   }
-  .side-nav { flex-direction: row; flex-wrap: wrap; }
-  .nav-group { display: flex; align-items: center; margin: 0 8px 0 0; }
+  .sidebar.nav-open {
+    max-height: calc(100vh - 20px);
+    overflow-y: auto;
+    align-items: flex-start;
+  }
+  .shell.collapsed .sidebar { padding: 10px 12px; }
+  .brand { flex: 1; padding: 0; min-width: 0; }
+  .brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .menu-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 40px; height: 40px;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.07);
+    border: 0; border-radius: 10px;
+    color: #fff; font-size: 17px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .side-nav {
+    order: 5;
+    flex-basis: 100%;
+    flex-direction: column;
+    gap: 2px;
+    display: none;
+  }
+  .sidebar.nav-open .side-nav { display: flex; padding: 10px 0 4px; }
+  .nav-group { display: block; margin: 0; }
   .nav-label { display: none; }
-  .nav-link { padding: 8px 11px; grid-template-columns: auto auto; }
+  .nav-link { padding: 11px 12px; grid-template-columns: 22px 1fr; }
   .nav-text { display: inline !important; }
-  .sidebar-bottom { flex-direction: row; align-items: center; padding-top: 10px; }
-  .sync-card { flex: 1; }
-  .sync-text { display: block; }
+
+  .sidebar-bottom {
+    order: 6;
+    flex-basis: 100%;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding-top: 10px;
+  }
+  .sidebar.nav-open .sidebar-bottom {
+    display: flex;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+  }
+  /* "Local planner / your data stays on this machine" is decorative — it
+     overlapped the theme toggle and profile on phones. */
+  .sync-card { display: none; }
   .side-actions { flex-direction: row; }
-  .content { padding: 22px 16px 60px; }
+  .side-actions .icon-btn { padding: 10px 0; }
+  .profile { padding: 4px 0; }
+
+  .content { padding: 18px 14px 60px; }
+
+  /* Tables stay readable instead of wrapping mid-value; they scroll inside
+     their card (never the page). */
+  .table-card th, .table-card td { padding: 9px 10px; font-size: 13px; }
+  .table-card td.num, .table-card th.num, .table-card td:first-child { white-space: nowrap; }
+
+  /* Forms stack instead of squeezing ("€ (– expense, + in…" clipping).
+     The extra .card class outranks the base .inline-form rules further down. */
+  .inline-form { flex-direction: column; align-items: stretch; }
+  .inline-form > * { flex: 1 1 auto; width: 100%; }
+  .card.inline-form input,
+  .card.inline-form input[type='number'],
+  .card.inline-form label input,
+  .card.inline-form select { width: 100%; }
+  .inline-form input[type='checkbox'] { width: auto; }
+  .inline-form .btn { width: 100%; }
 }
 
 /* ---------- primitives ---------- */
@@ -506,6 +585,9 @@ tr.override-row td:first-child { border-left: 3px solid var(--orange); }
 
 /* ---------- misc ---------- */
 .inline-form { display: flex; gap: 10px; padding: 15px 17px; align-items: center; flex-wrap: wrap; }
+.inline-form input[type='number'] { width: 110px; }
+.inline-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.inline-form label input { width: 110px; }
 .rule-form input { flex: 1; min-width: 200px; }
 .budget-input { width: 105px; font-family: var(--font-mono); }
 .env-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }

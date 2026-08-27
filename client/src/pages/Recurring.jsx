@@ -130,11 +130,11 @@ export default function Recurring() {
       <form onSubmit={add} className="card inline-form">
         <input placeholder="Name (e.g. Rent)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <input
-          placeholder="€ (− expense, + income)" type="number" step="0.01" style={{ width: 150 }}
+          placeholder="€ (− expense, + income)" type="number" step="0.01"
           value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}
         />
         <label>Day
-          <input type="number" min="1" max="28" style={{ width: 70 }} value={form.day_of_month}
+          <input type="number" min="1" max="28" value={form.day_of_month}
             onChange={(e) => setForm({ ...form, day_of_month: e.target.value })} />
         </label>
         <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>

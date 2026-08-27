@@ -115,7 +115,11 @@ export default function Reports() {
                 }))}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#2a3040" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 12 }}
+                  interval={Math.max(Math.ceil(yearly.months.length / 6) - 1, 0)}
+                />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip formatter={fmtEur} />
                 <Legend />
@@ -182,7 +186,11 @@ export default function Reports() {
                 }))}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#2a3040" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 12 }}
+                  interval={Math.max(Math.ceil(histAsc.length / 6) - 1, 0)}
+                />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip
                   formatter={fmtEur}
