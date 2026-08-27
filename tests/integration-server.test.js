@@ -291,6 +291,40 @@ test('backup → restore round trip preserves the data', async () => {
   assert.equal(after, txBefore);
 });
 
+test('re-importing the same statement inserts nothing; duplicates within one file both import', async () => {
+  const csv = [
+    'Started Date,Description,Amount,Currency',
+    '2026-05-10,Coffee Bar,-4.50,EUR',
+    '2026-05-10,Coffee Bar,-4.50,EUR', // two genuinely different purchases
+  ].join('\n');
+  const upload = async () => {
+    const fd = new FormData();
+    fd.append('file', new Blob([csv], { type: 'text/csv' }), 'coffee.csv');
+    const up = await fetch(`${srv.url}/api/import/upload`, {
+      method: 'POST',
+      headers: { Cookie: cookies },
+      body: fd,
+    });
+    assert.equal(up.status, 200);
+    return up.json();
+  };
+
+  // First pass: both rows in one file are distinct occurrences — preview shows
+  // both as new, confirm inserts both.
+  const first = await upload();
+  assert.equal(first.summary.toImport, 2);
+  const firstDone = await api('/import/confirm', 'POST', { token: first.token, account_id: null }, cookies);
+  assert.equal(firstDone.inserted, 2);
+
+  // Re-import of the same file: preview flags both as duplicates, confirm inserts nothing.
+  const second = await upload();
+  assert.equal(second.summary.toImport, 0);
+  assert.equal(second.summary.duplicates, 2);
+  const secondDone = await api('/import/confirm', 'POST', { token: second.token, account_id: null }, cookies);
+  assert.equal(secondDone.inserted, 0);
+  assert.equal(secondDone.skippedDuplicates, 2);
+});
+
 async function api(path, method, body, cookie) {
   const r = await fetch(`${srv.url}/api${path}`, {
     method,

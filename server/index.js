@@ -1,6 +1,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import authRoutes from './routes/auth.js';
@@ -32,6 +33,14 @@ app.disable('x-powered-by');
 app.set('trust proxy', process.env.TRUST_PROXY === '1' ? 1 : false);
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+
+// Short per-request id: echoed to the client and attached to error logs, so a
+// user can report an id and the matching journalctl line can be found.
+app.use((req, res, next) => {
+  req.id = crypto.randomBytes(6).toString('hex');
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
 
 // Security headers. CSP is scoped to the built client's needs: React inline
 // styles are allowed, but scripts must come from the same origin.
@@ -106,7 +115,7 @@ app.use('/api', (_req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, next) => {
   const status = err.status || err.statusCode || (err.type === 'entity.parse.failed' ? 400 : 500);
-  if (status >= 500) console.error('[error]', err);
+  if (status >= 500) console.error(`[error] [req:${_req.id ?? '-'}]`, err);
   if (res.headersSent) return next(err);
   const message =
     process.env.NODE_ENV === 'production'

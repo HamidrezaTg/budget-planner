@@ -16,6 +16,22 @@ const ALLOWED = {
   'text/csv': '.csv',
 };
 
+// The browser-declared mimetype is trivially spoofable; verify the file
+// actually starts with the expected magic bytes before storing it. CSV has
+// no signature — accept any non-binary-looking text.
+function contentMatchesDeclared(buffer, mime) {
+  const ascii = (offset, text) =>
+    buffer.subarray(offset, offset + text.length).toString('latin1') === text;
+  switch (mime) {
+    case 'application/pdf': return ascii(0, '%PDF-');
+    case 'image/png': return buffer[0] === 0x89 && ascii(1, 'PNG\r\n\x1a\n'.slice(1));
+    case 'image/jpeg': return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    case 'image/webp': return ascii(0, 'RIFF') && ascii(8, 'WEBP');
+    case 'text/csv': return !buffer.subarray(0, 4096).includes(0);
+    default: return false;
+  }
+}
+
 function userUploadDir(username) {
   // same sanitization as getUserDb
   const safe = username.replace(/[^a-zA-Z0-9_\-]/g, '_');
@@ -70,6 +86,8 @@ router.post('/', upload.single('file'), (req, res) => {
   const ext = ALLOWED[req.file.mimetype];
   if (!ext)
     return res.status(400).json({ error: `Unsupported file type (${req.file.mimetype}). Allowed: PDF, PNG, JPEG, WebP, CSV` });
+  if (!contentMatchesDeclared(req.file.buffer, req.file.mimetype))
+    return res.status(400).json({ error: `File content does not look like a ${req.file.mimetype}` });
 
   const original = String(req.file.originalname ?? 'file').slice(0, 200);
   const storedName = `${txId}-${crypto.randomUUID()}${ext}`;

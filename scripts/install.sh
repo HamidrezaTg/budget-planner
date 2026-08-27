@@ -193,6 +193,34 @@ else
 fi
 [ "$(stat -c%s "$OUT")" -gt 10000 ] || { echo "ERROR: download too small — asset problem." >&2; exit 1; }
 
+# Verify the downloaded artifact against the release's SHA256SUMS.txt.
+SUMS="/tmp/bp-SHA256SUMS.txt"
+SUMS_URL="https://github.com/$REPO/releases/download/$TAG/SHA256SUMS.txt"
+rm -f "$SUMS"
+if [ -n "${GH_TOKEN:-}" ]; then
+  curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -o "$SUMS" "$SUMS_URL" || true
+else
+  curl -fsSL -o "$SUMS" "$SUMS_URL" || true
+fi
+if [ -s "$SUMS" ]; then
+  EXPECTED=$(grep -E "^[0-9a-f]{64}[[:space:]]+${ASSET_NAME}\$" "$SUMS" | awk '{print $1}')
+  ACTUAL=$(sha256sum "$OUT" | awk '{print $1}')
+  if [ -z "$EXPECTED" ]; then
+    echo "WARNING: $ASSET_NAME not listed in SHA256SUMS.txt — cannot verify checksum." >&2
+  elif [ "$EXPECTED" != "$ACTUAL" ]; then
+    echo "ERROR: checksum mismatch for $ASSET_NAME" >&2
+    echo "  expected: $EXPECTED" >&2
+    echo "  actual:   $ACTUAL" >&2
+    rm -f "$OUT" "$SUMS"
+    exit 1
+  else
+    echo "==> checksum verified"
+  fi
+  rm -f "$SUMS"
+else
+  echo "WARNING: SHA256SUMS.txt unavailable for $TAG — skipping checksum verification." >&2
+fi
+
 echo "==> installing $ASSET_NAME"
 apt-get install -y "$OUT"
 rm -f "$OUT"

@@ -4,9 +4,30 @@ import { getAiConfig, chatComplete, parseJsonLoose } from '../services/ai.js';
 import { requireAuth } from '../auth.js';
 import { applyProposals, DEV_TOOLS, proposalFromToolCall } from '../services/dev-proposals.js';
 import { runReadOnlySql, schemaContext } from '../services/read-sql.js';
+import { rateLimit } from '../rate-limit.js';
 
 const router = Router();
 router.use(requireAuth);
+// AI calls fan out to paid/external providers and are the most expensive
+// endpoints in the app. Per-user limits keep a runaway client (or a compromised
+// session) from burning quota; per-user rather than per-IP because a household
+// legitimately shares one IP.
+router.use(rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  key: (req) => `ai:${req.username}`,
+}));
+
+// Client-supplied history is untrusted: cap each message and the whole
+// conversation so one huge paste cannot balloon the prompt (or the bill).
+const MAX_MESSAGE_CHARS = 8000;
+const MAX_HISTORY_MESSAGES = 16;
+function boundedHistory(raw) {
+  return (Array.isArray(raw) ? raw : [])
+    .filter((m) => ['user', 'assistant'].includes(m?.role) && typeof m?.content === 'string')
+    .slice(-MAX_HISTORY_MESSAGES)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_MESSAGE_CHARS) }));
+}
 
 const audit = (kind, detail, status = 'ok') =>
   db.prepare('INSERT INTO ai_audit_log (kind, detail, status) VALUES (?, ?, ?)').run(
@@ -91,9 +112,7 @@ const FINANCE_TOOLS = [
 router.post('/chat', async (req, res) => {
   try {
     const cfg = getAiConfig();
-    const history = (req.body?.messages ?? [])
-      .filter((m) => ['user', 'assistant'].includes(m.role) && typeof m.content === 'string')
-      .slice(-16);
+    const history = boundedHistory(req.body?.messages);
 
     const messages = [
       {
@@ -148,9 +167,7 @@ router.post('/chat', async (req, res) => {
 router.post('/dev-chat', async (req, res) => {
   try {
     const cfg = getAiConfig();
-    const history = (req.body?.messages ?? [])
-      .filter((m) => ['user', 'assistant'].includes(m.role) && typeof m.content === 'string')
-      .slice(-16);
+    const history = boundedHistory(req.body?.messages);
 
     const messages = [
       {
@@ -191,7 +208,7 @@ router.post('/dev-chat', async (req, res) => {
 // Apply reviewed proposals (re-validated server-side; the AI never executes directly)
 router.post('/dev-apply', (req, res) => {
   try {
-    const proposals = req.body?.proposals ?? [];
+    const proposals = (Array.isArray(req.body?.proposals) ? req.body.proposals : []).slice(0, 50);
     const results = applyProposals(proposals);
     audit('applied', proposals.map((p) => `${p.type}:${p.summary ?? ''}`).join(' | '));
     res.json({ results });

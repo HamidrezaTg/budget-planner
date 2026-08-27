@@ -78,10 +78,19 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - `scripts/build-apk.sh` builds a signed release APK when `BP_ANDROID_KEYSTORE`,
   `BP_ANDROID_KEYSTORE_PASSWORD` and `BP_ANDROID_KEY_ALIAS` are set, and a clearly
   labeled debug-key build otherwise; keystores are provided via environment only.
+- The installer verifies downloaded artifacts against the release's
+  `SHA256SUMS.txt` before installing.
+- **AI endpoint protection** — per-user rate limit (30/min), client-supplied chat
+  history capped (16 messages, 8,000 chars each), proposal application capped at
+  50 per call.
+- **Attachment content checks** — uploaded files are verified against their
+  declared mimetype via magic bytes before being stored.
+- Every response carries an `X-Request-Id`, echoed in 5xx error logs for support.
 
 ### Added
-- Test suite (`npm test`, 39 tests) covering parser, DB integrity,
-  projection, security, restore failure/round-trip and an end-to-end HTTP flow.
+- Test suite (`npm test`, 40 tests) covering parser, DB integrity,
+  projection, security, restore failure/round-trip, re-import behavior and an
+  end-to-end HTTP flow.
 - GitHub Actions CI: server tests, client build, dependency audit, version checks.
 - `docs/IMPROVEMENT_PLAN.md` — the validated improvement plan this release implements.
 - Unauthenticated `/healthz` liveness endpoint for systemd/uptime monitors.

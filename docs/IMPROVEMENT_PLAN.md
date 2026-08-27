@@ -8,7 +8,7 @@
 The v3.9.0 implementation changes are committed on `main`, but a tagged/public
 release and native artifacts still require verification.
 
-- Verification: `npm test` passes 39 tests; `npm run build` passes; `git diff --check` passes.
+- Verification: `npm test` passes 40 tests; `npm run build` passes; `git diff --check` passes.
 - CI now installs both root and client dependencies before testing/building.
 - `npm audit --omit=dev --audit-level=high` reports zero vulnerabilities after the
   spreadsheet dependency replacement.
@@ -53,6 +53,18 @@ release and native artifacts still require verification.
   APK when `BP_ANDROID_KEYSTORE*` environment variables are present and falls
   back to a clearly labeled debug-key build otherwise; gradle reads signing from
   the same environment so keystores never enter git.
+- Fresh-install smoke test of v3.9.0 from the public release passed (installer,
+  systemd hardening, healthz, headers, setup lockout, data-dir permissions).
+- Installer now downloads SHA256SUMS.txt and verifies the artifact checksum
+  before `apt-get install`; older releases without sums degrade to a warning.
+- AI endpoints: per-user rate limit (30/min), client-supplied history capped
+  (16 messages, 8,000 chars each), `/dev-apply` capped at 50 proposals.
+- Attachments: uploaded bytes are now verified against the declared mimetype
+  via magic bytes (CSV must be text) before storing.
+- Every response carries an `X-Request-Id`; 5xx error logs include it, so a
+  user-reported id maps to a journalctl line.
+- Added a re-import regression test: two identical rows in one file both
+  import; re-importing the same file inserts nothing.
 
 ## 1. Goals
 
@@ -193,20 +205,22 @@ password change; keep logout.
 `HttpOnly`, `SameSite=Lax/Strict`, `Secure` when HTTPS; document that plain HTTP exposes credentials on LAN;
 recommend localhost / Tailscale / HTTPS reverse proxy.
 
-### 5.5 Security headers and errors — MOSTLY DONE
+### 5.5 Security headers and errors — DONE
 Helmet-style headers or equivalent; CSP compatible with the built client; disable `X-Powered-By`;
 JSON 404s for API; centralized error middleware; no stack traces/paths in production responses;
-request-id logging.
+request-id logging via `X-Request-Id`.
 
-### 5.6 AI security — PARTIAL
+### 5.6 AI security — MOSTLY DONE
 Allowlist permitted tables/columns for the read-only SQL tool; exclude `settings`/credentials/audit internals;
-cap limits; rate-limit AI endpoints; cap history/response size; encrypt API keys at rest (operator secret)
-or store only in protected config; never leak keys through SQL/AI output.
+cap limits; per-user rate limiting and history/response caps implemented; encrypt API keys at rest
+(operator secret) or store only in protected config — currently satisfied by owner-only file permissions
+on the per-user database; explicit at-rest encryption remains a hardening option.
 
 ### 5.7 Upload and parser limits — PARTIAL
-Import file/row/sheet/cell limits, staging cleanup, umask 0077, and owner-only data
-directories are implemented. Attachment size limits, extension/content validation,
-and zip-bomb protection remain.
+Import file/row/sheet/cell limits, staging cleanup, umask 0077, owner-only data
+directories, attachment size/mime/extension validation with magic-byte checks,
+and checksum-verified installer downloads are implemented. Zip-bomb protection
+for XLSX and deeper content validation remain.
 
 ### 5.8 File permissions and service hardening — MOSTLY DONE
 `umask 077` is set at startup and DATA_DIR/user/upload directories are chmod'ed
@@ -266,8 +280,8 @@ published artifact verification remain open.
 
 ## 9. Phase 6: Automated Tests and CI
 
-**Status: PARTIAL.** The server suite currently present in the worktree has 39 passing tests and
-CI now installs client dependencies; restore-failure and recurrence paths are
+**Status: PARTIAL.** The server suite currently present in the worktree has 40 passing tests and
+CI now installs client dependencies; restore, recurrence, and re-import paths are
 covered, but client component, packaging, APK, and release tests are still missing.
 
 - Commit a real `tests/` suite: unit (dates, dedup, FX, rollover, projection), DB integration (temp dirs),
