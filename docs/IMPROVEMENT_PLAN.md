@@ -1,18 +1,71 @@
 # Improvement Plan — Budget Planner
 
 > Status: active implementation plan, validated against the current codebase
-> (v3.9.0). Updated 2026-08-27.
+> (v3.9.2). Updated 2026-08-28.
 
 ## Current Progress
 
-The v3.9.0 implementation changes are committed on `main`, but a tagged/public
-release and native artifacts still require verification.
+**v3.9.2 is published** (https://github.com/HamidrezaTg/budget-planner/releases/tag/v3.9.2)
+with server `.deb`, client `.deb`, signed APK and CI-generated `SHA256SUMS.txt`,
+all publicly downloadable. The release was cut by the new tag-triggered release
+workflow (its first run, after two pipeline bugs were fixed by dogfooding it).
 
-- Verification: `npm test` passes 41 tests; `npm run build` passes; `git diff --check` passes.
-- CI now installs both root and client dependencies before testing/building.
-- `npm audit --omit=dev --audit-level=high` reports zero vulnerabilities after the
-  spreadsheet dependency replacement.
-- The client build succeeds but emits a bundle-size warning for the main 762 kB chunk.
+- Verification: 43/43 tests, client build, shellcheck clean, packaging smoke
+  (deb from clean checkout), client + root dependency audits — all green in CI.
+- A full four-way project review (server, client, packaging/CI, docs) was
+  completed; all HIGH and MEDIUM findings are fixed and released. LOW findings
+  and expansion ideas are recorded under "Remaining Work" below.
+
+### 2026-08-27 Full-Project Review (released in v3.9.2)
+
+Data integrity:
+- Username → database-file collision closed ("a.b"/"a!b" collided with
+  "a_b" — cross-user data bleed). Collision-free encoding, automatic legacy
+  file rename on first open, new usernames reject `.` and `-`.
+- Budget rollover now accumulates across months (previously underspend older
+  than one month silently vanished); lookback capped at 24 months.
+- Settings PUT validates everything before the FX-rate wipe; category
+  retirement validates first and applies in one transaction.
+- Import confirm runs in a single transaction (large imports are far faster
+  and can no longer half-apply).
+- Timezone off-by-one fixed for non-ISO statement dates (UTC+1/+2 machines).
+
+Client:
+- FX-rate delete (broken payload), needs-review toggle (dead state), rollover
+  toggle (always "off"/always re-enabled), income usual-amount edit silently
+  deleting the month's actual entry, commitment end-month clearing — all fixed.
+- Transactions: newest-request-wins guard, bulk-apply failure reporting,
+  modal focus trap ignores hidden inputs, logout works offline.
+
+Server quality:
+- FK indexes (split_of, attachments.transaction_id, sessions.username,
+  fund_movements); monthly snapshot capture off the request path with logged
+  failures; fx/fetch capped at 60 external calls per request; PATCH endpoints
+  validate like POST; staging eviction prefers the current user's uploads.
+
+Security:
+- CSV/Excel formula injection neutralized in exports; login timing no longer
+  enumerates usernames; per-IP login bucket; password-change rate limit;
+  AI outbound timeouts; Electron runtime pinned + SHASUMS-verified,
+  will-redirect guard, all permission requests denied; Android cloud/device
+  backups disabled, debug-key APK can no longer use the release filename;
+  installer fails hard on missing/mismatched checksums; server deb always
+  builds the client fresh; Electron deb gets the full X11/GTK dependency set
+  and a chrome-sandbox SUID fix; `DATA_DIR` required for the CLI admin
+  creator (the silent wrong-directory trap).
+
+Docs:
+- Obsolete "clear app storage" advice replaced everywhere with the recovery
+  screen flow; MATH.md corrected (AI row limit 200, dedup formula with
+  currency + occurrence index, FX conversion, re-anchor formula); USER_GUIDE
+  gained Recurring and Settings backup/restore sections; CHANGELOG 3.9.0/3.9.1
+  duplication removed; 3.9.2 section added.
+
+CI/release:
+- shellcheck on all scripts, packaging smoke job, client dependency audit,
+  timeouts/concurrency/permissions; tag-triggered release workflow that
+  builds debs, generates checksums, and publishes (APK when signing secrets
+  are configured).
 
 ### 2026-08-27 Progress Log
 
@@ -128,9 +181,10 @@ The implementation should preserve existing user databases and avoid destructive
 
 ## 4. Phase 1: Database and Financial Integrity
 
-**Status: PARTIAL.** The highest-risk migration, split deletion, restore, projection,
-recurrence, import, and currency changes have implementation coverage, but several
-diagnostics, semantics, and parser-safety items remain open.
+**Status: MOSTLY DONE.** Migration, split deletion, restore, projection, recurrence,
+import, currency, and rollover-accumulation changes all have implementation plus
+regression coverage. Open: fund `contributed_so_far` vs balance consistency,
+reflected-semantics decisions (§4.10), parser ambiguous-date decision.
 
 ### 4.1 Enable SQLite foreign keys — PARTIAL
 
@@ -207,9 +261,9 @@ are covered by regression tests; schema migration-on-restore is applied.
 
 ## 5. Phase 2: Authentication and Server Security
 
-**Status: PARTIAL.** Authentication, sessions, headers, setup gating, and core SQL
-execution controls are implemented; key-at-rest protection, endpoint limits, and
-service hardening remain open.
+**Status: MOSTLY DONE.** Sessions, headers, setup gating, login throttling (per-IP
++ per-username + password-change), timing-safe login, and AI endpoint limits are
+implemented. Open: progressive delays/lockout, optional API-key-at-rest encryption.
 
 ### 5.1 Login protection — MOSTLY DONE
 Rate limit by IP and username; progressive delays; generic errors; max body size; optional lockout;
@@ -256,10 +310,10 @@ maintenance review remain.
 
 ## 6. Phase 3: Client UX and Accessibility
 
-**Status: MOSTLY DONE.** Shared dialog improvements, destructive confirmations, and
-the new reusable accessible `Modal` cover the split/attachment overlays and all
-destructive flows. Remaining: full form labeling audit, page error handling, and
-responsive/accessibility coverage.
+**Status: MOSTLY DONE.** Accessible `Modal`/dialogs, destructive confirmations,
+phone layout (top bar + drawer), chart/table/form responsiveness, stale-response
+guards, and bulk-action failure reporting are done. Open: remaining unlabeled
+controls audit, upload() 401 handling, client component tests.
 
 - Dialog: `aria-labelledby`/`aria-describedby`, real labels, initial focus, focus trap + restore, Escape
   everywhere, no accidental overlay dismissal on destructive actions, busy/error states, `aria-live` toasts.
@@ -274,10 +328,10 @@ responsive/accessibility coverage.
 
 ## 7. Phase 4: Desktop and Android Clients
 
-**Status: MOSTLY DONE.** The clients build/connect; Electron is hardened; the
-Android shell was reworked and verified on an emulator (auto-connect, recovery,
-back handling). Outstanding: publishing a release with the reworked APK and
-verifying it on a physical phone.
+**Status: MOSTLY DONE.** Electron is hardened and its runtime pinned +
+checksum-verified; the Android shell rework is published in v3.9.2 (signed APK
+in the release). Outstanding: CI-signed APKs (needs repo secrets) and physical
+phone verification; Electron has no update mechanism yet.
 
 - Electron: move reachability check into the main process via IPC (avoids permissive CORS), validate/save
   URLs in main, navigation `will-navigate` + `setWindowOpenHandler` allowlist, `shell.openExternal`,
@@ -287,57 +341,63 @@ verifying it on a physical phone.
 
 ## 8. Phase 5: Packaging and Release Pipeline
 
-**Status: PARTIAL.** Installer argument handling and desktop Debian metadata stamping
-are fixed; reproducible multi-artifact releases, version stamping, checksums, and
-published artifact verification remain open.
-
-- Single version source (root `package.json`); root/desktop/mobile package metadata are
-  synced at 3.9.0 and CI enforces consistency; the Android build.gradle versionName should
-  be stamped from the same source in a follow-up release-script pass.
-- One reproducible release command: npm ci, build client, build server `.deb`, client `.deb`, Android APK,
-  SHA-256 checksums, metadata validation, manifest; fail on version mismatch.
-- Installer fixes: preserve flags across sudo re-exec, don't parse JSON with Node before Node exists,
-  `--client`/`--version`/`--quiet` reliability, checksum verification, clear private-repo handling.
-- Every release: server `.deb`, client `.deb`, APK, checksums, notes, upgrade/rollback docs.
-- Test fresh install, upgrades from v3.6–v3.8, WAL/attachment migration, failed install, rollback.
+**Status: MOSTLY DONE.** A tag-triggered release workflow builds server/client
+debs, generates checksums in-pipeline, and publishes; the APK joins when
+`BP_ANDROID_KEYSTORE*` repo secrets exist. Versions are single-sourced
+(package.json, enforced by CI against desktop/mobile/CHANGELOG) and stamped
+into the APK by `build-apk.sh` with verification. Installer verifies checksums
+and fails hard. Open: fresh-install/upgrade matrix testing (v3.6–v3.8 →
+current), APK filename versioning, signed checksums.
 
 ## 9. Phase 6: Automated Tests and CI
 
-**Status: PARTIAL.** The server suite currently present in the worktree has 41 passing tests and
-CI now installs client dependencies; restore, recurrence, re-import, and XLSX export
-paths are covered, but client component, packaging, APK, and release tests are still missing.
-
-- Commit a real `tests/` suite: unit (dates, dedup, FX, rollover, projection), DB integration (temp dirs),
-  API (auth, isolation), import, restore, client components (dialog/destructive), packaging smoke.
-- Mandatory regression tests for every confirmed defect (see findings list).
-- GitHub Actions: Node 22, root/client `npm ci`, server tests, client build, package metadata checks, debug APK build,
-  `npm audit` with HIGH findings blocking, and artifact version validation.
+**Status: MOSTLY DONE.** 43 server tests (unit + DB + HTTP integration, including
+restore failure/round-trip, recurrence, re-import, XLSX export round-trip, and
+regressions for every review finding fixed so far). CI: tests, client build,
+root+client dependency audits (HIGH blocks), shellcheck on all scripts,
+packaging smoke (server deb from clean checkout), version consistency
+including the CHANGELOG header. Open: client component tests (React Testing
+Library scaffold), APK build job (needs Android SDK + signing secrets),
+upgrade-path tests.
 
 ## 10. Phase 7: Documentation and Help
 
-**Status: PARTIAL.** README, CHANGELOG, USER_GUIDE, Help, and SECURITY updates exist;
-MATH/TROUBLESHOOTING synchronization and final version/release claims remain open.
+**Status: MOSTLY DONE.** All docs verified against the code in the full review:
+obsolete "clear storage" advice replaced, MATH.md formulas corrected,
+USER_GUIDE gained Recurring + Settings backup/restore + import-error and
+setup-token notes, README covers healthz/X-Request-Id/checksum
+verification/AI_MODEL default, CHANGELOG deduplicated with an accurate 3.9.2
+section. Open: a CONTRIBUTING guide; final pass after the Lenovo migration.
 
-Update README/CHANGELOG/USER_GUIDE/MATH/TROUBLESHOOTING/Help.jsx; add SECURITY.md, security-issue template,
-contribution guide. Remove inaccurate claims (stale sidebar location, old versions, "local planner" phrasing,
-package metadata mismatches).
+## 11. Remaining Work
 
-## 11. Recommended Implementation Sequence
+Already shipped through v3.9.2: all HIGH and MEDIUM review findings, the
+Android shell rework, the phone layout rework, installer checksum
+verification, and the release workflow.
 
-1. Add missing regression tests for restore failure, recurrence posting, migration compatibility, and imported-row occurrence behavior.
-2. Add orphan diagnostics and startup `foreign_key_check` reporting; repair only after backup.
-3. Resolve parser ambiguity, row/sheet/cell limits, explicit import-account UX, and missing-rate warnings.
-4. Resolve refund/fund-goal/review-count/export semantics.
-5. Harden API-key storage, AI endpoint limits, upload permissions, `umask`, health checks, request IDs, and systemd service settings.
-6. Add XLSX import/export fixtures and review the replacement dependency's maintenance path.
-7. Fix Electron IPC/navigation security and produce a properly signed Android release.
-8. Make version stamping single-source and build server `.deb`, client `.deb`, APK, checksums, and manifests reproducibly.
-9. Complete accessibility, responsive UX, and client tests.
-10. Validate CI, fresh install/upgrade/restore/clients/rollback, and public release access.
-11. Update all remaining docs and Help claims.
-12. Test the full release on Lenovo, then migrate production data from ZorinHP only after a verified backup and rollback plan.
+### Remaining engineering work
+1. Client component tests (React Testing Library scaffold; Dialog/Modal, key flows).
+2. ZIP-bomb protection for XLSX imports and deeper attachment content validation.
+3. Electron update story (autoUpdater or apt repo) — bundled Chromium gets no fixes today.
+4. Fund accounting: reconcile `contributed_so_far` with `fundBalanceAt` (manual
+   contribution movements are currently double-counted in balance).
+5. Transactions list pagination (>500 rows silently capped; add a hint or paging).
+6. Client a11y audit: remaining unlabeled selects/inputs, upload() 401 handling,
+   Reports year-input guard, currency locale consistency, Budgets month-clear guard.
+7. GET endpoints that mutate (recurrence auto-post, snapshot capture) → consider
+   POST + CSRF stance review.
+8. Optional hardening: API-key-at-rest encryption, progressive login delays/lockout.
+9. CI: add repo secrets `BP_ANDROID_KEYSTORE*` so releases carry CI-signed APKs;
+   add an APK build job; version the APK filename.
+10. Physical-phone verification of the v3.9.2 APK (upgrade path from debug builds).
+
+### Deferred by owner
+- Lenovo migration (was judged too early; do after a verified ZorinHP backup and
+  an upgrade test on a spare machine).
+- §4.10 product decisions: refund rollover semantics beyond accumulation, funds
+  after target date, raw vs converted exports, parser ambiguous-slash-date policy.
 
 ## 12. Decisions Needed Before Financial Changes
 
-See §4.10. The safest path is to begin with database integrity, installer correctness, and regression
-tests before changing security or UI behavior.
+See §4.10. The safest path is to begin with database integrity, installer
+correctness, and regression tests before changing security or UI behavior.
