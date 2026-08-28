@@ -20,7 +20,7 @@ mkdir -p "$STAGE/opt/budget-planner-client" \
          "$STAGE/DEBIAN"
 
 echo "==> downloading electron $ELECTRON_VERSION (linux-x64)"
-ZIP="$STAGE/electron.zip"
+ZIP="$STAGE/electron-v${ELECTRON_VERSION}-linux-x64.zip"
 SUMS="$STAGE/SHASUMS256.txt"
 curl -fL --retry 2 -o "$ZIP" \
   "https://github.com/electron/electron/releases/download/v${ELECTRON_VERSION}/electron-v${ELECTRON_VERSION}-linux-x64.zip"
@@ -48,7 +48,8 @@ chmod 755 "$STAGE/opt/budget-planner-client/budget-planner-client"
 # systems; without it the client fails to launch where unprivileged user
 # namespaces are restricted.
 if [ -f "$STAGE/opt/budget-planner-client/chrome-sandbox" ]; then
-  chown root:root "$STAGE/opt/budget-planner-client/chrome-sandbox"
+  # dpkg-deb --root-owner-group records root:root regardless of the staging
+  # owner; only the setuid bit needs restoring here (possible as file owner).
   chmod 4755 "$STAGE/opt/budget-planner-client/chrome-sandbox"
 fi
 
