@@ -8,9 +8,9 @@ export default function Balances() {
   const [msg, setMsg] = useState('');
   const { confirm } = useDialogs();
 
-  const load = () => api.get('/balances').then(setData);
+  const load = () => api.get('/balances').then(setData).catch((err) => setMsg(err.message));
   useEffect(() => { load(); }, []);
-  if (!data) return <div className="loading">Loading…</div>;
+  if (!data) return <div className="loading">{msg ? `Failed to load: ${msg}` : 'Loading…'}</div>;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -85,8 +85,11 @@ export default function Balances() {
                         confirmLabel: 'Delete',
                       });
                       if (ok) {
-                        await api.del(`/balances/${r.id}`);
-                        load();
+                        try {
+                          await api.del(`/balances/${r.id}`);
+                          setMsg('');
+                          load();
+                        } catch (err) { setMsg(err.message); }
                       }
                     }}
                   >Delete</button>

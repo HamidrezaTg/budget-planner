@@ -4,6 +4,10 @@ import { fundBalanceAt, currentMonth, addMonths, monthsBetween, monthsLeftTo } f
 
 const router = Router();
 
+// Strict YYYY-MM with a real month number: a loose value like "2026-" passes
+// string comparisons but feeds monthsBetween() → NaN balances and progress.
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 // Funds with balances, goals and recent movements. `month` = balance reference.
 router.get('/', (req, res) => {
   const month = /^\d{4}-\d{2}$/.test(req.query.month ?? '') ? req.query.month : currentMonth();
@@ -83,13 +87,29 @@ router.patch('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM funds WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Fund not found' });
   const b = req.body ?? {};
+  let contribution = row.monthly_contribution;
+  if (b.monthly_contribution !== undefined) {
+    contribution = Number(b.monthly_contribution ?? 0);
+    // A negative contribution would be summed as reducing outgoings and
+    // silently inflate projected savings.
+    if (!Number.isFinite(contribution) || contribution < 0)
+      return res.status(400).json({ error: 'monthly_contribution must be a non-negative number' });
+  }
+  let opening = row.opening_balance;
+  if (b.opening_balance !== undefined) {
+    opening = Number(b.opening_balance ?? 0);
+    if (!Number.isFinite(opening))
+      return res.status(400).json({ error: 'opening_balance must be a number' });
+  }
+  if (b.start_month != null && b.start_month !== '' && !MONTH_RE.test(String(b.start_month)))
+    return res.status(400).json({ error: 'start_month must be YYYY-MM' });
   db.prepare(
     'UPDATE funds SET name=?, monthly_contribution=?, start_month=?, opening_balance=?, category_id=?, target_amount=?, target_date=? WHERE id=?'
   ).run(
     b.name ?? row.name,
-    Number(b.monthly_contribution ?? row.monthly_contribution) || 0,
+    contribution,
     b.start_month ?? row.start_month,
-    Number(b.opening_balance ?? row.opening_balance) || 0,
+    opening,
     b.category_id ?? row.category_id,
     b.target_amount !== undefined ? (b.target_amount === null ? null : Number(b.target_amount) || null) : row.target_amount,
     b.target_date !== undefined ? (b.target_date || null) : row.target_date,
@@ -102,10 +122,18 @@ router.post('/', (req, res) => {
   const { name, monthly_contribution = 0, start_month, opening_balance = 0, category_id = null } = req.body ?? {};
   if (!name?.trim() || !start_month)
     return res.status(400).json({ error: 'name and start_month required' });
+  if (!MONTH_RE.test(start_month))
+    return res.status(400).json({ error: 'start_month must be YYYY-MM' });
+  const contribution = Number(monthly_contribution ?? 0);
+  if (!Number.isFinite(contribution) || contribution < 0)
+    return res.status(400).json({ error: 'monthly_contribution must be a non-negative number' });
+  const opening = Number(opening_balance ?? 0);
+  if (!Number.isFinite(opening))
+    return res.status(400).json({ error: 'opening_balance must be a number' });
   try {
     const r = db
       .prepare('INSERT INTO funds (name, monthly_contribution, start_month, opening_balance, category_id) VALUES (?, ?, ?, ?, ?)')
-      .run(name.trim(), Number(monthly_contribution) || 0, start_month, Number(opening_balance) || 0, category_id);
+      .run(name.trim(), contribution, start_month, opening, category_id);
     res.json(db.prepare('SELECT * FROM funds WHERE id = ?').get(r.lastInsertRowid));
   } catch {
     res.status(400).json({ error: 'Fund name already exists' });

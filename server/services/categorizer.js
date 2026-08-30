@@ -89,6 +89,35 @@ export function createAutomationRule({ description_contains, amount_min, amount_
   return db.prepare('SELECT * FROM category_automation_rules WHERE id = ?').get(r.lastInsertRowid);
 }
 
+// Retro-apply a learned keyword to uncategorized transactions. Matching uses
+// the same normalizeDesc semantics (exact or substring) as import-time
+// categorization, so the retro-fix and future imports always agree — a SQL
+// LIKE would both over-match on %/_ in the keyword and miss normalized rows.
+// Both category_id and needs_review are set: clearing the review flag without
+// categorizing would silently drop rows from the review queue.
+export function retroApplyKeyword(keyword, categoryId) {
+  const kw = normalizeDesc(keyword);
+  if (!kw) return 0;
+  const rows = db.prepare('SELECT id, description FROM transactions WHERE needs_review = 1').all();
+  const upd = db.prepare('UPDATE transactions SET category_id = ?, needs_review = 0 WHERE id = ?');
+  let n = 0;
+  db.exec('BEGIN');
+  try {
+    for (const row of rows) {
+      const nd = normalizeDesc(row.description);
+      if (nd === kw || nd.includes(kw)) {
+        upd.run(categoryId, row.id);
+        n++;
+      }
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+  return n;
+}
+
 // Create a learned rule and retro-apply it to unmatched transactions.
 export function learnRule(keyword, categoryId, applyToExisting = true) {
   const kw = normalizeDesc(keyword);
@@ -97,12 +126,5 @@ export function learnRule(keyword, categoryId, applyToExisting = true) {
     'INSERT INTO category_rules (keyword, category_id) VALUES (?, ?) ON CONFLICT(keyword) DO UPDATE SET category_id = excluded.category_id'
   ).run(kw, categoryId);
 
-  if (applyToExisting) {
-    db.prepare(
-      'UPDATE transactions SET category_id = ?, needs_review = 0 WHERE needs_review = 1 AND LOWER(TRIM(description)) = ?'
-    ).run(categoryId, kw);
-    db.prepare(
-      'UPDATE transactions SET needs_review = 0 WHERE needs_review = 1 AND LOWER(description) LIKE ?'
-    ).run(`%${kw}%`);
-  }
+  if (applyToExisting) retroApplyKeyword(kw, categoryId);
 }

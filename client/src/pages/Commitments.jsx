@@ -9,8 +9,8 @@ export default function Commitments() {
   const [edits, setEdits] = useState({});
   const { confirm, toast } = useDialogs();
 
-  const load = () => api.get('/commitments').then(setRows);
-  useEffect(() => { load(); api.get('/categories/meta/all').then(setMeta); }, []);
+  const load = () => api.get('/commitments').then(setRows).catch((e) => toast(e.message, 'error'));
+  useEffect(() => { load(); api.get('/categories/meta/all').then(setMeta).catch(() => {}); }, []);
 
   const add = async (e) => {
     e.preventDefault();
@@ -24,12 +24,14 @@ export default function Commitments() {
   const save = async (row) => {
     const e = edits[row.id];
     if (!e) return;
-    await api.patch(`/commitments/${row.id}`, {
-      monthly_amount: e.amount !== undefined ? Number(e.amount) : undefined,
-      end_month: e.end_month !== undefined ? (e.end_month || null) : undefined,
-    });
-    setEdits((p) => ({ ...p, [row.id]: undefined }));
-    load();
+    try {
+      await api.patch(`/commitments/${row.id}`, {
+        monthly_amount: e.amount !== undefined ? Number(e.amount) : undefined,
+        end_month: e.end_month !== undefined ? (e.end_month || null) : undefined,
+      });
+      setEdits((p) => ({ ...p, [row.id]: undefined }));
+      load();
+    } catch (err) { toast(err.message, 'error'); }
   };
 
   const activeNow = (r) => {
@@ -85,8 +87,10 @@ export default function Commitments() {
                         confirmLabel: 'Delete',
                       });
                       if (ok) {
-                        await api.del(`/commitments/${r.id}`);
-                        load();
+                        try {
+                          await api.del(`/commitments/${r.id}`);
+                          load();
+                        } catch (err) { toast(err.message, 'error'); }
                       }
                     }}
                   >Delete</button>

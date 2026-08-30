@@ -30,7 +30,7 @@ export default function Settings() {
       setCustomUrl(s.base_url || '');
       setCurrencyState(s.currency || 'EUR');
       if (s.provider && s.model) setModels([s.model]);
-    });
+    }).catch((e) => setMsg({ ok: false, text: e.message }));
     api.get('/settings/fx').then(setFx).catch(() => {});
   }, []);
 
@@ -120,8 +120,10 @@ export default function Settings() {
       confirmLabel: 'Delete rate',
     });
     if (!ok) return;
-    await api.del('/settings/fx', { month, currency: cur });
-    loadFx();
+    try {
+      await api.del('/settings/fx', { month, currency: cur });
+      loadFx();
+    } catch (e) { toast(e.message, 'error'); }
   };
 
   const fetchFx = async (overwrite) => {

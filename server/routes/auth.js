@@ -26,6 +26,26 @@ function isLoopback(ip) {
   return normalized === '127.0.0.1' || normalized === '::1';
 }
 
+// Behind a reverse proxy without TRUST_PROXY=1, every request appears to come
+// from 127.0.0.1 — which would both open /setup to the world and merge all
+// users into one rate-limit bucket. A direct localhost connection never
+// carries proxy headers, so:
+// - setup treats any forwarded request as remote (SETUP_TOKEN required), and
+// - rate limiting keys on the rightmost XFF hop, which the local proxy itself
+//   appended (the leftmost entry is client-controlled and spoofable).
+function behindProxy(req) {
+  return ['x-forwarded-for', 'x-forwarded-host', 'x-real-ip'].some((h) => req.headers[h]);
+}
+
+function rateLimitIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (isLoopback(req.ip) && typeof xff === 'string' && xff.trim()) {
+    const parts = xff.split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+  return req.ip;
+}
+
 function hasSetupToken(req) {
   const presented = String(req.get('X-Setup-Token') || '');
   if (!SETUP_TOKEN || !presented) return false;
@@ -35,7 +55,7 @@ function hasSetupToken(req) {
 }
 
 function requireLocalSetup(req, res, next) {
-  if (isLoopback(req.ip) || hasSetupToken(req)) return next();
+  if (hasSetupToken(req) || (isLoopback(req.ip) && !behindProxy(req))) return next();
   return res.status(403).json({
     error: 'Initial setup is limited to localhost; set SETUP_TOKEN for remote setup',
   });
@@ -70,9 +90,11 @@ router.post(
 router.post('/login', async (req, res) => {
   const username = String(req.body?.username ?? '').trim().toLowerCase();
   // Two buckets: per-IP+username AND a wider per-IP bucket, so rotating
-  // usernames cannot dodge the per-username throttle.
-  const key = `${req.ip}|${username}`;
-  const ipKey = `ip|${req.ip}`;
+  // usernames cannot dodge the per-username throttle. Behind a local proxy the
+  // bucket keys fall back to the real client IP (see rateLimitIp).
+  const ip = rateLimitIp(req);
+  const key = `${ip}|${username}`;
+  const ipKey = `ip|${ip}`;
   if (consume(ipKey, 60 * 1000, 30) || consume(key, 60 * 1000, 10))
     return res.status(429).json({ error: 'Too many attempts — try again in a minute' });
   const user = await verifyLogin(username, req.body?.password);

@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { getSetting, setSetting, db, als, getUserDb, closeUserDb, DATA_DIR, initUserSchema, safeDbFilename } from '../db.js';
-import { getAiConfig, chatComplete } from '../services/ai.js';
+import { getAiConfig, chatComplete, isTrustedBaseUrl } from '../services/ai.js';
 import { requireAuth } from '../auth.js';
+import { pauseRequests, resumeRequests } from '../request-gate.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import multer from 'multer';
@@ -53,6 +54,10 @@ function baseUrlFor(provider, customUrl) {
   if (provider === 'custom') {
     const url = (customUrl || '').trim().replace(/\/+$/, '');
     if (!url) throw new Error('Custom provider needs a Base URL');
+    // The server fetches this URL itself; only real HTTP(S) endpoints are
+    // allowed so the field cannot smuggle in other schemes.
+    if (!/^https?:\/\//i.test(url))
+      throw new Error('Custom Base URL must start with http:// or https://');
     return url;
   }
   return p.base_url;
@@ -97,8 +102,14 @@ router.put('/', (req, res) => {
     }
   }
   if (provider !== undefined) {
+    let url;
+    try {
+      url = baseUrlFor(provider, base_url);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
     setSetting('ai_provider', provider);
-    setSetting('ai_base_url', baseUrlFor(provider, base_url));
+    setSetting('ai_base_url', url);
   }
   if (api_key) setSetting('ai_api_key', api_key.trim());
   if (model !== undefined) setSetting('ai_model', model.trim());
@@ -238,15 +249,6 @@ router.get('/backup', (req, res) => {
 router.delete('/spending', (req, res) => {
   const n = db.prepare('SELECT COUNT(*) AS c FROM transactions').get().c;
   const files = db.prepare('SELECT filename FROM attachments').all();
-  if (files.length) {
-    const dir = path.join(DATA_DIR, 'uploads', safeDbFilename(req.username));
-    for (const f of files) {
-      const resolved = path.resolve(dir, f.filename);
-      if (resolved.startsWith(path.resolve(dir) + path.sep)) {
-        try { fs.unlinkSync(resolved); } catch {}
-      }
-    }
-  }
   db.exec('BEGIN');
   try {
     // FK cascade removes split children + attachment metadata rows.
@@ -257,6 +259,17 @@ router.delete('/spending', (req, res) => {
     db.exec('ROLLBACK');
     throw e;
   }
+  // Unlink only after the delete committed: if it had rolled back, the
+  // attachment rows would survive pointing at missing files.
+  if (files.length) {
+    const dir = path.join(DATA_DIR, 'uploads', safeDbFilename(req.username));
+    for (const f of files) {
+      const resolved = path.resolve(dir, f.filename);
+      if (resolved.startsWith(path.resolve(dir) + path.sep)) {
+        try { fs.unlinkSync(resolved); } catch {}
+      }
+    }
+  }
   res.json({ ok: true, deleted: n });
 });
 
@@ -264,8 +277,10 @@ router.delete('/spending', (req, res) => {
 // timestamped copy of the current database as <name>.db.pre-restore-<ts>, then
 // swaps it in via an atomic rename. On reopen failure the previous database is
 // restored, so a failed copy can never leave the live database truncated.
-router.post('/restore', restoreUpload.single('file'), (req, res) => {
+let restoreBusy = false;
+router.post('/restore', restoreUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  if (restoreBusy) return res.status(409).json({ error: 'A restore is already in progress' });
 
   const dataDir = DATA_DIR;
   fs.mkdirSync(dataDir, { recursive: true });
@@ -291,52 +306,64 @@ router.post('/restore', restoreUpload.single('file'), (req, res) => {
     check.close();
     check = null;
 
-    const username = req.username;
-    const safe = safeDbFilename(username);
-    const target = path.join(dataDir, 'users', `${safe}.db`);
-
-    // Apply any pending schema migrations to a writable staging copy so an
-    // older backup still restores cleanly into the current app version.
-    const staged = `${tmp}.staged`;
-    fs.copyFileSync(tmp, staged);
-    const mig = new DatabaseSync(staged);
-    initUserSchema(mig);
-    mig.close();
-
-    // Checkpoint before copying the live database so its snapshot does not
-    // depend on a separate WAL file.
-    const live = getUserDb(username);
-    live.exec('PRAGMA wal_checkpoint(TRUNCATE);');
-    closeUserDb(username);
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const pre = `${target}.pre-restore-${stamp}`;
-    fs.copyFileSync(target, pre);
-    for (const suffix of ['-wal', '-shm']) {
-      try { fs.unlinkSync(target + suffix); } catch {}
-    }
-
-    // Atomic swap on the same filesystem.
-    fs.renameSync(staged, target);
-    try { fs.unlinkSync(tmp); } catch {}
-
+    // Drain in-flight API requests before touching the live database file:
+    // a request holding the old handle could otherwise write to the detached
+    // inode after the rename (silently lost data) or crash on the closed
+    // handle. New requests queue until the swap is done.
+    restoreBusy = true;
+    await pauseRequests();
     try {
-      getUserDb(username); // reopen + cache
-    } catch (e) {
-      // Roll back using renames so a failed restore never leaves a partial
-      // database or a target WAL sidecar in place.
-      const failed = `${target}.failed-restore-${stamp}`;
-      try { fs.renameSync(target, failed); } catch {}
-      fs.renameSync(pre, target);
-      try { getUserDb(username); } catch {}
-      try { fs.unlinkSync(failed); } catch {}
-      throw new Error('Restore failed while reopening the database — previous data was rolled back');
+      const username = req.username;
+      const safe = safeDbFilename(username);
+      const target = path.join(dataDir, 'users', `${safe}.db`);
+
+      // Apply any pending schema migrations to a writable staging copy so an
+      // older backup still restores cleanly into the current app version.
+      const staged = `${tmp}.staged`;
+      fs.copyFileSync(tmp, staged);
+      const mig = new DatabaseSync(staged);
+      initUserSchema(mig);
+      mig.close();
+
+      // Checkpoint before copying the live database so its snapshot does not
+      // depend on a separate WAL file.
+      const live = getUserDb(username);
+      live.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+      closeUserDb(username);
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const pre = `${target}.pre-restore-${stamp}`;
+      fs.copyFileSync(target, pre);
+      for (const suffix of ['-wal', '-shm']) {
+        try { fs.unlinkSync(target + suffix); } catch {}
+      }
+
+      // Atomic swap on the same filesystem.
+      fs.renameSync(staged, target);
+      try { fs.unlinkSync(tmp); } catch {}
+
+      try {
+        getUserDb(username); // reopen + cache
+      } catch (e) {
+        // Roll back using renames so a failed restore never leaves a partial
+        // database or a target WAL sidecar in place.
+        const failed = `${target}.failed-restore-${stamp}`;
+        try { fs.renameSync(target, failed); } catch {}
+        fs.renameSync(pre, target);
+        try { getUserDb(username); } catch {}
+        try { fs.unlinkSync(failed); } catch {}
+        throw new Error('Restore failed while reopening the database — previous data was rolled back');
+      }
+    } finally {
+      resumeRequests();
+      restoreBusy = false;
     }
     res.json({ ok: true, transactions: txCount, categories: catCount });
   } catch (e) {
     try { fs.unlinkSync(tmp); } catch {}
     try { fs.unlinkSync(tmp + '.staged'); } catch {}
     try { check?.close(); } catch {}
-    res.status(400).json({ error: e.message });
+    restoreBusy = false;
+    res.status(e.status || 400).json({ error: e.message });
   }
 });
 
@@ -358,7 +385,10 @@ router.post('/models', async (req, res) => {
     });
     if (!r.ok) {
       const text = await r.text().catch(() => '');
-      return res.status(502).json({ error: `Could not list models (${r.status}): ${text.slice(0, 200)}` });
+      // Custom base URLs can point at internal services — their response
+      // bodies are never echoed back (SSRF read primitive).
+      const detail = isTrustedBaseUrl(url) && text ? `: ${text.slice(0, 200)}` : '';
+      return res.status(502).json({ error: `Could not list models (${r.status})${detail}` });
     }
     const data = await r.json();
     let models = (data.data ?? data.models ?? [])

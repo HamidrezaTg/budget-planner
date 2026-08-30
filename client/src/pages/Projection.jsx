@@ -9,12 +9,13 @@ const label = (m) => `${monthNames[Number(m.slice(5)) - 1]} ${m.slice(2, 4)}`;
 
 export default function Projection() {
   const [data, setData] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api.get('/projection?months=96').then(setData);
+    api.get('/projection?months=96').then(setData).catch((e) => setError(e.message));
   }, []);
 
-  if (!data) return <div className="loading">Loading…</div>;
+  if (!data) return <div className="loading">{error ? `Failed to load: ${error}` : 'Loading…'}</div>;
 
   const chart = data.months.map((m) => ({
     name: label(m.month),

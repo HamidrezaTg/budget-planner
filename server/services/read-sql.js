@@ -20,13 +20,67 @@ const MAX_AI_ROWS = 200;
 
 const TABLE_RE = /\bfrom\s+([a-z_][a-z0-9_]*)|join\s+([a-z_][a-z0-9_]*)/gi;
 
-// Node 22's node:sqlite does not expose setAuthorizer yet. Reject comma joins
-// in the lexical validation path as a compatibility fallback; comma joins are
-// not needed by the assistant and could otherwise hide a second table from
-// TABLE_RE. Newer Node versions additionally enforce this with SQLite itself.
+const CLAUSE_RE = /\b(where|group\s+by|order\s+by|having|limit|union|except|intersect)\b/gi;
+
+// Replace string literals with '' so commas/keywords inside quoted text
+// (e.g. WHERE description = 'no limit') never fool the lexical checks below.
+// '' is SQL's own escaped-quote form, so the text stays valid SQL.
+function stripSqlStrings(q) {
+  return q.replace(/'(?:[^']|'')*'/g, "''").replace(/"(?:[^"]|"")*"/g, '""');
+}
+
+// Paren depth before each character of a string-stripped query.
+function parenDepths(q) {
+  const depths = new Array(q.length).fill(0);
+  let d = 0;
+  for (let i = 0; i < q.length; i++) {
+    if (q[i] === '(') d++;
+    else if (q[i] === ')') d = Math.max(0, d - 1);
+    depths[i] = d;
+  }
+  return depths;
+}
+
+// Detect comma-separated table sources (`FROM a, b`) in ANY FROM clause at any
+// nesting depth. A comma-join hides its second table from the allowlist scan
+// (e.g. SELECT 1 FROM accounts WHERE id IN (SELECT 1 FROM accounts, settings)),
+// so it is rejected outright — the assistant never needs one.
 function hasCommaJoin(query) {
-  const source = /\bfrom\b([\s\S]*?)(?=\bwhere\b|\bgroup\s+by\b|\border\s+by\b|\blimit\b|\bhaving\b|\bunion\b|\bexcept\b|\bintersect\b|$)/i.exec(query);
-  return Boolean(source?.[1].includes(','));
+  const q = stripSqlStrings(query);
+  const depths = parenDepths(q);
+  const clauses = [...q.matchAll(CLAUSE_RE)];
+  const fromRe = /\bfrom\b/gi;
+  let m;
+  while ((m = fromRe.exec(q))) {
+    const base = depths[m.index]; // depth of the paren containing this FROM
+    for (let i = m.index + m[0].length; i < q.length; i++) {
+      const c = q[i];
+      if (c === ')') {
+        if (depths[i] <= base) break; // closed the paren containing this FROM
+        continue;
+      }
+      if (depths[i] === base) {
+        if (c === ',') return true; // table-source separator
+        if (clauses.some((cl) => cl.index === i && depths[cl.index] === base)) break;
+      }
+    }
+  }
+  return false;
+}
+
+// Reject queries referencing the same table more than once (self-joins, CTEs
+// re-joining their base table). node:sqlite runs synchronously: a self-join
+// with a non-indexed ON condition (e.g. abs(a.amount)=abs(b.amount)) blocks
+// the whole event loop — one user can hang the server for everyone. Budget
+// tables never need self-joins.
+function hasSelfJoin(query) {
+  const q = stripSqlStrings(query);
+  const counts = new Map();
+  for (const m of q.matchAll(TABLE_RE)) {
+    const table = (m[1] || m[2]).toLowerCase();
+    counts.set(table, (counts.get(table) ?? 0) + 1);
+  }
+  return [...counts.values()].some((n) => n > 1);
 }
 
 export function validateReadOnlySql(query) {
@@ -37,6 +91,8 @@ export function validateReadOnlySql(query) {
   const stripped = q.replace(/;+\s*$/, '');
   if (/;/.test(stripped)) throw new Error('Only a single statement is allowed');
   if (hasCommaJoin(stripped)) throw new Error('Comma-joined table sources are not available to the assistant');
+  if (hasSelfJoin(stripped))
+    throw new Error('Referencing the same table twice (self-join) is not available to the assistant');
 
   // Restrict to the allowlist so credential-bearing tables stay out of reach.
   const seen = new Set();
@@ -50,13 +106,18 @@ export function validateReadOnlySql(query) {
       throw new Error(`Table "${t}" is not available to the assistant`);
   }
 
-  // Cap user-supplied limits regardless of what the AI asked for.
-  const limitMatch = /\blimit\s+(\d+)/i.exec(stripped);
-  if (limitMatch) {
-    if (Number(limitMatch[1]) > MAX_AI_ROWS)
+  // Cap user-supplied limits regardless of what the AI asked for. Checked on
+  // string-stripped text so a literal like 'no limit' cannot suppress the cap.
+  const text = stripSqlStrings(stripped);
+  const depths = parenDepths(text);
+  for (const m of text.matchAll(/\blimit\s+(\d+)\b/gi)) {
+    if (Number(m[1]) > MAX_AI_ROWS)
       throw new Error(`LIMIT may not exceed ${MAX_AI_ROWS} rows`);
-    return stripped;
   }
+  // A LIMIT inside a subquery does not bound the outer result — only a
+  // top-level one counts.
+  const hasTopLimit = [...text.matchAll(/\blimit\b/gi)].some((m) => depths[m.index] === 0);
+  if (hasTopLimit) return stripped;
   return `${stripped} LIMIT ${MAX_AI_ROWS}`;
 }
 

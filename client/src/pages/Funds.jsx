@@ -8,9 +8,9 @@ export default function Funds() {
   const [msg, setMsg] = useState('');
   const { toast } = useDialogs();
 
-  const load = () => api.get('/funds').then(setData);
+  const load = () => api.get('/funds').then(setData).catch((e) => setMsg(e.message));
   useEffect(() => { load(); }, []);
-  if (!data) return <div className="loading">Loading…</div>;
+  if (!data) return <div className="loading">{msg ? `Failed to load: ${msg}` : 'Loading…'}</div>;
 
   const move = async (fundId, kind) => {
     setMsg('');
@@ -24,8 +24,11 @@ export default function Funds() {
   const saveConfig = async (f) => {
     const c = amounts['c' + f.id];
     if (c === undefined) return;
-    await api.patch(`/funds/${f.id}`, { monthly_contribution: Number(c) || 0 });
-    load();
+    try {
+      await api.patch(`/funds/${f.id}`, { monthly_contribution: Number(c) || 0 });
+      setMsg('');
+      load();
+    } catch (e) { setMsg(e.message); }
   };
 
   const setGoal = async (f) => {
@@ -36,12 +39,15 @@ export default function Funds() {
       toast('Enter a positive target amount first.', 'error');
       return;
     }
-    await api.patch(`/funds/${f.id}`, {
-      target_amount: Number(amt),
-      target_date: date || null,
-    });
-    setAmounts((p) => ({ ...p, ['g' + f.id]: undefined, ['gd' + f.id]: undefined }));
-    load();
+    try {
+      await api.patch(`/funds/${f.id}`, {
+        target_amount: Number(amt),
+        target_date: date || null,
+      });
+      setAmounts((p) => ({ ...p, ['g' + f.id]: undefined, ['gd' + f.id]: undefined }));
+      setMsg('');
+      load();
+    } catch (e) { setMsg(e.message); }
   };
 
   return (

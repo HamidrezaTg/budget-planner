@@ -21,6 +21,7 @@ import reportRoutes from './routes/reports.js';
 import settingsRoutes from './routes/settings.js';
 import aiRoutes from './routes/ai.js';
 import { requireAuth, sweepExpiredSessions } from './auth.js';
+import { gate } from './request-gate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 2026;
@@ -65,6 +66,10 @@ app.use((_req, res, next) => {
 app.get('/healthz', (_req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
 });
+
+// Count/queue API requests so administrative database swaps (backup restore)
+// can drain in-flight work before touching the file on disk.
+app.use('/api', gate);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', requireAuth, categoryRoutes);

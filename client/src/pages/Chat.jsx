@@ -8,29 +8,43 @@ export default function Chat() {
   const [busy, setBusy] = useState(false);
   const [proposals, setProposals] = useState([]);
   const [aiReady, setAiReady] = useState(null);
+  // Switching tabs clears the conversation; an in-flight response from the
+  // previous tab must not repopulate the new one.
+  const tabRef = React.useRef(tab);
 
   useEffect(() => {
     api.get('/settings').then((s) => setAiReady(!!s.base_url)).catch(() => setAiReady(false));
   }, [tab]);
 
+  const switchTab = (t) => {
+    tabRef.current = t;
+    setTab(t);
+    setMessages([]);
+    setProposals([]);
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
+    const forTab = tabRef.current;
     setInput('');
     const next = [...messages, { role: 'user', content: text }];
     setMessages(next);
     setBusy(true);
     try {
-      if (tab === 'finance') {
+      if (forTab === 'finance') {
         const r = await api.post('/ai/chat', { messages: next });
-        setMessages([...next, { role: 'assistant', content: r.reply }]);
+        if (tabRef.current === forTab) setMessages([...next, { role: 'assistant', content: r.reply }]);
       } else {
         const r = await api.post('/ai/dev-chat', { messages: next });
-        setMessages([...next, { role: 'assistant', content: r.reply }]);
-        setProposals((p) => [...p, ...(r.proposals ?? [])]);
+        if (tabRef.current === forTab) {
+          setMessages([...next, { role: 'assistant', content: r.reply }]);
+          setProposals((p) => [...p, ...(r.proposals ?? [])]);
+        }
       }
     } catch (e) {
-      setMessages([...next, { role: 'assistant', content: `Error: ${e.message}` }]);
+      if (tabRef.current === forTab)
+        setMessages([...next, { role: 'assistant', content: `Error: ${e.message}` }]);
     } finally {
       setBusy(false);
     }
@@ -50,6 +64,8 @@ export default function Chat() {
         },
       ]);
       setProposals([]);
+    } catch (e) {
+      setMessages((m) => [...m, { role: 'assistant', content: `Error: ${e.message}` }]);
     } finally {
       setBusy(false);
     }
@@ -74,10 +90,10 @@ export default function Chat() {
       <div className="page-head">
         <h1>{tab === 'finance' ? 'Ask your finances' : 'Dev mode (guarded)'}</h1>
         <div className="month-nav">
-          <button className={`btn ghost ${tab === 'finance' ? 'active' : ''}`} onClick={() => { setTab('finance'); setMessages([]); setProposals([]); }}>
+          <button className={`btn ghost ${tab === 'finance' ? 'active' : ''}`} onClick={() => switchTab('finance')}>
             Finance — read-only
           </button>
-          <button className={`btn ghost ${tab === 'dev' ? 'active' : ''}`} onClick={() => { setTab('dev'); setMessages([]); setProposals([]); }}>
+          <button className={`btn ghost ${tab === 'dev' ? 'active' : ''}`} onClick={() => switchTab('dev')}>
             Dev mode
           </button>
         </div>

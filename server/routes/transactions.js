@@ -68,7 +68,9 @@ router.delete('/:id', (req, res) => {
 
   // Deleting a split parent removes its children via the ON DELETE CASCADE
   // foreign key (enforced since v3.9). Attachment files are not stored by
-  // SQLite, so collect and unlink them for the parent AND all children first.
+  // SQLite, so collect them for the parent AND all children first, then unlink
+  // only after the delete committed — if it rolled back, the rows would
+  // survive pointing at missing files.
   const ids = [
     tx.id,
     ...db.prepare('SELECT id FROM transactions WHERE split_of = ?').all(tx.id).map((r) => r.id),
@@ -77,6 +79,14 @@ router.delete('/:id', (req, res) => {
   const files = db
     .prepare(`SELECT filename FROM attachments WHERE transaction_id IN (${placeholders})`)
     .all(...ids);
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM transactions WHERE id = ?').run(tx.id);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
   if (files.length) {
     const dir = path.join(DATA_DIR, 'uploads', safeDbFilename(req.username));
     for (const f of files) {
@@ -85,14 +95,6 @@ router.delete('/:id', (req, res) => {
         try { fs.unlinkSync(resolved); } catch {}
       }
     }
-  }
-  db.exec('BEGIN');
-  try {
-    db.prepare('DELETE FROM transactions WHERE id = ?').run(tx.id);
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
   }
   res.json({ ok: true });
 });
@@ -150,21 +152,16 @@ router.post('/:id/unsplit', (req, res) => {
   if (!tx.split_group) return res.status(400).json({ error: 'Not split' });
   if (tx.split_of) return res.status(400).json({ error: 'This is a split part — delete it instead' });
 
-  // Remove attachment files attached to the split children before deleting them.
+  // Collect attachment files of the split children, delete the rows, and only
+  // unlink after the delete committed (see DELETE above).
   const children = db.prepare('SELECT id FROM transactions WHERE split_of = ?').all(tx.id);
+  let files = [];
   if (children.length) {
     const ids = children.map((r) => r.id);
     const placeholders = ids.map(() => '?').join(',');
-    const files = db
+    files = db
       .prepare(`SELECT filename FROM attachments WHERE transaction_id IN (${placeholders})`)
       .all(...ids);
-    const dir = path.join(DATA_DIR, 'uploads', safeDbFilename(req.username));
-    for (const f of files) {
-      const resolved = path.resolve(dir, f.filename);
-      if (resolved.startsWith(path.resolve(dir) + path.sep)) {
-        try { fs.unlinkSync(resolved); } catch {}
-      }
-    }
   }
   db.exec('BEGIN');
   try {
@@ -174,6 +171,15 @@ router.post('/:id/unsplit', (req, res) => {
   } catch (e) {
     db.exec('ROLLBACK');
     throw e;
+  }
+  if (files.length) {
+    const dir = path.join(DATA_DIR, 'uploads', safeDbFilename(req.username));
+    for (const f of files) {
+      const resolved = path.resolve(dir, f.filename);
+      if (resolved.startsWith(path.resolve(dir) + path.sep)) {
+        try { fs.unlinkSync(resolved); } catch {}
+      }
+    }
   }
   res.json({ ok: true });
 });

@@ -1,4 +1,5 @@
 import { db } from '../db.js';
+import { retroApplyKeyword } from './categorizer.js';
 
 // Guardrailed dev-mode proposals. The AI can ONLY emit these typed operations;
 // each is validated and converted to a human-readable diff. Nothing touches the
@@ -102,9 +103,7 @@ const BUILDERS = {
         db.prepare(
           'INSERT INTO category_rules (keyword, category_id) VALUES (?, ?) ON CONFLICT(keyword) DO UPDATE SET category_id = excluded.category_id'
         ).run(keyword, cat.id);
-        db.prepare('UPDATE transactions SET category_id = ?, needs_review = 0 WHERE needs_review = 1 AND LOWER(description) LIKE ?').run(
-          cat.id, `%${keyword}%`
-        );
+        retroApplyKeyword(keyword, cat.id);
       },
     };
   },

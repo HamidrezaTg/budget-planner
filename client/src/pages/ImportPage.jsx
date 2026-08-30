@@ -11,7 +11,7 @@ export default function ImportPage() {
   const [accounts, setAccounts] = useState([]);
 
   useEffect(() => {
-    api.get('/categories/meta/all').then((m) => setAccounts(m.accounts));
+    api.get('/categories/meta/all').then((m) => setAccounts(m.accounts)).catch((e) => setError(e.message));
   }, []);
 
   const onFile = async (e) => {

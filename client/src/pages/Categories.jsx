@@ -14,10 +14,10 @@ export default function Categories() {
   const [testResult, setTestResult] = useState(null);
 
   const load = () => {
-    api.get('/categories').then(setCats);
-    api.get('/transactions/rules/all').then(setRules);
+    api.get('/categories').then(setCats).catch((e) => toast(e.message, 'error'));
+    api.get('/transactions/rules/all').then(setRules).catch((e) => toast(e.message, 'error'));
   };
-  useEffect(() => { load(); api.get('/categories/meta/all').then(setMeta); }, []);
+  useEffect(() => { load(); api.get('/categories/meta/all').then(setMeta).catch(() => {}); }, []);
 
   const patch = async (id, body) => {
     if (body.is_active === false) {
@@ -37,9 +37,11 @@ export default function Categories() {
   const addRule = async (e) => {
     e.preventDefault();
     if (!newRule.keyword.trim() || !newRule.category_id) return;
-    await api.post('/transactions/rules', newRule);
-    setNewRule({ keyword: '', category_id: '' });
-    load();
+    try {
+      await api.post('/transactions/rules', newRule);
+      setNewRule({ keyword: '', category_id: '' });
+      load();
+    } catch (err) { toast(err.message, 'error'); }
   };
 
   const addAdvancedRule = async (e) => {

@@ -52,8 +52,11 @@ export default function Transactions() {
   useEffect(() => { load(); }, [month, review]);
 
   const assign = async (tx, categoryId, remember) => {
-    await api.patch(`/transactions/${tx.id}`, { category_id: categoryId, remember });
-    load();
+    try {
+      await api.patch(`/transactions/${tx.id}`, { category_id: categoryId, remember });
+      setError('');
+      load();
+    } catch (e) { setError(e.message); }
   };
 
   const suggestWithAi = async () => {
@@ -71,9 +74,11 @@ export default function Transactions() {
   };
 
   const applySuggestion = async (s) => {
-    await api.patch(`/transactions/${s.id}`, { category_id: s.category_id, remember: true });
-    setSuggestions((p) => p?.filter((x) => x.id !== s.id) ?? null);
-    load();
+    try {
+      await api.patch(`/transactions/${s.id}`, { category_id: s.category_id, remember: true });
+      setSuggestions((p) => p?.filter((x) => x.id !== s.id) ?? null);
+      load();
+    } catch (e) { setError(e.message); }
   };
 
   const sugFor = (txId) => suggestions?.find((s) => s.id === txId);
@@ -107,8 +112,10 @@ export default function Transactions() {
       confirmLabel: 'Undo split',
     });
     if (!ok) return;
-    await api.post(`/transactions/${tx.id}/unsplit`);
-    load();
+    try {
+      await api.post(`/transactions/${tx.id}/unsplit`);
+      load();
+    } catch (e) { setError(e.message); }
   };
 
   const openAttachments = (tx) => {
@@ -120,7 +127,9 @@ export default function Transactions() {
   };
 
   const refreshAttachments = () => {
-    api.get(`/attachments?transaction_id=${attTx.id}`).then((d) => setAttList(d.attachments));
+    api.get(`/attachments?transaction_id=${attTx.id}`)
+      .then((d) => setAttList(d.attachments))
+      .catch((e) => setAttError(e.message));
     load();
   };
 
@@ -145,8 +154,10 @@ export default function Transactions() {
       confirmLabel: 'Delete',
     });
     if (!ok) return;
-    await api.del(`/attachments/${att.id}`);
-    refreshAttachments();
+    try {
+      await api.del(`/attachments/${att.id}`);
+      refreshAttachments();
+    } catch (err) { setAttError(err.message); }
   };
 
   const formatSize = (n) =>

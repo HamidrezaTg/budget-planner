@@ -8,9 +8,16 @@ export default function Budgets() {
   const [meta, setMeta] = useState({ groups: [], accounts: [] });
   const [lines, setLines] = useState([]);
   const [edits, setEdits] = useState({});
+  const [error, setError] = useState('');
 
-  const load = () => api.get(`/budgets/${month}`).then((d) => { setLines(d.lines); setEdits({}); });
-  useEffect(() => { api.get('/categories/meta/all').then(setMeta); }, []);
+  // keepEdits: after saving one cell, other in-progress edits in the table
+  // must survive — wiping them all silently discarded unsaved input.
+  const load = (keepEdits = false) =>
+    api.get(`/budgets/${month}`).then((d) => {
+      setLines(d.lines);
+      if (!keepEdits) setEdits({});
+    });
+  useEffect(() => { api.get('/categories/meta/all').then(setMeta).catch(() => {}); }, []);
   useEffect(() => { load(); }, [month]);
 
   const grouped = lines.reduce((acc, l) => {
@@ -18,29 +25,51 @@ export default function Budgets() {
     return acc;
   }, {});
 
+  const clearEdit = (key) =>
+    setEdits((p) => {
+      if (!(key in p)) return p;
+      const next = { ...p };
+      delete next[key];
+      return next;
+    });
+
   const saveOverride = async (l) => {
     const v = edits[l.category_id];
     if (v === undefined) return;
-    await api.put(`/budgets/${month}/${l.category_id}`, { amount: v === '' ? null : Number(v) });
-    load();
+    try {
+      await api.put(`/budgets/${month}/${l.category_id}`, { amount: v === '' ? null : Number(v) });
+      clearEdit(l.category_id);
+      setError('');
+      load(true);
+    } catch (e) { setError(e.message); }
   };
 
   const saveStanding = async (l) => {
     const v = edits['s' + l.category_id];
     if (v === undefined) return;
-    await api.patch(`/categories/${l.category_id}`, { monthly_budget: Number(v) || 0 });
-    load();
+    try {
+      await api.patch(`/categories/${l.category_id}`, { monthly_budget: Number(v) || 0 });
+      clearEdit('s' + l.category_id);
+      setError('');
+      load(true);
+    } catch (e) { setError(e.message); }
   };
 
   const assignAccount = async (l, accountId) => {
-    await api.patch(`/categories/${l.category_id}`, { account_id: accountId ? Number(accountId) : null });
-    load();
+    try {
+      await api.patch(`/categories/${l.category_id}`, { account_id: accountId ? Number(accountId) : null });
+      setError('');
+      load(true);
+    } catch (e) { setError(e.message); }
   };
 
   const toggleRollover = async (l) => {
     const cur = l.roll_overs === undefined ? false : !!l.roll_overs;
-    await api.patch(`/categories/${l.category_id}`, { roll_overs: !cur });
-    load();
+    try {
+      await api.patch(`/categories/${l.category_id}`, { roll_overs: !cur });
+      setError('');
+      load(true);
+    } catch (e) { setError(e.message); }
   };
 
   const input = (key, value) => (
@@ -67,6 +96,7 @@ export default function Budgets() {
         “Plan for {monthLabel(month)}” overrides the standing plan for that month only.
         Every category should have an account — untagged spending disappears from account totals.
       </p>
+      {error && <div className="error">{error}</div>}
 
       {Object.entries(grouped).map(([g, rows]) => (
         <div key={g}>
@@ -89,7 +119,7 @@ export default function Budgets() {
                         <button
                           className="btn ghost tiny-btn"
                           title="Remove this month's override"
-                          onClick={() => api.put(`/budgets/${month}/${l.category_id}`, { amount: null }).then(load)}
+                          onClick={() => api.put(`/budgets/${month}/${l.category_id}`, { amount: null }).then(() => load(true)).catch((e) => setError(e.message))}
                         >
                           ↺
                         </button>

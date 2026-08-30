@@ -40,7 +40,7 @@ router.put('/:month/:categoryId', (req, res) => {
     db.prepare('DELETE FROM budget_lines WHERE category_id = ? AND month = ?').run(categoryId, month);
   } else {
     const amt = Number(amount);
-    if (isNaN(amt) || amt < 0) return res.status(400).json({ error: 'Invalid amount' });
+    if (!Number.isFinite(amt) || amt < 0) return res.status(400).json({ error: 'Invalid amount' });
     db.prepare(
       `INSERT INTO budget_lines (category_id, month, planned_amount) VALUES (?, ?, ?)
        ON CONFLICT(category_id, month) DO UPDATE SET planned_amount = excluded.planned_amount`
@@ -48,10 +48,12 @@ router.put('/:month/:categoryId', (req, res) => {
   }
   // also allow editing the standing plan in one call
   if (req.body?.standing_amount !== undefined) {
-    db.prepare('UPDATE categories SET monthly_budget = ? WHERE id = ?').run(
-      Number(req.body.standing_amount) || 0,
-      categoryId
-    );
+    // Same sign/finite guard as the override: a negative standing plan would
+    // be summed as reducing outgoings and silently inflate projected savings.
+    const standing = Number(req.body.standing_amount);
+    if (!Number.isFinite(standing) || standing < 0)
+      return res.status(400).json({ error: 'Invalid standing amount' });
+    db.prepare('UPDATE categories SET monthly_budget = ? WHERE id = ?').run(standing, categoryId);
   }
   res.json({ ok: true });
 });

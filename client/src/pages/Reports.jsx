@@ -16,12 +16,13 @@ export default function Reports() {
   const [monthly, setMonthly] = useState(null);
   const [yearly, setYearly] = useState(null);
   const [history, setHistory] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api.get(`/reports/monthly/${month}`).then(setMonthly);
+    api.get(`/reports/monthly/${month}`).then(setMonthly).catch((e) => setError(e.message));
   }, [month]);
   useEffect(() => {
-    api.get(`/reports/yearly/${year}`).then(setYearly);
+    api.get(`/reports/yearly/${year}`).then(setYearly).catch((e) => setError(e.message));
   }, [year]);
   useEffect(() => {
     // also triggers capture of any closed months still missing a snapshot
@@ -33,6 +34,7 @@ export default function Reports() {
   return (
     <div>
       <h1>Reports</h1>
+      {error && <div className="error">{error}</div>}
 
       <div className="filters card">
         <label>Month

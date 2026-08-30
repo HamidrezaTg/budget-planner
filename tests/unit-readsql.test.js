@@ -42,6 +42,47 @@ test('joins are checked too', () => {
   );
 });
 
+test('comma-join hidden in a subquery is rejected (allowlist bypass)', () => {
+  assert.throws(
+    () => validateReadOnlySql('SELECT 1 FROM accounts WHERE id IN (SELECT 1 FROM accounts, settings)'),
+    /Comma-joined table sources/
+  );
+  assert.throws(
+    () => validateReadOnlySql('SELECT (SELECT count(*) FROM accounts, settings) FROM accounts'),
+    /Comma-joined table sources/
+  );
+});
+
+test('self-joins are rejected (synchronous event-loop DoS)', () => {
+  assert.throws(
+    () => validateReadOnlySql('SELECT count(*) FROM transactions t1 JOIN transactions t2 ON abs(t1.amount)=abs(t2.amount)'),
+    /same table twice/
+  );
+  assert.throws(
+    () => validateReadOnlySql('WITH x AS (SELECT * FROM accounts) SELECT * FROM x JOIN accounts ON 1=1'),
+    /same table twice/
+  );
+  assert.doesNotThrow(() => validateReadOnlySql('SELECT * FROM transactions JOIN categories ON 1=1'));
+});
+
+test('a LIMIT inside a string literal cannot suppress the row cap', () => {
+  assert.equal(
+    validateReadOnlySql("SELECT * FROM transactions WHERE description = 'no limit'"),
+    "SELECT * FROM transactions WHERE description = 'no limit' LIMIT 200"
+  );
+});
+
+test('a LIMIT inside a subquery does not bound the outer result', () => {
+  assert.equal(
+    validateReadOnlySql('SELECT * FROM transactions WHERE category_id IN (SELECT id FROM categories LIMIT 5)'),
+    'SELECT * FROM transactions WHERE category_id IN (SELECT id FROM categories LIMIT 5) LIMIT 200'
+  );
+  assert.throws(
+    () => validateReadOnlySql('SELECT * FROM transactions WHERE category_id IN (SELECT id FROM categories LIMIT 500)'),
+    /LIMIT may not exceed/
+  );
+});
+
 test('execution authorizer rejects disallowed comma-joined tables', () => {
   assert.throws(
     () => dbm.als.run(readDb, () => runReadOnlySql('SELECT * FROM transactions, settings')),

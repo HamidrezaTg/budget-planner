@@ -1,6 +1,27 @@
 // Shared OpenAI-compatible chat client + per-user AI configuration.
 import { getSetting } from '../db.js';
 
+// Base URLs of the built-in providers, whose error bodies are safe to surface
+// verbatim (their hosts are fixed, not user-chosen). Anything else is a custom
+// endpoint that can point at internal services — its responses must never be
+// echoed to the client, or any user gains a read primitive against the
+// server's network (SSRF).
+const KNOWN_PROVIDER_BASES = new Set([
+  'https://api.openai.com/v1',
+  'https://api.anthropic.com/v1',
+  'https://openrouter.ai/api/v1',
+  'https://api.groq.com/openai/v1',
+  'https://api.deepseek.com/v1',
+  'https://api.mistral.ai/v1',
+  'https://api.together.xyz/v1',
+  'http://localhost:11434/v1',
+  'http://localhost:1234/v1',
+]);
+
+export function isTrustedBaseUrl(url) {
+  return KNOWN_PROVIDER_BASES.has(String(url || '').replace(/\/+$/, ''));
+}
+
 export function getAiConfig() {
   const cfg = {
     baseUrl: (getSetting('ai_base_url') || process.env.AI_BASE_URL || '').replace(/\/+$/, ''),
@@ -31,7 +52,11 @@ async function post(path, body, cfg, extra = {}) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    const err = new Error(`AI request failed (${res.status}): ${text.slice(0, 300)}`);
+    // kept on `raw` only for internal retry heuristics — never sent to clients
+    const err = new Error(
+      `AI request failed (HTTP ${res.status})` +
+        (isTrustedBaseUrl(cfg.baseUrl) && text ? `: ${text.slice(0, 300)}` : '')
+    );
     err.status = 502;
     err.raw = text;
     throw err;

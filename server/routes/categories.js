@@ -26,10 +26,19 @@ function validateCategory(body, currentId = null) {
   return null;
 }
 
+// Plans must be finite and non-negative: a negative budget would be summed as
+// reducing outgoings and silently inflate projected savings.
+function validatePlanAmount(v) {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 router.post('/', (req, res) => {
   const b = req.body ?? {};
   const err = validateCategory(b);
   if (err) return res.status(400).json({ error: err });
+  const budget = validatePlanAmount(b.monthly_budget);
+  if (budget === null) return res.status(400).json({ error: 'monthly_budget must be a non-negative number' });
   const r = db
     .prepare(
       `INSERT INTO categories (name, group_id, account_id, monthly_budget, active_from, active_to, is_active)
@@ -39,7 +48,7 @@ router.post('/', (req, res) => {
       b.name.trim(),
       b.group_id ?? null,
       b.account_id ?? null,
-      Number(b.monthly_budget) || 0,
+      budget,
       b.active_from ?? null,
       b.active_to ?? null,
       b.is_active === false ? 0 : 1
@@ -55,6 +64,12 @@ router.patch('/:id', (req, res) => {
   // its budget lines and rules already destroyed.
   const err = validateCategory({ ...row, ...b }, row.id);
   if (err) return res.status(400).json({ error: err });
+  let budget = row.monthly_budget;
+  if (b.monthly_budget !== undefined) {
+    budget = validatePlanAmount(b.monthly_budget);
+    if (budget === null)
+      return res.status(400).json({ error: 'monthly_budget must be a non-negative number' });
+  }
 
   // Retiring a category also retires its plan and rules (spec §10.3 / D1).
   db.exec('BEGIN');
@@ -72,9 +87,10 @@ router.patch('/:id', (req, res) => {
        WHERE id=?`
     ).run(
       b.name ?? row.name,
-      b.group_id ?? row.group_id,
+      // `?? row.group_id` made clearing the group impossible (null ?? old → old)
+      b.group_id !== undefined ? b.group_id : row.group_id,
       b.account_id !== undefined ? b.account_id : row.account_id,
-      Number(b.monthly_budget ?? row.monthly_budget) || 0,
+      budget,
       b.active_from !== undefined ? b.active_from : row.active_from,
       b.active_to !== undefined ? b.active_to : row.active_to,
       b.is_active !== undefined ? (b.is_active ? 1 : 0) : row.is_active,
