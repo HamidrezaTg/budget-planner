@@ -86,7 +86,11 @@ export default function Recurring() {
               <strong>{u.name}</strong>
               <small>{u.auto_post ? 'auto-posts' : 'manual'}</small>
             </div>
-            <button className="btn small" onClick={() => post(u)}>Post now</button>
+            <button
+              className="btn small"
+              title={`Create the "${u.name}" transaction now for ${u.month}`}
+              onClick={() => post(u)}
+            >Post now</button>
             <b className={u.amount >= 0 ? 'income' : ''}>{eur(u.amount)}</b>
           </div>
         ))}
@@ -106,17 +110,25 @@ export default function Recurring() {
                 <td className="muted">{r.account_name ?? '—'}</td>
                 <td className="muted">{r.category_name ?? '—'}</td>
                 <td>
-                  <button className={`btn ghost small ${r.auto_post ? 'active' : ''}`} onClick={() => toggle(r, 'auto_post')}>
+                  <button
+                    className={`btn ghost small ${r.auto_post ? 'active' : ''}`}
+                    title={r.auto_post ? 'Currently auto-posts on its day. Click to require manual confirmation.' : 'Currently manual. Click to auto-post on its day.'}
+                    onClick={() => toggle(r, 'auto_post')}
+                  >
                     {r.auto_post ? 'auto' : 'manual'}
                   </button>
                 </td>
                 <td>
-                  <button className="btn ghost small" onClick={() => toggle(r, 'active')}>
+                  <button
+                    className="btn ghost small"
+                    title={r.active ? 'Pause — the recurrence stops appearing until you resume' : 'Resume — the recurrence will appear again'}
+                    onClick={() => toggle(r, 'active')}
+                  >
                     {r.active ? 'pause' : 'resume'}
                   </button>
                 </td>
                 <td>
-                  <button className="btn danger small" onClick={() => remove(r)}>Delete</button>
+                  <button className="btn danger small" title={`Delete the "${r.name}" recurrence`} onClick={() => remove(r)}>Delete</button>
                 </td>
               </tr>
             ))}
@@ -128,28 +140,29 @@ export default function Recurring() {
       </div>
 
       <form onSubmit={add} className="card inline-form">
-        <input placeholder="Name (e.g. Rent)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input title="Name (e.g. Rent)" placeholder="Name (e.g. Rent)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <input
+          title="Amount — negative for spend, positive for income"
           placeholder="€ (− expense, + income)" type="number" step="0.01"
           value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}
         />
-        <label>Day
+        <label title="Day of the month the transaction is due (1–28)">Day
           <input type="number" min="1" max="28" value={form.day_of_month}
             onChange={(e) => setForm({ ...form, day_of_month: e.target.value })} />
         </label>
-        <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
+        <select title="Account this transaction will be booked against" value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
           <option value="">Account…</option>
           {meta.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
+        <select title="Category to use when the transaction is posted" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
           <option value="">Category…</option>
           {cats.filter((c) => c.is_active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <label className="muted" style={{ flexDirection: 'row', alignItems: 'center', textTransform: 'none', letterSpacing: 0 }}>
-          <input type="checkbox" style={{ width: 'auto' }} checked={form.auto_post}
+          <input type="checkbox" style={{ width: 'auto' }} title="Auto-post creates the real transaction on its day without confirmation" checked={form.auto_post}
             onChange={(e) => setForm({ ...form, auto_post: e.target.checked })} /> auto-post
         </label>
-        <button className="btn primary">Add</button>
+        <button className="btn primary" title="Add this recurring transaction">Add</button>
       </form>
     </div>
   );

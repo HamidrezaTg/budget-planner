@@ -53,7 +53,7 @@ export default function Balances() {
             type="number" step="0.01" placeholder="Actual balance €"
             value={form.balance} onChange={(e) => setForm({ ...form, balance: e.target.value })}
           />
-          <button className="btn primary">Record</button>
+          <button className="btn primary" title="Record the real bank balance for this month and account">Record</button>
           {msg && <span className="error">{msg}</span>}
         </form>
       </div>
@@ -77,6 +77,7 @@ export default function Balances() {
                 <td>
                   <button
                     className="btn danger small"
+                    title={`Delete the ${r.month} observation for ${r.account_name}`}
                     onClick={async () => {
                       const ok = await confirm({
                         title: `Delete the ${r.month} observation for ${r.account_name}?`,

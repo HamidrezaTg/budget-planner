@@ -197,7 +197,10 @@ function monthNet(m, cats, coveredCats, commitments) {
 // Projection: income minus outgoings rolled forward, commitments dropping out
 // at their end dates. Re-anchors to the latest observed bank balance (spec §7).
 export function project(numMonths = 96, from = currentMonth()) {
-  const cats = getAllCategories().filter((c) => !c.account_name || c.account_name !== null);
+  // Every active category's plan counts as variable spend, including untagged
+  // ones — the user is reminded to tag them on the dashboard, but missing the
+  // account column does not silently drop a budget from the forecast.
+  const cats = getAllCategories();
   // categories whose spend is already represented by a linked commitment
   const coveredCats = new Set(
     db

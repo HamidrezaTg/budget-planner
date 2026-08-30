@@ -63,6 +63,7 @@ export default function Commitments() {
                 <td>
                   <input
                     type="month"
+                    title="Month this commitment ends — leave empty for an open-ended commitment"
                     defaultValue={r.end_month ?? ''}
                     key={r.id + String(r.end_month)}
                     style={{ width: 150 }}
@@ -74,11 +75,13 @@ export default function Commitments() {
                 <td>
                   <button
                     className={`btn small ${edits[r.id]?.end_month !== undefined ? 'primary' : 'ghost'}`}
+                    title="Save the new end month"
                     onClick={() => save(r)}
                     disabled={!edits[r.id]}
                   >✓</button>
                   <button
                     className="btn danger small"
+                    title={`Delete the "${r.name}" commitment`}
                     onClick={async () => {
                       const ok = await confirm({
                         title: `Delete "${r.name}"?`,
@@ -100,21 +103,23 @@ export default function Commitments() {
           </tbody>
         </table>
         <form onSubmit={add} className="inline-form commit-form">
-          <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <input title="Commitment name (e.g. Car loan)" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <input
+            title="Monthly amount — positive number"
             placeholder="€/month" type="number" step="0.01" min="0" style={{ width: 110 }}
             value={form.monthly_amount} onChange={(e) => setForm({ ...form, monthly_amount: e.target.value })}
           />
-          <input type="month" value={form.start_month} onChange={(e) => setForm({ ...form, start_month: e.target.value })} />
-          <input type="month" value={form.end_month} onChange={(e) => setForm({ ...form, end_month: e.target.value })} />
+          <input title="Start month (YYYY-MM)" type="month" value={form.start_month} onChange={(e) => setForm({ ...form, start_month: e.target.value })} />
+          <input title="Optional end month (YYYY-MM) — leave empty for an open-ended commitment" type="month" value={form.end_month} onChange={(e) => setForm({ ...form, end_month: e.target.value })} />
           <select
+            title="Account this commitment is paid from"
             value={form.account_id ?? ''}
             onChange={(e) => setForm({ ...form, account_id: e.target.value || null })}
           >
             <option value="">Account…</option>
             {meta.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
-          <button className="btn primary">Add commitment</button>
+          <button className="btn primary" title="Add this commitment">Add commitment</button>
         </form>
       </div>
     </div>

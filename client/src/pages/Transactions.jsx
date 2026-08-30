@@ -19,6 +19,13 @@ export default function Transactions() {
   const [attTx, setAttTx] = useState(null);
   const [attList, setAttList] = useState(null);
   const [attError, setAttError] = useState('');
+  // Per-row "edit category" mode: { [tx.id]: { categoryId, remember } }
+  const [editingCategory, setEditingCategory] = useState({});
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState({ date: '', description: '', amount: '', currency: 'EUR', account_id: '', category_id: '', tx_type: '' });
+  const [addAccounts, setAddAccounts] = useState([]);
+  const [addError, setAddError] = useState('');
+  const [addBusy, setAddBusy] = useState(false);
   const { confirm } = useDialogs();
 
   // The URL is the source of truth for the filter: the toggle button updates
@@ -49,12 +56,81 @@ export default function Transactions() {
   useEffect(() => {
     api.get('/categories').then(setCategories);
   }, []);
+
+  const openAdd = async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setAddForm({ date: today, description: '', amount: '', currency: 'EUR', account_id: '', category_id: '', tx_type: '' });
+    setAddError('');
+    setAddOpen(true);
+    if (addAccounts.length === 0) {
+      try {
+        const meta = await api.get('/categories/meta/all');
+        setAddAccounts(meta.accounts ?? []);
+      } catch (e) { /* leave the select empty; user can retry */ }
+    }
+  };
+
+  const submitAdd = async (e) => {
+    e?.preventDefault?.();
+    if (addBusy) return;
+    setAddError('');
+    const amt = Number(addForm.amount);
+    if (!addForm.date || !addForm.description.trim() || !Number.isFinite(amt) || amt === 0) {
+      setAddError('Date, description and a non-zero amount are required.');
+      return;
+    }
+    setAddBusy(true);
+    try {
+      await api.post('/transactions', {
+        date: addForm.date,
+        description: addForm.description.trim(),
+        amount: amt,
+        currency: addForm.currency,
+        account_id: addForm.account_id || null,
+        category_id: addForm.category_id || null,
+        tx_type: addForm.tx_type || null,
+      });
+      setAddOpen(false);
+      load();
+    } catch (err) {
+      setAddError(err.message);
+    } finally {
+      setAddBusy(false);
+    }
+  };
   useEffect(() => { load(); }, [month, review]);
 
   const assign = async (tx, categoryId, remember) => {
     try {
       await api.patch(`/transactions/${tx.id}`, { category_id: categoryId, remember });
       setError('');
+      load();
+    } catch (e) { setError(e.message); }
+  };
+
+  const startEditCategory = (tx) => {
+    setEditingCategory((p) => ({
+      ...p,
+      [tx.id]: { categoryId: tx.category_id || '', remember: true },
+    }));
+  };
+  const cancelEditCategory = (tx) => {
+    setEditingCategory((p) => {
+      const next = { ...p };
+      delete next[tx.id];
+      return next;
+    });
+  };
+  const saveEditCategory = async (tx) => {
+    const edit = editingCategory[tx.id];
+    if (!edit || !edit.categoryId) return;
+    try {
+      await api.patch(`/transactions/${tx.id}`, {
+        category_id: Number(edit.categoryId),
+        remember: !!edit.remember,
+      });
+      setError('');
+      cancelEditCategory(tx);
       load();
     } catch (e) { setError(e.message); }
   };
@@ -204,11 +280,18 @@ export default function Transactions() {
           {review ? 'Showing needs-review' : 'Show needs-review only'}
         </button>
         {month && (
-          <button className="btn ghost" onClick={() => setMonth('')}>Clear month</button>
+          <button className="btn ghost" title="Show every month" onClick={() => setMonth('')}>Clear month</button>
         )}
+        <button
+          className="btn"
+          title="Add a single transaction by hand (no CSV import needed)"
+          onClick={openAdd}
+        >
+          + Add transaction
+        </button>
         {review && (
           <>
-            <button className="btn" onClick={suggestWithAi} disabled={aiBusy}>
+            <button className="btn" onClick={suggestWithAi} disabled={aiBusy} title="Ask the AI to suggest a category for each row in the review queue">
               {aiBusy ? 'Asking AI…' : 'Suggest categories with AI'}
             </button>
             {suggestions?.length > 0 && (
@@ -272,17 +355,72 @@ export default function Transactions() {
                   )}
                 </td>
                 <td>
-                  {tx.category_name && !tx.needs_review ? (
+                  {editingCategory[tx.id] ? (
+                    <div className="assign assign-edit">
+                      <select
+                        aria-label={`Change category for ${tx.description}`}
+                        value={editingCategory[tx.id].categoryId}
+                        onChange={(e) =>
+                          setEditingCategory((p) => ({
+                            ...p,
+                            [tx.id]: { ...p[tx.id], categoryId: e.target.value },
+                          }))
+                        }
+                      >
+                        <option value="">Pick a category…</option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      <label className="remember-toggle" title="Save a rule so this merchant auto-categorizes next time">
+                        <input
+                          type="checkbox"
+                          checked={!!editingCategory[tx.id].remember}
+                          onChange={(e) =>
+                            setEditingCategory((p) => ({
+                              ...p,
+                              [tx.id]: { ...p[tx.id], remember: e.target.checked },
+                            }))
+                          }
+                        />
+                        <span className="muted tiny">remember</span>
+                      </label>
+                      <button
+                        className="btn small primary"
+                        title="Save the new category"
+                        disabled={!editingCategory[tx.id].categoryId}
+                        onClick={() => saveEditCategory(tx)}
+                      >Save</button>
+                      <button
+                        className="btn ghost small"
+                        title="Cancel without changing"
+                        onClick={() => cancelEditCategory(tx)}
+                      >Cancel</button>
+                    </div>
+                  ) : tx.category_name && !tx.needs_review ? (
                     <div className="assign">
                       <span className="cat-chip" style={{ background: tx.category_color || '#5E8BD9' }}>
                         {tx.category_name}
                       </span>
                       {tx.split_parts > 0 && (
-                        <button className="btn ghost small" onClick={() => unsplit(tx)}>Unsplit</button>
+                        <button
+                          className="btn ghost small"
+                          title={`Remove the split (${tx.split_parts} parts) and return to the full amount`}
+                          onClick={() => unsplit(tx)}
+                        >Unsplit</button>
                       )}
                       {!tx.split_of && !tx.split_group && (
-                        <button className="btn ghost small" onClick={() => openSplit(tx)}>Split</button>
+                        <button
+                          className="btn ghost small"
+                          title="Split this transaction across several categories"
+                          onClick={() => openSplit(tx)}
+                        >Split</button>
                       )}
+                      <button
+                        className="btn ghost small"
+                        title="Change the category for this transaction"
+                        onClick={() => startEditCategory(tx)}
+                      >Edit</button>
                     </div>
                   ) : sugFor(tx.id) ? (
                     <div className="assign">
@@ -304,7 +442,7 @@ export default function Transactions() {
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
-                      <span className="muted tiny">remembered for next time</span>
+                      <span className="muted tiny" title="The merchant will be remembered for next time">remembered for next time</span>
                     </div>
                   )}
                 </td>
@@ -411,6 +549,88 @@ export default function Transactions() {
             </label>
             <button className="btn ghost" onClick={() => setAttTx(null)}>Close</button>
           </div>
+        </Modal>
+      )}
+
+      {addOpen && (
+        <Modal title="Add transaction" onClose={() => setAddOpen(false)} width={460}>
+          <form onSubmit={submitAdd} className="add-tx-form">
+            <label className="modal-label" htmlFor="add-tx-date">Date</label>
+            <input
+              id="add-tx-date"
+              type="date"
+              value={addForm.date}
+              onChange={(e) => setAddForm({ ...addForm, date: e.target.value })}
+              required
+              autoFocus
+            />
+            <label className="modal-label" htmlFor="add-tx-desc">Description</label>
+            <input
+              id="add-tx-desc"
+              type="text"
+              maxLength={200}
+              placeholder="e.g. REWE SAGT DANKE"
+              value={addForm.description}
+              onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
+              required
+            />
+            <label className="modal-label" htmlFor="add-tx-amount">
+              Amount <span className="muted tiny">(negative = spend, positive = refund/income)</span>
+            </label>
+            <input
+              id="add-tx-amount"
+              type="number"
+              step="0.01"
+              placeholder="-12.50"
+              value={addForm.amount}
+              onChange={(e) => setAddForm({ ...addForm, amount: e.target.value })}
+              required
+            />
+            <div className="add-tx-row">
+              <label className="modal-label" htmlFor="add-tx-cur">Currency</label>
+              <select
+                id="add-tx-cur"
+                value={addForm.currency}
+                onChange={(e) => setAddForm({ ...addForm, currency: e.target.value })}
+              >
+                {['EUR', 'USD', 'GBP', 'CHF'].map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <label className="modal-label" htmlFor="add-tx-type">Type <span className="muted tiny">(optional)</span></label>
+              <input
+                id="add-tx-type"
+                type="text"
+                maxLength={40}
+                placeholder="e.g. Card"
+                value={addForm.tx_type}
+                onChange={(e) => setAddForm({ ...addForm, tx_type: e.target.value })}
+              />
+            </div>
+            <label className="modal-label" htmlFor="add-tx-acc">Account</label>
+            <select
+              id="add-tx-acc"
+              value={addForm.account_id}
+              onChange={(e) => setAddForm({ ...addForm, account_id: e.target.value })}
+            >
+              <option value="">Unassigned…</option>
+              {addAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            <label className="modal-label" htmlFor="add-tx-cat">Category</label>
+            <select
+              id="add-tx-cat"
+              value={addForm.category_id}
+              onChange={(e) => setAddForm({ ...addForm, category_id: e.target.value })}
+            >
+              <option value="">Needs review (uncategorized)…</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            {addError && <div className="error" role="alert" style={{ margin: '8px 0' }}>{addError}</div>}
+            <div className="modal-actions">
+              <button type="button" className="btn ghost" onClick={() => setAddOpen(false)}>Cancel</button>
+              <button type="submit" className="btn primary" disabled={addBusy}>
+                {addBusy ? 'Saving…' : 'Add transaction'}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>

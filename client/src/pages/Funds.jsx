@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { api, eur } from '../api.js';
+import { api, eur, currentMonth } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
 export default function Funds() {
   const [data, setData] = useState(null);
   const [amounts, setAmounts] = useState({});
   const [msg, setMsg] = useState('');
-  const { toast } = useDialogs();
+  const { toast, confirm } = useDialogs();
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: '', start_month: currentMonth(), monthly_contribution: 0, opening_balance: 0 });
 
   const load = () => api.get('/funds').then(setData).catch((e) => setMsg(e.message));
   useEffect(() => { load(); }, []);
@@ -50,6 +52,39 @@ export default function Funds() {
     } catch (e) { setMsg(e.message); }
   };
 
+  const addFund = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    try {
+      await api.post('/funds', {
+        name: form.name.trim(),
+        start_month: form.start_month,
+        monthly_contribution: Number(form.monthly_contribution) || 0,
+        opening_balance: Number(form.opening_balance) || 0,
+      });
+      setForm({ name: '', start_month: currentMonth(), monthly_contribution: 0, opening_balance: 0 });
+      setShowAdd(false);
+      setMsg('');
+      toast(`Fund "${form.name.trim()}" created.`, 'ok');
+      load();
+    } catch (e) { setMsg(e.message); }
+  };
+
+  const removeFund = async (f) => {
+    const ok = await confirm({
+      title: `Delete fund "${f.name}"?`,
+      message: 'This removes the fund and its movement history. Transactions are kept; they will simply no longer be linked to a fund.',
+      danger: true,
+      confirmLabel: 'Delete fund',
+    });
+    if (!ok) return;
+    try {
+      await api.del(`/funds/${f.id}`);
+      toast(`Fund "${f.name}" deleted.`);
+      load();
+    } catch (e) { setMsg(e.message); }
+  };
+
   return (
     <div>
       <h1>Sinking funds <span className="muted h-count">(balances at {data.month})</span></h1>
@@ -60,6 +95,62 @@ export default function Funds() {
       {msg && <div className="error">{msg}</div>}
 
       <div className="card table-card">
+        <div className="panel-head">
+          <span className="muted tiny">{data.funds.length} fund{data.funds.length === 1 ? '' : 's'}</span>
+          <button
+            className="btn small"
+            title="Create a new fund"
+            onClick={() => setShowAdd((s) => !s)}
+          >
+            {showAdd ? 'Cancel' : '+ Add fund'}
+          </button>
+        </div>
+        {showAdd && (
+          <form onSubmit={addFund} className="add-fund-form">
+            <input
+              autoFocus
+              placeholder="Fund name (e.g. Car service)"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+              maxLength={60}
+            />
+            <label className="muted tiny">Start month
+              <input
+                type="month"
+                value={form.start_month}
+                onChange={(e) => setForm({ ...form, start_month: e.target.value })}
+                required
+              />
+            </label>
+            <label className="muted tiny">Monthly contribution €
+              <input
+                type="number" step="0.01" min="0"
+                value={form.monthly_contribution}
+                onChange={(e) => setForm({ ...form, monthly_contribution: e.target.value })}
+              />
+            </label>
+            <label className="muted tiny">Opening balance €
+              <input
+                type="number" step="0.01"
+                value={form.opening_balance}
+                onChange={(e) => setForm({ ...form, opening_balance: e.target.value })}
+                title="Money already in the fund when you start using the planner. Negative values represent an overdrawn fund."
+              />
+            </label>
+            <button className="btn primary small" type="submit" disabled={!form.name.trim()}>
+              Create fund
+            </button>
+          </form>
+        )}
+
+        {data.funds.length === 0 && !showAdd && (
+          <div className="empty" style={{ padding: '20px 12px', textAlign: 'center' }}>
+            <p className="muted">No funds yet. Create your first fund to start setting money aside for irregular bills.</p>
+          </div>
+        )}
+
+        {data.funds.length > 0 && (
         <table>
           <thead>
             <tr>
@@ -96,7 +187,9 @@ export default function Funds() {
                           </>
                         )}
                       </span>
-                      <button className="btn ghost tiny-btn" title="Edit goal"
+                      <button
+                        className="btn ghost tiny-btn"
+                        title={`Edit the ${f.name} target`}
                         onClick={() => {
                           setAmounts((p) => ({ ...p, ['g' + f.id]: String(f.goal.target_amount), ['gd' + f.id]: f.goal.target_date ?? '' }));
                         }}
@@ -111,10 +204,14 @@ export default function Funds() {
                       <input type="month" style={{ width: 130 }}
                         value={amounts['gd' + f.id] ?? ''}
                         onChange={(e) => setAmounts((p) => ({ ...p, ['gd' + f.id]: e.target.value }))} />
-                      <button className="btn small primary" onClick={() => setGoal(f)}>Save</button>
+                      <button className="btn small primary" title="Save the goal" onClick={() => setGoal(f)}>Save</button>
                     </div>
                   ) : !f.goal ? (
-                    <button className="btn ghost small" onClick={() => setAmounts((p) => ({ ...p, ['g' + f.id]: '', ['gd' + f.id]: '' }))}>
+                    <button
+                      className="btn ghost small"
+                      title={`Set a savings target for ${f.name}`}
+                      onClick={() => setAmounts((p) => ({ ...p, ['g' + f.id]: '', ['gd' + f.id]: '' }))}
+                    >
                       + Set goal
                     </button>
                   ) : null}
@@ -125,10 +222,12 @@ export default function Funds() {
                     type="number" step="0.01" min="0"
                     defaultValue={f.monthly_contribution}
                     key={'c' + f.id + String(f.monthly_contribution)}
+                    title="Per-month amount set aside into this fund"
                     onChange={(e) => setAmounts((p) => ({ ...p, ['c' + f.id]: e.target.value }))}
                   />
                   <button
                     className={`btn small ${(amounts['c' + f.id] ?? '') !== '' ? 'primary' : 'ghost'}`}
+                    title="Save the new monthly contribution"
                     onClick={() => saveConfig(f)}
                     disabled={amounts['c' + f.id] === undefined}
                   >✓</button>
@@ -137,18 +236,36 @@ export default function Funds() {
                   <div className="env-actions">
                     <input
                       type="number" step="0.01" min="0" placeholder="€"
+                      title="Amount to move"
                       value={amounts[f.id] ?? ''}
                       onChange={(e) => setAmounts((p) => ({ ...p, [f.id]: e.target.value }))}
                     />
-                    <button className="btn small" disabled={!amounts[f.id]} onClick={() => move(f.id, 'contribution')}>In</button>
-                    <button className="btn small" disabled={!amounts[f.id]} onClick={() => move(f.id, 'withdrawal')}>Out</button>
+                    <button
+                      className="btn small"
+                      title="Record a contribution into this fund"
+                      disabled={!amounts[f.id]}
+                      onClick={() => move(f.id, 'contribution')}
+                    >In</button>
+                    <button
+                      className="btn small"
+                      title="Record a withdrawal from this fund"
+                      disabled={!amounts[f.id]}
+                      onClick={() => move(f.id, 'withdrawal')}
+                    >Out</button>
                   </div>
                 </td>
-                <td></td>
+                <td>
+                  <button
+                    className="btn danger tiny-btn"
+                    title={`Delete the ${f.name} fund`}
+                    onClick={() => removeFund(f)}
+                  >✕</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+        )}
       </div>
 
       <h2>Recent movements</h2>

@@ -99,6 +99,106 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ------------------------------------------------------------- manual create
+// Manually enter one or more transactions (no CSV). Same dedup rules as
+// import: identical date + amount(2dp) + currency + normalized description
+// within the same file is folded; split/recurrence prefixes stay untouched.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function computeDedupKey(date, amount, currency, description) {
+  const desc = String(description ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return `${date}|${Number(amount).toFixed(2)}|${currency}|${desc}`;
+}
+
+function buildInsertStatement() {
+  // Mirrors the columns used by parser.js transactionsFromGrid; the source_file
+  // tag marks these as user-entered so a future re-import of the same statement
+  // does not collide.
+  return db.prepare(
+    `INSERT INTO transactions
+       (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)`
+  );
+}
+
+function validateManualEntry(t, index) {
+  const errors = [];
+  if (!t || typeof t !== 'object') errors.push(`row ${index + 1}: not an object`);
+  else {
+    if (!DATE_RE.test(t.date || '')) errors.push(`row ${index + 1}: date must be YYYY-MM-DD`);
+    const desc = String(t.description ?? '').trim();
+    if (!desc || desc.length > 200) errors.push(`row ${index + 1}: description required (1-200 chars)`);
+    const amt = Number(t.amount);
+    if (!Number.isFinite(amt) || amt === 0) errors.push(`row ${index + 1}: amount must be a non-zero number`);
+    const currency = String(t.currency ?? 'EUR').toUpperCase();
+    if (currency.length !== 3) errors.push(`row ${index + 1}: currency must be 3 letters`);
+    if (t.account_id != null && t.account_id !== '') {
+      const acc = db.prepare('SELECT id FROM accounts WHERE id = ?').get(Number(t.account_id));
+      if (!acc) errors.push(`row ${index + 1}: account not found`);
+    }
+    if (t.category_id != null && t.category_id !== '') {
+      const cat = db.prepare('SELECT id FROM categories WHERE id = ?').get(Number(t.category_id));
+      if (!cat) errors.push(`row ${index + 1}: category not found`);
+    }
+  }
+  return errors;
+}
+
+function insertOne(t) {
+  const amt = Number(t.amount);
+  const currency = String(t.currency ?? 'EUR').toUpperCase();
+  const accountId = t.account_id != null && t.account_id !== '' ? Number(t.account_id) : null;
+  const categoryId = t.category_id != null && t.category_id !== '' ? Number(t.category_id) : null;
+  const txType = t.tx_type ? String(t.tx_type).slice(0, 40) : null;
+  const dedupKey = computeDedupKey(t.date, amt, currency, t.description);
+  const result = buildInsertStatement().run(
+    t.date,
+    String(t.description).trim(),
+    amt,
+    txType,
+    currency,
+    accountId,
+    categoryId,
+    categoryId ? 0 : 1,
+    dedupKey
+  );
+  return result.lastInsertRowid;
+}
+
+router.post('/', (req, res) => {
+  const body = req.body ?? {};
+  const list = Array.isArray(body) ? body : [body];
+  if (list.length === 0) return res.status(400).json({ error: 'Provide at least one transaction' });
+  if (list.length > 200) return res.status(400).json({ error: 'Bulk add is limited to 200 transactions per request' });
+
+  const errors = [];
+  for (let i = 0; i < list.length; i++) {
+    errors.push(...validateManualEntry(list[i], i));
+  }
+  if (errors.length) return res.status(400).json({ error: errors.join('; ') });
+
+  const created = [];
+  const duplicates = [];
+  db.exec('BEGIN');
+  try {
+    for (const t of list) {
+      const dedupKey = computeDedupKey(t.date, Number(t.amount), String(t.currency ?? 'EUR').toUpperCase(), t.description);
+      const existing = db.prepare('SELECT id FROM transactions WHERE dedup_key = ?').get(dedupKey);
+      if (existing) {
+        duplicates.push({ dedup_key: dedupKey, existing_id: existing.id });
+        continue;
+      }
+      const id = insertOne(t);
+      created.push({ id, dedup_key: dedupKey });
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+  res.json({ ok: true, created: created.length, duplicates: duplicates.length, ids: created.map((c) => c.id) });
+});
+
 // ------------------------------------------------------------- splits
 // Split a transaction into parts across categories. The original row becomes
 // a parent that is excluded from all sums; children carry the amounts.

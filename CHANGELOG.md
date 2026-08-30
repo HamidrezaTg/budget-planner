@@ -3,6 +3,41 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.10.0] — unreleased
+
+### Added (client)
+- **Funds**: "Add fund" form (name, start month, contribution, opening balance),
+  inline delete with confirm, and tooltips on every action.
+- **Categories & groups**: full CRUD on the Categories page. Add, rename, and
+  delete both groups and categories from the UI. Inline edit row for
+  categories (name, group, account, monthly budget, active flag). Rules
+  sections preserved.
+- **Transactions**: an "Add transaction" button opens a modal for manual
+  single-entry (date, description, signed amount, currency, account, category,
+  type). The server endpoint also accepts an array for bulk entry with
+  same-request dedup.
+- **Transactions**: an "Edit" button on already-categorized rows swaps the
+  category chip for a category select + "remember" checkbox. Save reuses the
+  existing PATCH endpoint.
+- **Income, Commitments, Recurring, Balances, Settings, Users**: every
+  button now has a descriptive `title=` (tooltip) and icon-only controls have
+  matching `aria-label=`s.
+- **Settings**: 2-column responsive card layout for the five sections
+  (Appearance, Account, Data, AI connection, Exchange rates). Each section
+  has a panel header, copy, and labelled controls.
+- **Users**: split into three cards (your account summary, add user, user
+  list) for clearer hierarchy.
+
+### Added (server)
+- `POST /api/transactions` — single or bulk manual entry with per-row
+  validation (date format, description, signed amount, currency, account,
+  category existence) and the same dedup rules as CSV import.
+- `DELETE /api/categories/:id` — refused with 409 if any transaction still
+  uses the category (directs the user to retire instead).
+- `POST /api/categories/groups`, `PATCH /api/categories/groups/:id`,
+  `DELETE /api/categories/groups/:id` — full CRUD for budget groups. Deleting
+  a group leaves its categories ungrouped (ON DELETE SET NULL cascade).
+
 ## [3.9.2] — 2026-08-27
 
 Full-project review outcomes (server, client, packaging, docs).

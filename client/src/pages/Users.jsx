@@ -69,7 +69,7 @@ export default function Users({ admin, me }) {
   }
 
   return (
-    <div>
+    <div className="users-page">
       <h1>Users</h1>
       <p className="muted">
         Every user has their own private database, starting from a clean, generic
@@ -77,23 +77,61 @@ export default function Users({ admin, me }) {
         reset passwords and delete accounts.
       </p>
 
-      <form onSubmit={add} className="card inline-form">
-        <input
-          placeholder="Username (letters, numbers, . _ -)"
-          value={form.username}
-          onChange={(e) => setForm({ ...form, username: e.target.value })}
-        />
-        <input
-          type="password"
-          placeholder="Password (min 4 chars)"
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-        />
-        <button className="btn primary">Add user</button>
-        {error && <span className="error">{error}</span>}
-      </form>
+      <div className="card users-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">You</p>
+            <h2 style={{ fontSize: 18, margin: 0 }}>Your account</h2>
+          </div>
+        </div>
+        <div className="users-summary">
+          <span className="avatar avatar-lg">{(me || '?').slice(0, 2).toUpperCase()}</span>
+          <div>
+            <strong>{me}</strong>
+            <small className="muted">Admin · Personal budget</small>
+          </div>
+        </div>
+      </div>
+
+      <div className="card users-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Add</p>
+            <h2 style={{ fontSize: 18, margin: 0 }}>Create a new user</h2>
+          </div>
+        </div>
+        <form onSubmit={add} className="add-user-form">
+          <label title="2-32 characters, letters/numbers/_ only">Username
+            <input
+              placeholder="Username (letters, numbers, . _ -)"
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+            />
+          </label>
+          <label title="At least 8 characters">Password
+            <input
+              type="password"
+              placeholder="Password (min 4 chars)"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </label>
+          <div className="btn-row" style={{ alignItems: 'center' }}>
+            <button className="btn primary" title="Create the user and their own private database" disabled={!form.username || !form.password}>
+              Add user
+            </button>
+            {error && <span className="error">{error}</span>}
+          </div>
+        </form>
+      </div>
 
       <div className="card table-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">All users</p>
+            <h2 style={{ fontSize: 18, margin: 0 }}>{(users ?? []).length} user{(users ?? []).length === 1 ? '' : 's'}</h2>
+          </div>
+        </div>
         <table>
           <thead>
             <tr><th>User</th><th>Role</th><th>Created</th><th></th></tr>
@@ -109,14 +147,19 @@ export default function Users({ admin, me }) {
                 <td className="muted">{u.role}</td>
                 <td className="muted">{u.created_at?.slice(0, 10)}</td>
                 <td>
-                  <button className="btn small" onClick={() => resetPassword(u)}>Reset password</button>
-                  <button
-                    className="btn danger small"
-                    disabled={u.username === me}
-                    onClick={() => remove(u)}
-                  >
-                    Delete
-                  </button>
+                  <div className="env-actions">
+                    <button
+                      className="btn small"
+                      title={`Reset "${u.username}"'s password — they'll be signed out everywhere`}
+                      onClick={() => resetPassword(u)}
+                    >Reset password</button>
+                    <button
+                      className="btn danger small"
+                      title={`Delete the "${u.username}" user and their entire database — cannot be undone`}
+                      disabled={u.username === me}
+                      onClick={() => remove(u)}
+                    >Delete</button>
+                  </div>
                 </td>
               </tr>
             ))}

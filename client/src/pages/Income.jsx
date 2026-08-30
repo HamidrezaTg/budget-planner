@@ -6,21 +6,25 @@ export default function Income() {
   const [month, setMonth] = useState(currentMonth());
   const [data, setData] = useState(null);
   const [edits, setEdits] = useState({});
+  const [error, setError] = useState('');
   const { prompt, confirm } = useDialogs();
 
-  const load = () => api.get(`/income?month=${month}`).then((d) => { setData(d); setEdits({}); });
+  const load = () => api.get(`/income?month=${month}`).then((d) => { setData(d); setEdits({}); }).catch((e) => setError(e.message));
   useEffect(() => { load(); }, [month]);
-  if (!data) return <div className="loading">Loading…</div>;
+  if (!data) return <div className="loading">{error ? `Failed to load: ${error}` : 'Loading…'}</div>;
 
   const save = async (s) => {
     const e = edits[s.id];
     if (e === undefined) return;
-    const entry = e.entry;
-    await api.put(`/income/${month}/${s.id}`, {
-      amount: entry !== undefined ? (entry === '' ? null : Number(entry)) : s.entry_amount,
-      current_amount: e.current !== undefined ? Number(e.current) || 0 : undefined,
-    });
-    load();
+    try {
+      const entry = e.entry;
+      await api.put(`/income/${month}/${s.id}`, {
+        amount: entry !== undefined ? (entry === '' ? null : Number(entry)) : s.entry_amount,
+        current_amount: e.current !== undefined ? Number(e.current) || 0 : undefined,
+      });
+      setError('');
+      load();
+    } catch (err) { setError(err.message); }
   };
 
   return (
@@ -33,6 +37,8 @@ export default function Income() {
         Actual income must be entered, not assumed. The “usual” amount is used by the projection
         unless a month has its own entry.
       </p>
+
+      {error && <div className="error">{error}</div>}
 
       <div className="card stat big-income">
         <div className="stat-label">Total income this month</div>
@@ -76,6 +82,7 @@ export default function Income() {
                   <input
                     className="budget-input"
                     type="number" step="0.01"
+                    title="Actual income for this month — leave blank to use the usual amount"
                     placeholder={String(s.current_amount)}
                     defaultValue={s.entry_amount ?? ''}
                     key={`${month}-${s.id}-${String(s.entry_amount)}`}
@@ -87,6 +94,7 @@ export default function Income() {
                 <td>
                   <button
                     className={`btn small ${edits[s.id] ? 'primary' : 'ghost'}`}
+                    title={s.entry_amount != null ? 'Replace the actual for this month' : 'Save the actual amount you typed'}
                     onClick={() => save(s)}
                     disabled={!edits[s.id]}
                   >
@@ -95,6 +103,7 @@ export default function Income() {
                   {s.entry_amount != null && (
                     <button
                       className="btn ghost small"
+                      title="Remove the actual for this month — the projection will fall back to the usual amount"
                       onClick={async () => {
                         const ok = await confirm({
                           title: 'Clear this month’s actual?',

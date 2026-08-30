@@ -581,6 +581,48 @@ tr.override-row td:first-child { border-left: 3px solid var(--orange); }
 }
 .ai-chip { background: rgba(49, 87, 213, 0.1); color: var(--blue); border: 1px solid rgba(49, 87, 213, 0.25); }
 .assign { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.assign-edit { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 4px 0; }
+.assign-edit select { min-width: 160px; }
+.remember-toggle { display: inline-flex; align-items: center; gap: 4px; }
+.remember-toggle input { margin: 0; }
+
+.add-tx-form { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.add-tx-form .modal-label { margin-top: 8px; }
+.add-tx-form input,
+.add-tx-form select { width: 100%; }
+.add-tx-row { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: end; }
+.add-tx-row .modal-label { margin-top: 0; }
+
+.add-cat-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 2fr) minmax(120px, 1fr) minmax(140px, 1fr) minmax(100px, 1fr) auto;
+  gap: 10px 12px;
+  align-items: end;
+  padding: 12px 4px 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.add-cat-form > input,
+.add-cat-form > select { width: 100%; }
+
+.settings-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .settings-grid { grid-template-columns: 1fr 1fr; } }
+.settings-title { margin: 0 0 4px; }
+.settings-card { display: flex; flex-direction: column; gap: 10px; }
+.settings-card .panel-head { margin-bottom: 0; }
+.settings-section { display: flex; flex-direction: column; gap: 6px; }
+.settings-section > form { display: flex; flex-direction: column; gap: 8px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.form-grid label { display: flex; flex-direction: column; gap: 4px; }
+.pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.users-page { display: grid; gap: 14px; }
+.users-card { display: flex; flex-direction: column; gap: 10px; }
+.users-summary { display: flex; align-items: center; gap: 14px; }
+.users-summary strong { display: block; font-size: 16px; }
+.users-summary small { display: block; }
+.add-user-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px 12px; align-items: end; }
+.add-user-form label { display: flex; flex-direction: column; gap: 4px; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---------- misc ---------- */
@@ -592,6 +634,20 @@ tr.override-row td:first-child { border-left: 3px solid var(--orange); }
 .budget-input { width: 105px; font-family: var(--font-mono); }
 .env-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .env-actions input { width: 78px; }
+
+.add-fund-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(140px, 1fr)) auto;
+  gap: 10px 12px;
+  align-items: end;
+  padding: 12px 4px 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.add-fund-form label { display: flex; flex-direction: column; gap: 4px; }
+.add-fund-form input[type="number"] { width: 100%; }
+.add-fund-form > input[type="text"],
+.add-fund-form > input:not([type]) { width: 100%; }
 .commit-form input[type="month"] { width: 148px; }
 
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }

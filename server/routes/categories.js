@@ -105,4 +105,89 @@ router.patch('/:id', (req, res) => {
   res.json(db.prepare('SELECT * FROM categories WHERE id = ?').get(row.id));
 });
 
+// Delete a category outright. The schema cascades (ON DELETE SET NULL / CASCADE)
+// on group_id, account_id, budget_lines, rules, fund.category_id, etc., so
+// transactions keep their amounts but become "untagged".
+router.delete('/:id', (req, res) => {
+  const row = db.prepare('SELECT id, name FROM categories WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  const txCount = db
+    .prepare('SELECT COUNT(*) AS c FROM transactions WHERE category_id = ?')
+    .get(req.params.id).c;
+  if (txCount > 0) {
+    return res.status(409).json({
+      error: `Cannot delete: ${txCount} transaction(s) are still tagged "${row.name}". Retire the category instead to keep the history.`,
+    });
+  }
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM budget_lines WHERE category_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM category_rules WHERE category_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM category_automation_rules WHERE category_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM categories WHERE id = ?').run(req.params.id);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------- category groups
+const GROUP_RE = /^[A-Za-z0-9 .&'\-/()]{1,40}$/;
+
+function validateGroup(body, currentId = null) {
+  const name = String(body.name ?? '').trim();
+  if (!name) return 'Group name required';
+  if (name.length > 40) return 'Group name must be 40 characters or fewer';
+  if (!GROUP_RE.test(name)) return 'Group name contains unsupported characters';
+  const dup = db
+    .prepare('SELECT id FROM category_groups WHERE name = ? AND id != ?')
+    .get(name, currentId ?? -1);
+  if (dup) return 'Group already exists';
+  return null;
+}
+
+router.post('/groups', (req, res) => {
+  const b = req.body ?? {};
+  const err = validateGroup(b);
+  if (err) return res.status(400).json({ error: err });
+  // Default new groups to the end of the sort order.
+  const maxSort = db.prepare('SELECT COALESCE(MAX(sort), 0) AS s FROM category_groups').get().s;
+  const r = db
+    .prepare('INSERT INTO category_groups (name, sort) VALUES (?, ?)')
+    .run(String(b.name).trim(), Number.isFinite(Number(b.sort)) ? Number(b.sort) : maxSort + 10);
+  res.json(db.prepare('SELECT * FROM category_groups WHERE id = ?').get(r.lastInsertRowid));
+});
+
+router.patch('/groups/:id', (req, res) => {
+  const row = db.prepare('SELECT * FROM category_groups WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  const b = req.body ?? {};
+  const err = validateGroup({ ...row, ...b }, row.id);
+  if (err) return res.status(400).json({ error: err });
+  db.prepare('UPDATE category_groups SET name = ?, sort = ? WHERE id = ?').run(
+    String(b.name).trim(),
+    Number.isFinite(Number(b.sort)) ? Number(b.sort) : row.sort,
+    req.params.id
+  );
+  res.json(db.prepare('SELECT * FROM category_groups WHERE id = ?').get(req.params.id));
+});
+
+router.delete('/groups/:id', (req, res) => {
+  const row = db.prepare('SELECT id, name FROM category_groups WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  // Categories in this group will have group_id set to NULL by the FK cascade
+  // (ON DELETE SET NULL), so the data stays intact — we just lose the grouping.
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM category_groups WHERE id = ?').run(req.params.id);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+  res.json({ ok: true });
+});
+
 export default router;
