@@ -3,6 +3,16 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.15.0] — 2026-08-31
+
+### Added
+- Linux CI now verifies and retains the Tauri `.deb` and AppImage bundles as
+  downloadable build artifacts.
+- AUR package generation now produces `.SRCINFO` and builds the package in a
+  clean Arch container during tagged release validation.
+- [`docs/INSTALL_ARCH.md`](docs/INSTALL_ARCH.md) documents yay installation and
+  the AppImage fallback for Arch Linux, Manjaro, and Omarchy.
+
 ## [3.14.0] — 2026-08-31
 
 ### Added

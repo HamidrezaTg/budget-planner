@@ -95,11 +95,11 @@ git push --follow-tags
 
 ### v3.15 — Linux polish (AppImage + AUR)
 
-- [ ] v3.15.1 Add AppImage to the Linux CI job.
-- [ ] v3.15.2 `scripts/build-aur.sh` generates `PKGBUILD` + `.SRCINFO`,
+- [x] v3.15.1 Add AppImage to the Linux CI job.
+- [x] v3.15.2 `scripts/build-aur.sh` generates `PKGBUILD` + `.SRCINFO`,
       `makepkg` test in a clean Arch container
       (`ghcr.io/archlinux/archlinux:latest`).
-- [ ] v3.15.3 `docs/INSTALL_ARCH.md` (yay + AppImage fallback).
+- [x] v3.15.3 `docs/INSTALL_ARCH.md` (yay + AppImage fallback).
 - [ ] v3.15.4 Optional: AUR submission (you need a maintainer account).
 - [ ] v3.15.5 Tag `v3.15.0`, push `--follow-tags`.
 

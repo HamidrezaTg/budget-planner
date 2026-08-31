@@ -32,7 +32,7 @@ run_makepkg_in_container() {
   docker run --rm --pull=always \
     -v "$PKG_DIR:/work" \
     -w /work \
-    archlinux:latest \
+    ghcr.io/archlinux/archlinux:latest \
     bash -euc '
       pacman -Sy --noconfirm base-devel curl >/dev/null
       useradd --create-home builder

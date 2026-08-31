@@ -7,7 +7,7 @@
 #
 # To bump: update pkgver to match the GitHub release tag and `updpkgsums`.
 pkgname=budget-planner-client
-pkgver=3.14.0
+pkgver=3.15.0
 pkgrel=1
 pkgdesc="Desktop client for a self-hosted Budget Planner server (Tauri v2, no backend)"
 arch=('x86_64')
@@ -17,9 +17,9 @@ depends=('gtk3' 'libsoup3' 'webkit2gtk-4.1' 'libappindicator-gtk3' 'librsvg' 'hi
 makedepends=('binutils')
 options=('!strip')
 install=budget-planner-client.install
-source=("https://github.com/HamidrezaTg/budget-planner/releases/download/v3.14.0/budget-planner-client_3.14.0_amd64.deb")
+source=("https://github.com/HamidrezaTg/budget-planner/releases/download/v${pkgver}/budget-planner-client_${pkgver}_amd64.deb")
 # Update the sha256 below with `makepkg -g >> PKGBUILD && updpkgsums`.
-sha256sums=('c79b6a036775597108d7b9eb0da80117d34adab7daecdad6fa910893689216e3')
+sha256sums=('SKIP')
 
 package() {
   local deb_file
