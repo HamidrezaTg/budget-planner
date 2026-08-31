@@ -3,6 +3,18 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.17.0] — 2026-08-31
+
+### Added
+- ESLint and Prettier checks in CI, with server and client coverage reports.
+- A live-server Playwright flow covering setup, import, review, and dashboard navigation.
+- A static OpenAPI 3.1 contract covering the public and authenticated API operations.
+- Optional Prometheus request metrics at `/metrics` when `METRICS_ENABLED=1`.
+- Caddy HTTPS deployment guidance for secure remote access.
+
+### Changed
+- Moved the mobile Capacitor CLI to development dependencies so production audits remain clean.
+
 ## [3.16.0] — 2026-08-31
 
 ### Added

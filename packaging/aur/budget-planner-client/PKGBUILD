@@ -7,7 +7,7 @@
 #
 # To bump: update pkgver to match the GitHub release tag and `updpkgsums`.
 pkgname=budget-planner-client
-pkgver=3.16.0
+pkgver=3.17.0
 pkgrel=1
 pkgdesc="Desktop client for a self-hosted Budget Planner server (Tauri v2, no backend)"
 arch=('x86_64')

@@ -1,6 +1,6 @@
 pkgbase = budget-planner-client
 	pkgdesc = Desktop client for a self-hosted Budget Planner server (Tauri v2, no backend)
-	pkgver = 3.16.0
+	pkgver = 3.17.0
 	pkgrel = 1
 	url = https://github.com/HamidrezaTg/budget-planner
 	install = budget-planner-client.install
@@ -16,7 +16,7 @@ pkgbase = budget-planner-client
 	depends = desktop-file-utils
 	depends = xdg-utils
 	options = !strip
-	source = https://github.com/HamidrezaTg/budget-planner/releases/download/v3.16.0/budget-planner-client_3.16.0_amd64.deb
+	source = https://github.com/HamidrezaTg/budget-planner/releases/download/v3.17.0/budget-planner-client_3.17.0_amd64.deb
 	sha256sums = SKIP
 
 pkgname = budget-planner-client
