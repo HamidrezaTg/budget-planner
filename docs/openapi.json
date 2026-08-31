@@ -1,0 +1,1857 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Budget Planner API",
+    "version": "3.16.0",
+    "description": "Static contract for the Budget Planner HTTP API. JSON amounts are numbers and transaction expenses are negative. Unless an operation is marked public, send the bp_session cookie returned by login or setup."
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "Budget Planner API base path"
+    }
+  ],
+  "tags": [
+    { "name": "Public", "description": "Unauthenticated health and discovery probes" },
+    { "name": "Auth", "description": "Setup, sessions, and user administration" },
+    { "name": "Resources", "description": "Accounts, transactions, budgets, and related data" },
+    { "name": "Reports", "description": "Dashboard, projections, reports, and exports" },
+    { "name": "Settings", "description": "User settings, exchange rates, and backups" },
+    { "name": "AI", "description": "AI-assisted categorization, chat, and proposals" }
+  ],
+  "security": [{ "bpSession": [] }],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Check server liveness",
+        "operationId": "getHealth",
+        "servers": [{ "url": "/", "description": "Server root (outside /api)" }],
+        "security": [],
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/.well-known/budget-planner": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Discover a Budget Planner server",
+        "operationId": "getDiscovery",
+        "servers": [{ "url": "/", "description": "Server root (outside /api)" }],
+        "security": [],
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/auth/status": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Report whether setup is complete",
+        "operationId": "getAuthStatus",
+        "security": [],
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/auth/setup": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Create the first administrator account",
+        "operationId": "setupAuth",
+        "security": [],
+        "parameters": [{ "$ref": "#/components/parameters/SetupToken" }],
+        "requestBody": { "$ref": "#/components/requestBodies/Setup" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Create a session",
+        "operationId": "loginAuth",
+        "security": [],
+        "requestBody": { "$ref": "#/components/requestBodies/Login" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "401": { "$ref": "#/components/responses/ErrorResponse" },
+          "429": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Destroy the current session",
+        "operationId": "logoutAuth",
+        "security": [],
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get the current user",
+        "operationId": "getCurrentUser",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "401": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "patch": {
+        "tags": ["Auth"],
+        "summary": "Rename the current user",
+        "operationId": "renameCurrentUser",
+        "requestBody": { "$ref": "#/components/requestBodies/RenameUser" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Change the current user's password",
+        "operationId": "changeCurrentPassword",
+        "requestBody": { "$ref": "#/components/requestBodies/ChangePassword" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/auth/users/{username}": {
+      "parameters": [{ "$ref": "#/components/parameters/Username" }],
+      "patch": {
+        "tags": ["Auth"],
+        "summary": "Rename any user (administrator)",
+        "operationId": "renameUser",
+        "requestBody": { "$ref": "#/components/requestBodies/UserRename" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Auth"],
+        "summary": "Delete any user (administrator)",
+        "operationId": "deleteUser",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/auth/users": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "List users (administrator)",
+        "operationId": "listUsers",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Create a user (administrator)",
+        "operationId": "createUser",
+        "requestBody": { "$ref": "#/components/requestBodies/UserCreate" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/auth/users/{username}/password": {
+      "parameters": [{ "$ref": "#/components/parameters/Username" }],
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Reset a user's password (administrator)",
+        "operationId": "resetUserPassword",
+        "requestBody": { "$ref": "#/components/requestBodies/NewPassword" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/accounts": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List accounts",
+        "operationId": "listAccounts",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create an account",
+        "operationId": "createAccount",
+        "requestBody": { "$ref": "#/components/requestBodies/Account" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/accounts/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Update an account",
+        "operationId": "updateAccount",
+        "requestBody": { "$ref": "#/components/requestBodies/AccountPatch" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete an account",
+        "operationId": "deleteAccount",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" },
+          "409": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/persons": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List people",
+        "operationId": "listPersons",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create a person",
+        "operationId": "createPerson",
+        "requestBody": { "$ref": "#/components/requestBodies/Person" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/persons/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Update a person",
+        "operationId": "updatePerson",
+        "requestBody": { "$ref": "#/components/requestBodies/Person" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a person",
+        "operationId": "deletePerson",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/categories": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List categories",
+        "operationId": "listCategories",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create a category",
+        "operationId": "createCategory",
+        "requestBody": { "$ref": "#/components/requestBodies/Category" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/categories/meta/all": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "Get category reference data",
+        "operationId": "getCategoryMeta",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/categories/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Update a category",
+        "operationId": "updateCategory",
+        "requestBody": { "$ref": "#/components/requestBodies/CategoryPatch" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a category",
+        "operationId": "deleteCategory",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" },
+          "409": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/categories/groups": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create a category group",
+        "operationId": "createCategoryGroup",
+        "requestBody": { "$ref": "#/components/requestBodies/CategoryGroup" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/categories/groups/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Update a category group",
+        "operationId": "updateCategoryGroup",
+        "requestBody": { "$ref": "#/components/requestBodies/CategoryGroup" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a category group",
+        "operationId": "deleteCategoryGroup",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List transactions",
+        "operationId": "listTransactions",
+        "parameters": [
+          { "$ref": "#/components/parameters/MonthQuery" },
+          { "name": "review", "in": "query", "schema": { "type": "string", "enum": ["1"] } },
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 500 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create one or more manual transactions",
+        "operationId": "createTransactions",
+        "requestBody": { "$ref": "#/components/requestBodies/ManualTransactions" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Update a transaction",
+        "operationId": "updateTransaction",
+        "requestBody": { "$ref": "#/components/requestBodies/TransactionPatch" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a transaction",
+        "operationId": "deleteTransaction",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/{id}/split": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Split a transaction into category parts",
+        "operationId": "splitTransaction",
+        "requestBody": { "$ref": "#/components/requestBodies/TransactionSplit" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/{id}/unsplit": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Undo a transaction split",
+        "operationId": "unsplitTransaction",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/rules/all": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List categorization rules",
+        "operationId": "listTransactionRules",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/transactions/rules": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create a keyword rule",
+        "operationId": "createTransactionRule",
+        "requestBody": { "$ref": "#/components/requestBodies/KeywordRule" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/rules/advanced": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create an advanced categorization rule",
+        "operationId": "createAdvancedTransactionRule",
+        "requestBody": { "$ref": "#/components/requestBodies/AdvancedRule" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/rules/test": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Test categorization rules",
+        "operationId": "testTransactionRule",
+        "requestBody": { "$ref": "#/components/requestBodies/RuleTest" },
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/transactions/rules/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a keyword rule",
+        "operationId": "deleteTransactionRule",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/transactions/rules/advanced/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete an advanced rule",
+        "operationId": "deleteAdvancedTransactionRule",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/import/upload": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Upload and parse a bank statement",
+        "operationId": "uploadStatement",
+        "requestBody": { "$ref": "#/components/requestBodies/StatementUpload" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/import/smart": {
+      "post": {
+        "tags": ["Resources", "AI"],
+        "summary": "Use AI to map an unfamiliar statement format",
+        "operationId": "smartImportStatement",
+        "requestBody": { "$ref": "#/components/requestBodies/StatementUpload" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/import/preview": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Preview a staged import for an account",
+        "operationId": "previewImport",
+        "requestBody": { "$ref": "#/components/requestBodies/ImportPreview" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/import/confirm": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Confirm a staged import",
+        "operationId": "confirmImport",
+        "requestBody": { "$ref": "#/components/requestBodies/ImportConfirm" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/dashboard/{month}": {
+      "parameters": [{ "$ref": "#/components/parameters/Month" }],
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get the dashboard for a month",
+        "operationId": "getDashboard",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/budgets/{month}": {
+      "parameters": [{ "$ref": "#/components/parameters/Month" }],
+      "get": {
+        "tags": ["Resources"],
+        "summary": "Get budget lines for a month",
+        "operationId": "getBudget",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/budgets/{month}/{categoryId}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/Month" },
+        { "$ref": "#/components/parameters/CategoryId" }
+      ],
+      "put": {
+        "tags": ["Resources"],
+        "summary": "Set or clear a monthly budget override",
+        "operationId": "setBudgetOverride",
+        "requestBody": { "$ref": "#/components/requestBodies/BudgetOverride" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/commitments": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List commitments",
+        "operationId": "listCommitments",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create a commitment",
+        "operationId": "createCommitment",
+        "requestBody": { "$ref": "#/components/requestBodies/Commitment" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/commitments/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Update a commitment",
+        "operationId": "updateCommitment",
+        "requestBody": { "$ref": "#/components/requestBodies/CommitmentPatch" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a commitment",
+        "operationId": "deleteCommitment",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/funds": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List funds and movements",
+        "operationId": "listFunds",
+        "parameters": [{ "$ref": "#/components/parameters/MonthQuery" }],
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create a fund",
+        "operationId": "createFund",
+        "requestBody": { "$ref": "#/components/requestBodies/Fund" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/funds/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Update a fund",
+        "operationId": "updateFund",
+        "requestBody": { "$ref": "#/components/requestBodies/FundPatch" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a fund",
+        "operationId": "deleteFund",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/funds/{id}/movement": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Record a fund movement",
+        "operationId": "createFundMovement",
+        "requestBody": { "$ref": "#/components/requestBodies/FundMovement" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/income": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "Get income sources for a month",
+        "operationId": "getIncome",
+        "parameters": [{ "$ref": "#/components/parameters/MonthQuery" }],
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/income/{month}/{sourceId}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/Month" },
+        { "$ref": "#/components/parameters/SourceId" }
+      ],
+      "put": {
+        "tags": ["Resources"],
+        "summary": "Set or clear actual income",
+        "operationId": "setIncome",
+        "requestBody": { "$ref": "#/components/requestBodies/IncomeEntry" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/balances": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "Get balance observations and reconciliation",
+        "operationId": "listBalances",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Record an observed account balance",
+        "operationId": "createBalanceObservation",
+        "requestBody": { "$ref": "#/components/requestBodies/BalanceObservation" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/balances/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a balance observation",
+        "operationId": "deleteBalanceObservation",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/projection": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Project future monthly balances",
+        "operationId": "getProjection",
+        "parameters": [
+          {
+            "name": "months",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 240, "default": 96 }
+          },
+          { "name": "from", "in": "query", "schema": { "$ref": "#/components/schemas/Month" } }
+        ],
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/recurrences": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List recurring transactions",
+        "operationId": "listRecurrences",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create a recurring transaction",
+        "operationId": "createRecurrence",
+        "requestBody": { "$ref": "#/components/requestBodies/Recurrence" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/recurrences/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Update a recurring transaction",
+        "operationId": "updateRecurrence",
+        "requestBody": { "$ref": "#/components/requestBodies/RecurrencePatch" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a recurring transaction",
+        "operationId": "deleteRecurrence",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/recurrences/{id}/post": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Post a recurring item as a transaction",
+        "operationId": "postRecurrence",
+        "requestBody": { "$ref": "#/components/requestBodies/MonthBody" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/attachments": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List attachments for a transaction",
+        "operationId": "listAttachments",
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Attach a file to a transaction",
+        "operationId": "createAttachment",
+        "requestBody": { "$ref": "#/components/requestBodies/AttachmentUpload" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "413": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/attachments/{id}/file": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "get": {
+        "tags": ["Resources"],
+        "summary": "Download or preview an attachment",
+        "operationId": "downloadAttachment",
+        "parameters": [
+          { "name": "inline", "in": "query", "schema": { "type": "string", "enum": ["1"] } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/BinaryResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/attachments/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete an attachment",
+        "operationId": "deleteAttachment",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/reports/history": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get captured monthly report history",
+        "operationId": "getReportHistory",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/reports/export/monthly/{month}.xlsx": {
+      "parameters": [{ "$ref": "#/components/parameters/Month" }],
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Export a monthly Excel report",
+        "operationId": "exportMonthlyXlsx",
+        "responses": {
+          "200": { "$ref": "#/components/responses/SpreadsheetResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/reports/export/yearly/{year}.xlsx": {
+      "parameters": [{ "$ref": "#/components/parameters/Year" }],
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Export a yearly Excel report",
+        "operationId": "exportYearlyXlsx",
+        "responses": {
+          "200": { "$ref": "#/components/responses/SpreadsheetResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/reports/monthly/{month}": {
+      "parameters": [{ "$ref": "#/components/parameters/Month" }],
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get a monthly report",
+        "operationId": "getMonthlyReport",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/reports/yearly/{year}": {
+      "parameters": [{ "$ref": "#/components/parameters/Year" }],
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get a yearly report",
+        "operationId": "getYearlyReport",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/reports/export/monthly/{month}": {
+      "parameters": [{ "$ref": "#/components/parameters/Month" }],
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Export a monthly CSV report",
+        "operationId": "exportMonthlyCsv",
+        "responses": {
+          "200": { "$ref": "#/components/responses/CsvResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/reports/export/yearly/{year}": {
+      "parameters": [{ "$ref": "#/components/parameters/Year" }],
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Export a yearly CSV report",
+        "operationId": "exportYearlyCsv",
+        "responses": {
+          "200": { "$ref": "#/components/responses/CsvResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Get user settings and AI provider metadata",
+        "operationId": "getSettings",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Update user settings",
+        "operationId": "updateSettings",
+        "requestBody": { "$ref": "#/components/requestBodies/Settings" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/settings/fx": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "List exchange rates and missing rates",
+        "operationId": "listExchangeRates",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Set a monthly exchange rate",
+        "operationId": "setExchangeRate",
+        "requestBody": { "$ref": "#/components/requestBodies/ExchangeRate" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Settings"],
+        "summary": "Delete a monthly exchange rate",
+        "operationId": "deleteExchangeRate",
+        "requestBody": { "$ref": "#/components/requestBodies/ExchangeRateDelete" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/settings/fx/fetch": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Fetch missing exchange rates from the ECB service",
+        "operationId": "fetchExchangeRates",
+        "requestBody": { "$ref": "#/components/requestBodies/ExchangeRateFetch" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "502": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/settings/backup": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Download the user's SQLite backup",
+        "operationId": "downloadBackup",
+        "responses": { "200": { "$ref": "#/components/responses/BinaryResponse" } }
+      }
+    },
+    "/settings/spending": {
+      "delete": {
+        "tags": ["Settings"],
+        "summary": "Delete all spending data",
+        "operationId": "deleteSpendingData",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/settings/restore": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Restore a SQLite backup",
+        "operationId": "restoreBackup",
+        "requestBody": { "$ref": "#/components/requestBodies/BackupUpload" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "409": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/settings/models": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "List models from an AI provider",
+        "operationId": "listAiModels",
+        "requestBody": { "$ref": "#/components/requestBodies/Models" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "502": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/settings/test": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Test the configured AI provider",
+        "operationId": "testAiConnection",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "500": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/ai/suggest-categories": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Suggest categories for transactions needing review",
+        "operationId": "suggestCategories",
+        "requestBody": { "$ref": "#/components/requestBodies/SuggestionOptions" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "500": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/ai/chat": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Ask the read-only finance assistant",
+        "operationId": "financeChat",
+        "requestBody": { "$ref": "#/components/requestBodies/AiChat" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "500": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/ai/dev-chat": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Generate reviewed budget change proposals",
+        "operationId": "developerChat",
+        "requestBody": { "$ref": "#/components/requestBodies/AiChat" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "500": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/ai/dev-apply": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Apply reviewed AI proposals",
+        "operationId": "applyDeveloperProposals",
+        "requestBody": { "$ref": "#/components/requestBodies/AiApply" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "500": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/ai/audit": {
+      "get": {
+        "tags": ["AI"],
+        "summary": "List AI audit entries",
+        "operationId": "listAiAudit",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bpSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "bp_session",
+        "description": "HttpOnly session cookie issued by /auth/login or /auth/setup."
+      }
+    },
+    "parameters": {
+      "Id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "minimum": 1 }
+      },
+      "CategoryId": {
+        "name": "categoryId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "minimum": 1 }
+      },
+      "SourceId": {
+        "name": "sourceId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "minimum": 1 }
+      },
+      "Username": {
+        "name": "username",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1 }
+      },
+      "SetupToken": {
+        "name": "X-Setup-Token",
+        "in": "header",
+        "description": "Required for non-local setup requests when SETUP_TOKEN is configured.",
+        "schema": { "type": "string" }
+      },
+      "Month": {
+        "name": "month",
+        "in": "path",
+        "required": true,
+        "schema": { "$ref": "#/components/schemas/Month" }
+      },
+      "Year": {
+        "name": "year",
+        "in": "path",
+        "required": true,
+        "schema": { "$ref": "#/components/schemas/Year" }
+      },
+      "MonthQuery": {
+        "name": "month",
+        "in": "query",
+        "schema": { "$ref": "#/components/schemas/Month" }
+      }
+    },
+    "responses": {
+      "JsonResponse": {
+        "description": "Endpoint-specific JSON response.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Json" } } }
+      },
+      "ErrorResponse": {
+        "description": "A failed request.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "BinaryResponse": {
+        "description": "Binary download. Content type is endpoint-specific (or application/octet-stream).",
+        "content": {
+          "application/octet-stream": { "schema": { "$ref": "#/components/schemas/Binary" } }
+        }
+      },
+      "SpreadsheetResponse": {
+        "description": "An Excel workbook download.",
+        "content": {
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+            "schema": { "$ref": "#/components/schemas/Binary" }
+          }
+        }
+      },
+      "CsvResponse": {
+        "description": "A CSV report download.",
+        "content": { "text/csv": { "schema": { "$ref": "#/components/schemas/Binary" } } }
+      }
+    },
+    "requestBodies": {
+      "Setup": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Credentials" },
+            "example": { "username": "alice", "password": "correct-horse-battery" }
+          }
+        }
+      },
+      "Login": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Credentials" } }
+        }
+      },
+      "ChangePassword": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ChangePassword" } }
+        }
+      },
+      "NewPassword": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/NewPassword" } }
+        }
+      },
+      "RenameUser": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/RenameUser" } }
+        }
+      },
+      "UserRename": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/UserRename" } }
+        }
+      },
+      "UserCreate": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Credentials" } }
+        }
+      },
+      "Account": {
+        "required": true,
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Account" } } }
+      },
+      "AccountPatch": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/AccountPatch" } }
+        }
+      },
+      "Person": {
+        "required": true,
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Person" } } }
+      },
+      "Category": {
+        "required": true,
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } }
+      },
+      "CategoryPatch": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/CategoryPatch" } }
+        }
+      },
+      "CategoryGroup": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/CategoryGroup" } }
+        }
+      },
+      "ManualTransactions": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                { "$ref": "#/components/schemas/ManualTransaction" },
+                {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ManualTransaction" },
+                  "maxItems": 200
+                }
+              ]
+            }
+          }
+        }
+      },
+      "TransactionPatch": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/TransactionPatch" } }
+        }
+      },
+      "TransactionSplit": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/TransactionSplit" } }
+        }
+      },
+      "KeywordRule": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/KeywordRule" } }
+        }
+      },
+      "AdvancedRule": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/AdvancedRule" } }
+        }
+      },
+      "RuleTest": {
+        "required": true,
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RuleTest" } } }
+      },
+      "StatementUpload": {
+        "required": true,
+        "content": {
+          "multipart/form-data": { "schema": { "$ref": "#/components/schemas/Multipart" } }
+        }
+      },
+      "ImportPreview": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ImportPreview" } }
+        }
+      },
+      "ImportConfirm": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ImportConfirm" } }
+        }
+      },
+      "BudgetOverride": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/BudgetOverride" } }
+        }
+      },
+      "Commitment": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Commitment" } }
+        }
+      },
+      "CommitmentPatch": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/CommitmentPatch" } }
+        }
+      },
+      "Fund": {
+        "required": true,
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Fund" } } }
+      },
+      "FundPatch": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/FundPatch" } }
+        }
+      },
+      "FundMovement": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/FundMovement" } }
+        }
+      },
+      "IncomeEntry": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/IncomeEntry" } }
+        }
+      },
+      "BalanceObservation": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/BalanceObservation" } }
+        }
+      },
+      "Recurrence": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Recurrence" } }
+        }
+      },
+      "RecurrencePatch": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/RecurrencePatch" } }
+        }
+      },
+      "MonthBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": { "month": { "$ref": "#/components/schemas/Month" } }
+            }
+          }
+        }
+      },
+      "AttachmentUpload": {
+        "required": true,
+        "content": {
+          "multipart/form-data": {
+            "schema": { "$ref": "#/components/schemas/AttachmentMultipart" }
+          }
+        }
+      },
+      "Settings": {
+        "required": true,
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Settings" } } }
+      },
+      "ExchangeRate": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ExchangeRate" } }
+        }
+      },
+      "ExchangeRateDelete": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ExchangeRateDelete" } }
+        }
+      },
+      "ExchangeRateFetch": {
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ExchangeRateFetch" } }
+        }
+      },
+      "BackupUpload": {
+        "required": true,
+        "content": {
+          "multipart/form-data": { "schema": { "$ref": "#/components/schemas/BackupMultipart" } }
+        }
+      },
+      "Models": {
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Models" } } }
+      },
+      "SuggestionOptions": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 40 }
+              }
+            }
+          }
+        }
+      },
+      "AiChat": {
+        "required": true,
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AiChat" } } }
+      },
+      "AiApply": {
+        "required": true,
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AiApply" } } }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": { "error": { "type": "string" } },
+        "additionalProperties": true
+      },
+      "Json": {
+        "description": "Endpoint-specific JSON object or array. The API intentionally returns different shapes per resource.",
+        "oneOf": [
+          { "type": "object", "additionalProperties": true },
+          { "type": "array", "items": {} }
+        ]
+      },
+      "Binary": { "type": "string", "format": "binary" },
+      "Multipart": {
+        "type": "object",
+        "required": ["file"],
+        "properties": {
+          "file": { "$ref": "#/components/schemas/Binary", "description": "Bank statement file." }
+        }
+      },
+      "AttachmentMultipart": {
+        "type": "object",
+        "required": ["file", "transaction_id"],
+        "properties": {
+          "file": { "$ref": "#/components/schemas/Binary" },
+          "transaction_id": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "BackupMultipart": {
+        "type": "object",
+        "required": ["file"],
+        "properties": {
+          "file": {
+            "$ref": "#/components/schemas/Binary",
+            "description": "A previously downloaded SQLite backup."
+          }
+        }
+      },
+      "Month": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$", "example": "2026-08" },
+      "Year": { "type": "string", "pattern": "^\\d{4}$", "example": "2026" },
+      "Currency": { "type": "string", "pattern": "^[A-Z]{3}$", "default": "EUR" },
+      "Credentials": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "minLength": 1 },
+          "password": { "type": "string", "minLength": 8, "format": "password" }
+        }
+      },
+      "ChangePassword": {
+        "type": "object",
+        "required": ["current_password", "new_password"],
+        "properties": {
+          "current_password": { "type": "string", "format": "password" },
+          "new_password": { "type": "string", "minLength": 8, "format": "password" }
+        }
+      },
+      "NewPassword": {
+        "type": "object",
+        "required": ["new_password"],
+        "properties": { "new_password": { "type": "string", "minLength": 8, "format": "password" } }
+      },
+      "RenameUser": {
+        "type": "object",
+        "required": ["username", "current_password"],
+        "properties": {
+          "username": { "type": "string", "minLength": 1 },
+          "current_password": { "type": "string", "format": "password" }
+        }
+      },
+      "UserRename": {
+        "type": "object",
+        "required": ["username"],
+        "properties": { "username": { "type": "string", "minLength": 1 } }
+      },
+      "Account": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "kind": {
+            "type": "string",
+            "enum": ["bank", "card", "cash", "other", "sparkasse", "revolut"]
+          },
+          "is_spending_pot": { "type": "boolean" },
+          "opening_balance": { "type": "number" }
+        }
+      },
+      "AccountPatch": {
+        "type": "object",
+        "description": "Any subset of editable account fields.",
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "kind": {
+            "type": "string",
+            "enum": ["bank", "card", "cash", "other", "sparkasse", "revolut"]
+          },
+          "is_spending_pot": { "type": "boolean" },
+          "opening_balance": { "type": "number" }
+        }
+      },
+      "Person": {
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 60 } }
+      },
+      "Category": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "group_id": { "type": ["integer", "null"] },
+          "account_id": { "type": ["integer", "null"] },
+          "monthly_budget": { "type": "number", "minimum": 0 },
+          "active_from": { "type": ["string", "null"] },
+          "active_to": { "type": ["string", "null"] },
+          "is_active": { "type": "boolean" }
+        }
+      },
+      "CategoryPatch": {
+        "type": "object",
+        "description": "Any subset of editable category fields.",
+        "properties": {
+          "name": { "type": "string" },
+          "group_id": { "type": ["integer", "null"] },
+          "account_id": { "type": ["integer", "null"] },
+          "monthly_budget": { "type": "number", "minimum": 0 },
+          "active_from": { "type": ["string", "null"] },
+          "active_to": { "type": ["string", "null"] },
+          "is_active": { "type": "boolean" },
+          "roll_overs": { "type": "boolean" }
+        }
+      },
+      "CategoryGroup": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 40 },
+          "sort": { "type": "number" }
+        }
+      },
+      "ManualTransaction": {
+        "type": "object",
+        "required": ["date", "description", "amount"],
+        "properties": {
+          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "description": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "amount": { "type": "number", "not": { "const": 0 } },
+          "currency": { "$ref": "#/components/schemas/Currency" },
+          "tx_type": { "type": "string" },
+          "account_id": { "type": ["integer", "null"] },
+          "category_id": { "type": ["integer", "null"] },
+          "fund_id": { "type": ["integer", "null"] },
+          "transfer_group": { "type": ["string", "null"] }
+        }
+      },
+      "TransactionPatch": {
+        "type": "object",
+        "properties": {
+          "category_id": { "type": ["integer", "null"] },
+          "fund_id": { "type": ["integer", "null"] },
+          "transfer_group": { "type": ["string", "null"] },
+          "description": { "type": "string" },
+          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "remember": { "type": "boolean" },
+          "keyword": { "type": "string" }
+        }
+      },
+      "TransactionSplit": {
+        "type": "object",
+        "required": ["parts"],
+        "properties": {
+          "parts": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "required": ["amount", "category_id"],
+              "properties": {
+                "amount": { "type": "number" },
+                "category_id": { "type": "integer", "minimum": 1 }
+              }
+            }
+          }
+        }
+      },
+      "KeywordRule": {
+        "type": "object",
+        "required": ["keyword", "category_id"],
+        "properties": { "keyword": { "type": "string" }, "category_id": { "type": "integer" } }
+      },
+      "AdvancedRule": {
+        "type": "object",
+        "required": ["category_id"],
+        "properties": {
+          "category_id": { "type": "integer" },
+          "description_contains": { "type": "string" },
+          "amount_min": { "type": "number" },
+          "amount_max": { "type": "number" },
+          "account_id": { "type": "integer" },
+          "tx_type": { "type": "string" }
+        }
+      },
+      "RuleTest": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "amount": { "type": "number" },
+          "account_id": { "type": "integer" },
+          "tx_type": { "type": "string" }
+        }
+      },
+      "ImportPreview": {
+        "type": "object",
+        "required": ["token"],
+        "properties": {
+          "token": { "type": "string" },
+          "account_id": { "type": ["integer", "null"] }
+        }
+      },
+      "ImportConfirm": {
+        "type": "object",
+        "required": ["token"],
+        "properties": {
+          "token": { "type": "string" },
+          "account_id": { "type": ["integer", "null"] },
+          "transfer_pairs": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "BudgetOverride": {
+        "type": "object",
+        "properties": {
+          "amount": { "type": ["number", "null"], "minimum": 0 },
+          "standing_amount": { "type": "number", "minimum": 0 }
+        }
+      },
+      "Commitment": {
+        "type": "object",
+        "required": ["name", "start_month"],
+        "properties": {
+          "name": { "type": "string" },
+          "monthly_amount": { "type": "number", "minimum": 0 },
+          "start_month": { "$ref": "#/components/schemas/Month" },
+          "end_month": { "type": ["string", "null"], "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+          "account_id": { "type": ["integer", "null"] },
+          "fund_id": { "type": ["integer", "null"] },
+          "category_id": { "type": ["integer", "null"] },
+          "note": { "type": ["string", "null"] }
+        }
+      },
+      "CommitmentPatch": {
+        "type": "object",
+        "description": "Any subset of commitment fields.",
+        "properties": {
+          "name": { "type": "string" },
+          "monthly_amount": { "type": "number", "minimum": 0 },
+          "start_month": { "$ref": "#/components/schemas/Month" },
+          "end_month": { "type": ["string", "null"] },
+          "account_id": { "type": ["integer", "null"] },
+          "fund_id": { "type": ["integer", "null"] },
+          "category_id": { "type": ["integer", "null"] },
+          "note": { "type": ["string", "null"] }
+        }
+      },
+      "Fund": {
+        "type": "object",
+        "required": ["name", "start_month"],
+        "properties": {
+          "name": { "type": "string" },
+          "monthly_contribution": { "type": "number", "minimum": 0 },
+          "start_month": { "$ref": "#/components/schemas/Month" },
+          "opening_balance": { "type": "number" },
+          "category_id": { "type": ["integer", "null"] },
+          "target_amount": { "type": ["number", "null"] },
+          "target_date": { "type": ["string", "null"] }
+        }
+      },
+      "FundPatch": {
+        "type": "object",
+        "description": "Any subset of fund fields.",
+        "properties": {
+          "name": { "type": "string" },
+          "monthly_contribution": { "type": "number", "minimum": 0 },
+          "start_month": { "$ref": "#/components/schemas/Month" },
+          "opening_balance": { "type": "number" },
+          "category_id": { "type": ["integer", "null"] },
+          "target_amount": { "type": ["number", "null"] },
+          "target_date": { "type": ["string", "null"] }
+        }
+      },
+      "FundMovement": {
+        "type": "object",
+        "required": ["kind", "amount"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["contribution", "withdrawal"] },
+          "amount": { "type": "number", "exclusiveMinimum": 0 },
+          "month": { "$ref": "#/components/schemas/Month" },
+          "note": { "type": "string" }
+        }
+      },
+      "IncomeEntry": {
+        "type": "object",
+        "properties": {
+          "amount": { "type": ["number", "null"] },
+          "current_amount": { "type": "number" }
+        }
+      },
+      "BalanceObservation": {
+        "type": "object",
+        "required": ["account_id", "month", "balance"],
+        "properties": {
+          "account_id": { "type": "integer" },
+          "month": { "$ref": "#/components/schemas/Month" },
+          "balance": { "type": "number" }
+        }
+      },
+      "Recurrence": {
+        "type": "object",
+        "required": ["name", "amount", "day_of_month"],
+        "properties": {
+          "name": { "type": "string" },
+          "amount": { "type": "number" },
+          "day_of_month": { "type": "integer", "minimum": 1, "maximum": 28 },
+          "account_id": { "type": ["integer", "null"] },
+          "category_id": { "type": ["integer", "null"] },
+          "auto_post": { "type": "boolean" }
+        }
+      },
+      "RecurrencePatch": {
+        "type": "object",
+        "description": "Any subset of recurrence fields.",
+        "properties": {
+          "name": { "type": "string" },
+          "amount": { "type": "number" },
+          "day_of_month": { "type": "integer", "minimum": 1, "maximum": 28 },
+          "account_id": { "type": ["integer", "null"] },
+          "category_id": { "type": ["integer", "null"] },
+          "auto_post": { "type": "boolean" },
+          "active": { "type": "boolean" }
+        }
+      },
+      "Settings": {
+        "type": "object",
+        "properties": {
+          "provider": { "type": "string" },
+          "api_key": { "type": "string", "format": "password" },
+          "model": { "type": "string" },
+          "base_url": { "type": "string", "format": "uri" },
+          "currency": { "type": "string", "enum": ["EUR", "USD", "GBP", "CHF"] }
+        }
+      },
+      "ExchangeRate": {
+        "type": "object",
+        "required": ["month", "currency", "rate"],
+        "properties": {
+          "month": { "$ref": "#/components/schemas/Month" },
+          "currency": { "$ref": "#/components/schemas/Currency" },
+          "rate": { "type": "number", "exclusiveMinimum": 0 }
+        }
+      },
+      "ExchangeRateDelete": {
+        "type": "object",
+        "required": ["month", "currency"],
+        "properties": {
+          "month": { "$ref": "#/components/schemas/Month" },
+          "currency": { "$ref": "#/components/schemas/Currency" }
+        }
+      },
+      "ExchangeRateFetch": {
+        "type": "object",
+        "properties": { "overwrite": { "type": "boolean", "default": false } }
+      },
+      "Models": {
+        "type": "object",
+        "properties": {
+          "provider": { "type": "string" },
+          "api_key": { "type": "string", "format": "password" },
+          "base_url": { "type": "string", "format": "uri" }
+        }
+      },
+      "AiChat": {
+        "type": "object",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["role", "content"],
+              "properties": {
+                "role": { "type": "string", "enum": ["user", "assistant"] },
+                "content": { "type": "string", "maxLength": 8000 }
+              }
+            },
+            "maxItems": 16
+          }
+        }
+      },
+      "AiApply": {
+        "type": "object",
+        "required": ["proposals"],
+        "properties": {
+          "proposals": {
+            "type": "array",
+            "maxItems": 50,
+            "items": { "type": "object", "additionalProperties": true }
+          }
+        }
+      }
+    }
+  }
+}

@@ -10,8 +10,8 @@
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
     "lint": "eslint .",
-    "format:check": "prettier --check \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"tests/**/*.js\" \"tests/e2e/**/*.js\" \"scripts/**/*.js\" \"*.config.js\" \"client/*.config.js\"",
-    "format": "prettier --write \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"tests/**/*.js\" \"tests/e2e/**/*.js\" \"scripts/**/*.js\" \"*.config.js\" \"client/*.config.js\""
+    "format:check": "prettier --check \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"tests/**/*.js\" \"tests/e2e/**/*.js\" \"scripts/**/*.js\" \"docs/openapi.json\" \"*.config.js\" \"client/*.config.js\"",
+    "format": "prettier --write \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"tests/**/*.js\" \"tests/e2e/**/*.js\" \"scripts/**/*.js\" \"docs/openapi.json\" \"*.config.js\" \"client/*.config.js\""
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

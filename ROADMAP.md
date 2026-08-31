@@ -118,7 +118,7 @@ git push --follow-tags
 - [x] v3.17.1 Add ESLint + Prettier, hook into CI.
 - [x] v3.17.2 Playwright integration tests against the live server
       (login → import → review → dashboard).
-- [ ] v3.17.3 OpenAPI/JSON-Schema for the API.
+- [x] v3.17.3 OpenAPI/JSON-Schema for the API.
 - [ ] v3.17.4 Coverage reports: `c8` for server, `vitest --coverage` for client.
 - [ ] v3.17.5 Dependency audit automation.
 - [ ] v3.17.6 Optional Caddy/HTTPS recipes in docs.
