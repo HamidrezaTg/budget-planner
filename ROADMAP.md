@@ -116,7 +116,7 @@ git push --follow-tags
 ### v3.17 — Hardening and infrastructure
 
 - [x] v3.17.1 Add ESLint + Prettier, hook into CI.
-- [ ] v3.17.2 Playwright integration tests against the live server
+- [x] v3.17.2 Playwright integration tests against the live server
       (login → import → review → dashboard).
 - [ ] v3.17.3 OpenAPI/JSON-Schema for the API.
 - [ ] v3.17.4 Coverage reports: `c8` for server, `vitest --coverage` for client.

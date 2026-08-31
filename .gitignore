@@ -38,3 +38,6 @@ desktop-client-tauri/src-tauri/icons/icon.png
 *.log
 .DS_Store
 Thumbs.db
+
+# Playwright output
+test-results/
