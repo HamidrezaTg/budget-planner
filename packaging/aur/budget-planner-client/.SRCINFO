@@ -10,13 +10,13 @@ pkgbase = budget-planner-client
 	depends = gtk3
 	depends = libsoup3
 	depends = webkit2gtk-4.1
-	depends = libappindicator-gtk3
+	depends = libappindicator
 	depends = librsvg
 	depends = hicolor-icon-theme
 	depends = desktop-file-utils
 	depends = xdg-utils
 	options = !strip
 	source = https://github.com/HamidrezaTg/budget-planner/releases/download/v3.15.0/budget-planner-client_3.15.0_amd64.deb
-	sha256sums = SKIP
+	sha256sums = fa56d0ebfda0ff6254da3a9a7456e16bd31047de233383feb73f2f140b941abf
 
 pkgname = budget-planner-client

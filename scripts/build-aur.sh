@@ -34,14 +34,14 @@ run_makepkg_in_container() {
     -w /work \
     ghcr.io/archlinux/archlinux:latest \
     bash -euc '
-      pacman -Sy --noconfirm base-devel curl >/dev/null
+      pacman -Sy --noconfirm --needed base-devel curl gtk3 libsoup3 webkit2gtk-4.1 libappindicator librsvg hicolor-icon-theme desktop-file-utils xdg-utils >/dev/null
       useradd --create-home builder
       rm -rf /work/src /work/pkg
       rm -f /work/*.pkg.tar.*
       rm -f /work/*.deb
       chown -R builder:builder /work
       runuser -u builder -- makepkg --printsrcinfo > /work/.SRCINFO
-      runuser -u builder -- makepkg --cleanbuild --clean --force --syncdeps --noconfirm
+      runuser -u builder -- makepkg --cleanbuild --clean --force --noconfirm
       rm -rf /work/src /work/pkg
       rm -f /work/*.pkg.tar.*
       rm -f /work/*.deb
