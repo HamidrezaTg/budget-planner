@@ -185,6 +185,7 @@ so LAN and Tailscale endpoints can coexist.
 - [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — every page, button and section explained
 - [`docs/MATH.md`](docs/MATH.md) — the exact formulas behind every number, so you can trust them
 - [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — service won't start, devices can't connect, odd totals
+- [`docs/HTTPS_CADDY.md`](docs/HTTPS_CADDY.md) — optional HTTPS reverse proxy recipe
 - [`CHANGELOG.md`](CHANGELOG.md) — release history
 
 ## Roadmap
