@@ -1,11 +1,3 @@
-// Configuration for the Tauri v2 application. The product is the same
-// "Budget Planner" desktop client that previously shipped as Electron:
-// a native shell that talks to a self-hosted server via /api.
-//
-// The "Brownfield" pattern from the Tauri docs is used: the React bundle
-// built by Vite is shipped inside the binary as `dist/`, and `frontendDist`
-// points src-tauri at it. The window loads the index.html in dev (Vite
-// serves it) and the bundled files in production.
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Budget Planner",
@@ -37,18 +29,18 @@
       "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ipc: http://ipc.localhost https://* http://*; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     }
   },
-  "plugins": {
-    "single-instance": {
-      "label": "com.hamidreza.budgetplanner.client"
-    }
-  },
+  "plugins": {},
   "bundle": {
     "active": true,
     "category": "Productivity",
     "shortDescription": "Desktop client for your self-hosted Budget Planner server",
     "longDescription": "Tauri v2 client for the Budget Planner web app. The app contains NO backend: on first launch it asks for the server address, verifies the /.well-known/budget-planner discovery endpoint, and remembers it. Designed to work over a home LAN, Tailscale, or HTTPS reverse proxy.",
     "icon": [
-      "icons/icon.svg"
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
     ],
     "targets": "all",
     "linux": {
@@ -72,9 +64,6 @@
     "resources": [],
     "externalBin": [],
     "copyright": "Copyright (c) 2026 HamidrezaTg",
-    "category": "Productivity",
-    "shortDescription": "Desktop client for your self-hosted Budget Planner server",
-    "longDescription": "Tauri v2 client for the Budget Planner web app. The app contains NO backend: on first launch it asks for the server address, verifies the /.well-known/budget-planner discovery endpoint, and remembers it.",
     "publisher": "HamidrezaTg"
   }
 }

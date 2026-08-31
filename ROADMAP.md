@@ -12,10 +12,10 @@ desktop client.
 - Server: `server/index.js` (Express 5, `node:sqlite`).
 - Web client: `client/` (Vite + React).
 - Android shell: `mobile/` (Capacitor, loads the same web bundle).
-- Desktop client (Electron, to be removed): `desktop-client/`.
+- Desktop client (Tauri v2): `desktop-client-tauri/`.
 - Tests: `node --test tests/*.test.js`. Each file runs in its own process with
   a temp data dir.
-- Versioning: `package.json`, `desktop-client/package.json`, `mobile/package.json`
+- Versioning: `package.json`, `desktop-client-tauri/package.json`, `mobile/package.json`
   and the first version in `CHANGELOG.md` must all match. CI enforces this.
 - Git policy: commit + tag + push on green after each release step. Use
   Conventional Commits (e.g. `feat: …`, `fix: …`).
@@ -36,8 +36,8 @@ desktop client.
 
 ## Status of in-progress work
 
-All current source changes are uncommitted in the working tree. After every
-release step:
+The v3.13 Tauri source is in the working tree and has not been released yet.
+After every release step:
 
 ```
 git add -A
@@ -52,37 +52,35 @@ git push --follow-tags
 
 ## Release steps
 
-### v3.12 — closeout (current work)
+### v3.12 — closeout (released)
 
 - [x] v3.12.1 Add regression test for transfer-pair import preview
       (`tests/unit-import-transfer-review.test.js`).
-- [ ] v3.12.2 `npm test` and `npm run build` are green.
-- [ ] v3.12.3 Confirm `package.json`, `desktop-client/package.json`,
-      `mobile/package.json` and the first version in `CHANGELOG.md` are all
-      `3.12.0`.
-- [ ] v3.12.4 Conventional-Commits commit:
-      `feat: accounts, people, username rename, mobile multi-server, transfer review (v3.12.0)`.
-- [ ] v3.12.5 Tag `v3.12.0`, push `--follow-tags`.
+- [x] v3.12.2 `npm test` and `npm run build` are green.
+- [x] v3.12.3 Confirm `package.json`, `mobile/package.json` and the first
+      version in `CHANGELOG.md` are all `3.12.0`.
+- [x] v3.12.4 Conventional-Commits commit and release tag created.
+- [x] v3.12.5 Tag `v3.12.0`, push `--follow-tags`.
 
 ### v3.13 — Tauri desktop client (replaces Electron)
 
 - [ ] v3.13.1 Decide Tauri app id, icon, and bundle identifier.
-- [ ] v3.13.2 Scaffold `desktop-client-tauri/` with `create-tauri-app`, Vite,
+- [x] v3.13.2 Scaffold `desktop-client-tauri/` with Vite,
       React. Reuse `client/dist/` as the bundled frontend (the "Brownfield"
       pattern from the Tauri docs).
-- [ ] v3.13.3 Port the multi-server picker from `mobile/www/index.html` into a
+- [x] v3.13.3 Port the multi-server picker from `mobile/www/index.html` into a
       shared JS module used by both shells.
-- [ ] v3.13.4 Add Tauri plugins: `single-instance`, `window-state`,
+- [x] v3.13.4 Add Tauri plugins: `single-instance`, `window-state`,
       `autostart`, `log`, `updater`, `os`.
-- [ ] v3.13.5 Wire discovery endpoint `/.well-known/budget-planner` for
+- [x] v3.13.5 Wire discovery endpoint `/.well-known/budget-planner` for
       reachability checks.
-- [ ] v3.13.6 Add build scripts: `scripts/build-deb-client.sh`,
-      `scripts/build-dmg.sh`, `scripts/build-msi.sh`, AUR `PKGBUILD`.
-- [ ] v3.13.7 CI matrix on Linux, macOS, Windows runners.
+- [x] v3.13.6 Add Tauri build script and AUR `PKGBUILD`.
+- [ ] v3.13.7 CI matrix on Linux, macOS, Windows runners is green.
 - [ ] v3.13.8 Document install paths, signing, AUR publishing.
 - [ ] v3.13.9 Test on each OS: server picker, server switch, tray behaviour.
-- [ ] v3.13.10 Delete the now-redundant `desktop-client/` Electron directory.
-- [ ] v3.13.11 Tag `v3.13.0`, push `--follow-tags`.
+- [x] v3.13.10 Delete the now-redundant `desktop-client/` Electron directory.
+- [ ] v3.13.11 Validate all release gates, then tag `v3.13.0` and push
+      `--follow-tags`.
 
 ### v3.14 — macOS polish (unsigned)
 
@@ -139,8 +137,6 @@ git push --follow-tags
 ## Postponed (per your instructions)
 
 - GoCardless/PSD2 bank synchronization.
-- Windows-specific client work (the Tauri v2 matrix in v3.13 already covers
-  Windows; no separate work item needed).
 
 ## Inspiration and references
 

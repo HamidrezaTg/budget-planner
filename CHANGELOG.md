@@ -15,9 +15,9 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - New Tauri plugins wired in: `single-instance`, `window-state`,
   `autostart`, `log`, `os`, `updater`.
 - AUR package for Arch/Manjaro/Omarchy in `packaging/aur/budget-planner-client/`.
-- Build scripts: `scripts/build-tauri-client.sh` (deb + AppImage on Linux,
-  bundles all targets on macOS/Windows) and `scripts/build-aur.sh`.
-- CI matrix `desktop-tauri-linux` builds the Tauri shell in addition to
+- Build scripts: `scripts/build-tauri-client.sh` (deb + AppImage on Linux),
+  native `tauri:build` commands for macOS/Windows, and `scripts/build-aur.sh`.
+- CI matrix builds the Tauri shell on Linux, macOS, and Windows in addition to
   the server test/build job.
 
 ### Changed

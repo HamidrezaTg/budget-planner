@@ -23,6 +23,12 @@ desktop-client-tauri/node_modules/
 desktop-client-tauri/dist/
 desktop-client-tauri/src-tauri/target/
 desktop-client-tauri/src-tauri/gen/
+desktop-client-tauri/src-tauri/icons/android/
+desktop-client-tauri/src-tauri/icons/ios/
+desktop-client-tauri/src-tauri/icons/Square*.png
+desktop-client-tauri/src-tauri/icons/StoreLogo.png
+desktop-client-tauri/src-tauri/icons/64x64.png
+desktop-client-tauri/src-tauri/icons/icon.png
 
 # environment & secrets
 .env

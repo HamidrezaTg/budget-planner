@@ -14,8 +14,8 @@ concurrency:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -28,15 +28,38 @@ jobs:
         run: |
           npm ci
           npm --prefix client ci
+          if [ -f desktop-client-tauri/package-lock.json ]; then
+            npm --prefix desktop-client-tauri ci
+          else
+            echo "no lockfile yet, falling back to npm install"
+            npm --prefix desktop-client-tauri install --no-audit --no-fund
+          fi
 
       - name: Run server tests
         run: npm test
 
-      - name: Build server .deb (builds the client too)
+      - name: Install Tauri v2 system dependencies (Debian)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf build-essential curl wget file
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop-client-tauri/src-tauri -> target
+
+      - name: Build server .deb (also rebuilds the web client)
         run: ./scripts/build-deb.sh
 
-      - name: Build client .deb
-        run: ./scripts/build-deb-client.sh
+      - name: Build Tauri v2 client (.deb + .AppImage)
+        # The Tauri CLI builds every target it can on the host. On Linux
+        # runners that produces the .deb and the AppImage. macOS/Windows
+        # bundles are produced by their own OS-specific workflows.
+        run: ./scripts/build-tauri-client.sh
 
       # Android release signing requires BP_ANDROID_KEYSTORE* secrets; without
       # them this step is skipped and the release ships without a new APK.
@@ -58,7 +81,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum budget-planner_*.deb budget-planner-client_*.deb \
+          sha256sum budget-planner_*_all.deb budget-planner-client_*.deb budget-planner-client_*.AppImage \
             $( [ -f budget-planner-android.apk ] && echo budget-planner-android.apk ) \
             > SHA256SUMS.txt
           cat SHA256SUMS.txt
@@ -73,7 +96,11 @@ jobs:
             echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${VERSION}"; exit 1;
           }
           ARGS=()
-          for f in dist/budget-planner_*_all.deb dist/budget-planner-client_*_amd64.deb dist/budget-planner-android.apk dist/SHA256SUMS.txt; do
+          for f in dist/budget-planner_*_all.deb \
+                   dist/budget-planner-client_*_amd64.deb \
+                   dist/budget-planner-client_*_amd64.AppImage \
+                   dist/budget-planner-android.apk \
+                   dist/SHA256SUMS.txt; do
             [ -f "$f" ] && ARGS+=("$f")
           done
           gh release create "$TAG" "${ARGS[@]}" \

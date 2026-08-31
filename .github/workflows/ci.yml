@@ -54,15 +54,27 @@ jobs:
           ROOT=$(node -p "require('./package.json').version")
           TAURI=$(node -p "require('./desktop-client-tauri/package.json').version")
           MOBILE=$(node -p "require('./mobile/package.json').version")
-          CHANGELOG=$(head -1 CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "$ROOT")
+          CHANGELOG=$(grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
           echo "root=$ROOT tauri=$TAURI mobile=$MOBILE changelog=$CHANGELOG"
           test "$ROOT" = "$TAURI"
           test "$ROOT" = "$MOBILE"
+          test "$ROOT" = "$CHANGELOG"
           echo "versions consistent"
 
-  desktop-tauri-linux:
+  desktop-tauri:
     needs: server
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-22.04
+          - name: macos
+            os: macos-14
+          - name: windows
+            os: windows-2022
+    name: desktop-tauri-${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -73,6 +85,7 @@ jobs:
           cache: npm
 
       - name: Install Tauri v2 system dependencies (Debian)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -90,4 +103,10 @@ jobs:
         run: npm --prefix desktop-client-tauri ci
 
       - name: Build the Tauri desktop client (deb + AppImage)
+        if: runner.os == 'Linux'
         run: ./scripts/build-tauri-client.sh
+
+      - name: Build the Tauri desktop client (DMG/MSI)
+        if: runner.os != 'Linux'
+        working-directory: desktop-client-tauri
+        run: npm run tauri:build

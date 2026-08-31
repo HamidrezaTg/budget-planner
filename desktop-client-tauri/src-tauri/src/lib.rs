@@ -23,12 +23,10 @@ struct ClientConfig {
 
 #[tauri::command]
 fn get_config(state: tauri::State<'_, AppState>) -> ClientConfig {
-    let path = state
-        .config_path
-        .lock()
-        .ok()
-        .and_then(|p| p.clone());
-    let Some(path) = path else { return ClientConfig::default() };
+    let path = state.config_path.lock().ok().and_then(|p| p.clone());
+    let Some(path) = path else {
+        return ClientConfig::default();
+    };
     match std::fs::read_to_string(&path) {
         Ok(text) => serde_json::from_str(&text).unwrap_or_default(),
         Err(_) => ClientConfig::default(),
@@ -37,7 +35,7 @@ fn get_config(state: tauri::State<'_, AppState>) -> ClientConfig {
 
 #[tauri::command]
 fn save_url(
-    window: tauri::Window,
+    window: tauri::WebviewWindow,
     state: tauri::State<'_, AppState>,
     url: String,
 ) -> Result<(), String> {
@@ -54,8 +52,10 @@ fn save_url(
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let payload = serde_json::to_string_pretty(&ClientConfig { url: cleaned.clone() })
-        .map_err(|e| e.to_string())?;
+    let payload = serde_json::to_string_pretty(&ClientConfig {
+        url: cleaned.clone(),
+    })
+    .map_err(|e| e.to_string())?;
     std::fs::write(&path, payload).map_err(|e| e.to_string())?;
     // Reload the window so the user immediately lands on the new server.
     if window.label() == "main" {
@@ -76,9 +76,11 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .plugin(tauri_plugin_window_state::Builder::default()
-            .with_state_flags(StateFlags::POSITION | StateFlags::SIZE | StateFlags::MAXIMIZED)
-            .build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::POSITION | StateFlags::SIZE | StateFlags::MAXIMIZED)
+                .build(),
+        )
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![]),

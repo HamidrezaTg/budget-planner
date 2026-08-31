@@ -14,7 +14,7 @@ arch=('x86_64')
 url="https://github.com/HamidrezaTg/budget-planner"
 license=('MIT')
 depends=('gtk3' 'libsoup' 'webkit2gtk-4.1' 'libappindicator-gtk3' 'librsvg' 'hicolor-icon-theme' 'desktop-file-utils' 'xdg-utils')
-makedepends=('unzip')
+makedepends=('binutils')
 options=('!strip')
 install=budget-planner-client.install
 source=("https://github.com/HamidrezaTg/budget-planner/releases/download/v${pkgver}/budget-planner-client_${pkgver}_amd64.deb")
@@ -22,9 +22,14 @@ source=("https://github.com/HamidrezaTg/budget-planner/releases/download/v${pkgv
 sha256sums=('SKIP')
 
 package() {
-  cd "$srcdir"
-  # dpkg-deb leaves a flat staging tree in the current directory; tar -x
-  # with -C "$pkgdir" gives us the same layout the .deb would have
-  # installed to a real root. fakeroot-friendly.
-  tar -xf data.tar.* -C "$pkgdir"
+  local deb_file
+  local -a deb_files=("$srcdir"/*.deb)
+  if (( ${#deb_files[@]} != 1 )); then
+    error "expected exactly one downloaded .deb"
+  fi
+  deb_file=${deb_files[0]}
+  mkdir -p "$srcdir/deb"
+  (cd "$srcdir/deb" && ar -x "$deb_file")
+  # Extract the data archive without executing Debian maintainer scripts.
+  tar -xf "$srcdir"/deb/data.tar.* -C "$pkgdir"
 }

@@ -51,8 +51,9 @@ to it as clients — over your LAN or a VPN such as Tailscale:
   address, verifies the `/.well-known/budget-planner` discovery endpoint, and
   remembers it (up to ten servers, switchable from the picker). The package
   contains no backend.
-- **Build the clients yourself** with `scripts/build-apk.sh` (Android, needs a JDK)
-  and `scripts/build-tauri-client.sh` (Linux/macOS/Windows, needs Rust + Node.js ≥ 22).
+- **Build the clients yourself** with `scripts/build-apk.sh` (Android, needs a JDK),
+  `scripts/build-tauri-client.sh` (Linux), or `npm run tauri:build` inside
+  `desktop-client-tauri/` (macOS/Windows; needs Rust + Node.js ≥ 22).
 
 Connection problems (phone can't reach the server, wrong account list, hostname
 traps): see [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
