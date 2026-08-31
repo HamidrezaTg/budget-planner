@@ -1,0 +1,33 @@
+name: Dependency audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '**/package.json'
+      - '**/package-lock.json'
+      - '.github/workflows/dependency-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit-${{ matrix.directory }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: [., client, desktop-client-tauri, mobile]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Audit production dependencies
+        working-directory: ${{ matrix.directory }}
+        run: npm audit --omit=dev --audit-level=high --package-lock-only
