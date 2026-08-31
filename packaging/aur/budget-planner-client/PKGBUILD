@@ -13,13 +13,13 @@ pkgdesc="Desktop client for a self-hosted Budget Planner server (Tauri v2, no ba
 arch=('x86_64')
 url="https://github.com/HamidrezaTg/budget-planner"
 license=('MIT')
-depends=('gtk3' 'libsoup' 'webkit2gtk-4.1' 'libappindicator-gtk3' 'librsvg' 'hicolor-icon-theme' 'desktop-file-utils' 'xdg-utils')
+depends=('gtk3' 'libsoup3' 'webkit2gtk-4.1' 'libappindicator-gtk3' 'librsvg' 'hicolor-icon-theme' 'desktop-file-utils' 'xdg-utils')
 makedepends=('binutils')
 options=('!strip')
 install=budget-planner-client.install
-source=("https://github.com/HamidrezaTg/budget-planner/releases/download/v${pkgver}/budget-planner-client_${pkgver}_amd64.deb")
+source=("https://github.com/HamidrezaTg/budget-planner/releases/download/v3.14.0/budget-planner-client_3.14.0_amd64.deb")
 # Update the sha256 below with `makepkg -g >> PKGBUILD && updpkgsums`.
-sha256sums=('SKIP')
+sha256sums=('c79b6a036775597108d7b9eb0da80117d34adab7daecdad6fa910893689216e3')
 
 package() {
   local deb_file

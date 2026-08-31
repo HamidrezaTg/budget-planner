@@ -51,6 +51,8 @@ to it as clients — over your LAN or a VPN such as Tailscale:
   address, verifies the `/.well-known/budget-planner` discovery endpoint, and
   remembers it (up to ten servers, switchable from the picker). The package
   contains no backend.
+- **Arch Linux / Manjaro / Omarchy** — install the AUR package with `yay`, or use
+  the AppImage fallback described in [`docs/INSTALL_ARCH.md`](docs/INSTALL_ARCH.md).
 - **macOS desktop (Tauri v2)** — download the matching unsigned
   `budget-planner-client_<version>_<arch>.dmg`, drag Budget Planner to
   Applications, and follow [`docs/INSTALL_MAC.md`](docs/INSTALL_MAC.md) if

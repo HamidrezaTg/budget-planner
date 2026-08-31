@@ -106,6 +106,22 @@ jobs:
         if: runner.os == 'Linux'
         run: ./scripts/build-tauri-client.sh
 
+      - name: Verify Linux desktop bundles
+        if: runner.os == 'Linux'
+        run: |
+          test -s dist/budget-planner-client_*_amd64.deb
+          test -s dist/budget-planner-client_*_amd64.AppImage
+
+      - name: Upload Linux desktop bundles
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: budget-planner-linux-bundles
+          if-no-files-found: error
+          path: |
+            dist/budget-planner-client_*_amd64.deb
+            dist/budget-planner-client_*_amd64.AppImage
+
       - name: Build the Tauri desktop client (DMG/MSI)
         if: runner.os != 'Linux'
         working-directory: desktop-client-tauri
