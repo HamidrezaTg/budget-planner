@@ -64,7 +64,7 @@ git push --follow-tags
 
 ### v3.13 — Tauri desktop client (replaces Electron)
 
-- [ ] v3.13.1 Decide Tauri app id, icon, and bundle identifier.
+- [x] v3.13.1 Decide Tauri app id, icon, and bundle identifier.
 - [x] v3.13.2 Scaffold `desktop-client-tauri/` with Vite,
       React. Reuse `client/dist/` as the bundled frontend (the "Brownfield"
       pattern from the Tauri docs).
@@ -75,11 +75,11 @@ git push --follow-tags
 - [x] v3.13.5 Wire discovery endpoint `/.well-known/budget-planner` for
       reachability checks.
 - [x] v3.13.6 Add Tauri build script and AUR `PKGBUILD`.
-- [ ] v3.13.7 CI matrix on Linux, macOS, Windows runners is green.
+- [x] v3.13.7 CI matrix on Linux, macOS, Windows runners is green.
 - [ ] v3.13.8 Document install paths, signing, AUR publishing.
 - [ ] v3.13.9 Test on each OS: server picker, server switch, tray behaviour.
 - [x] v3.13.10 Delete the now-redundant `desktop-client/` Electron directory.
-- [ ] v3.13.11 Validate all release gates, then tag `v3.13.1` and push
+- [x] v3.13.11 Validate all release gates, then tag `v3.13.1` and push
       `--follow-tags`.
 
 ### v3.14 — macOS polish (unsigned)
