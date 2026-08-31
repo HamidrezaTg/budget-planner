@@ -3,6 +3,33 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.13.0] — 2026-08-31
+
+### Added
+- **Tauri v2 desktop client** (`desktop-client-tauri/`) replacing the old
+  Electron shell. A single Rust binary per platform, no Chromium runtime,
+  with the same multi-server saved-URL picker as the Android shell.
+- Shared picker helper (`mobile/www/shell-picker.js`) so the Android and
+  desktop shells use identical storage keys, normalization, and
+  discovery probing.
+- New Tauri plugins wired in: `single-instance`, `window-state`,
+  `autostart`, `log`, `os`, `updater`.
+- AUR package for Arch/Manjaro/Omarchy in `packaging/aur/budget-planner-client/`.
+- Build scripts: `scripts/build-tauri-client.sh` (deb + AppImage on Linux,
+  bundles all targets on macOS/Windows) and `scripts/build-aur.sh`.
+- CI matrix `desktop-tauri-linux` builds the Tauri shell in addition to
+  the server test/build job.
+
+### Changed
+- The `/.well-known/budget-planner` endpoint now also sets
+  `Access-Control-Allow-Origin: *` so the desktop shell can verify
+  reachability from a separate origin without CORS errors.
+- Removed the `desktop-client/` Electron directory, its Debian
+  packaging (`scripts/build-deb-client.sh`), and the now-redundant
+  `packaging/client-control`, `packaging/client-postinst`, and
+  `packaging/budget-planner-client.desktop`. The Tauri shell replaces
+  all of them with a single Rust binary (<10 MB instead of ~110 MB).
+
 ## [3.12.0] — 2026-08-31
 
 ### Added

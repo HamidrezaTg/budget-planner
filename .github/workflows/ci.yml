@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  server:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -33,13 +33,12 @@ jobs:
       - name: Run server tests
         run: npm test
 
-      - name: Build the client
+      - name: Build the web client
         run: npm run build
 
       - name: Dependency audit (high+ blocks)
         run: |
           npm audit --omit=dev --audit-level=high
-          # The client bundle ships to browsers; its runtime deps are audited too.
           npm --prefix client audit --omit=dev --audit-level=high
 
       - name: Shellcheck (release-critical bash)
@@ -53,10 +52,42 @@ jobs:
       - name: Version metadata consistency
         run: |
           ROOT=$(node -p "require('./package.json').version")
-          DESKTOP=$(node -p "require('./desktop-client/package.json').version")
+          TAURI=$(node -p "require('./desktop-client-tauri/package.json').version")
           MOBILE=$(node -p "require('./mobile/package.json').version")
           CHANGELOG=$(head -1 CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "$ROOT")
-          echo "root=$ROOT desktop=$DESKTOP mobile=$MOBILE changelog=$CHANGELOG"
-          test "$ROOT" = "$DESKTOP"
+          echo "root=$ROOT tauri=$TAURI mobile=$MOBILE changelog=$CHANGELOG"
+          test "$ROOT" = "$TAURI"
           test "$ROOT" = "$MOBILE"
           echo "versions consistent"
+
+  desktop-tauri-linux:
+    needs: server
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Tauri v2 system dependencies (Debian)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf build-essential curl wget file
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop-client-tauri/src-tauri -> target
+
+      - name: Install Node dependencies
+        run: npm --prefix desktop-client-tauri ci
+
+      - name: Build the Tauri desktop client (deb + AppImage)
+        run: ./scripts/build-tauri-client.sh

@@ -1,0 +1,36 @@
+[package]
+name = "budget-planner-client"
+version = "3.13.0"
+description = "Desktop client for a self-hosted Budget Planner server (Tauri v2, no backend)"
+authors = ["HamidrezaTg"]
+edition = "2021"
+rust-version = "1.77"
+# Match the rest of the project: this is a CLIENT, not a server. It never
+# opens a network port. The single tiny binary (<10 MB) replaces the 110 MB
+# Electron runtime that the previous v3.8-v3.12 build had to ship.
+[[bin]]
+name = "budget-planner-client"
+path = "src/main.rs"
+
+[lib]
+name = "budget_planner_client_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.1", features = ["protocol-asset"] }
+tauri-plugin-single-instance = "2.0"
+tauri-plugin-autostart = "2.0"
+tauri-plugin-log = "2.0"
+tauri-plugin-os = "2.0"
+tauri-plugin-updater = "2.0"
+tauri-plugin-window-state = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+# Default feature is required by Tauri for production builds.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

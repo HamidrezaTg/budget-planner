@@ -1,0 +1,80 @@
+// Configuration for the Tauri v2 application. The product is the same
+// "Budget Planner" desktop client that previously shipped as Electron:
+// a native shell that talks to a self-hosted server via /api.
+//
+// The "Brownfield" pattern from the Tauri docs is used: the React bundle
+// built by Vite is shipped inside the binary as `dist/`, and `frontendDist`
+// points src-tauri at it. The window loads the index.html in dev (Vite
+// serves it) and the bundled files in production.
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Budget Planner",
+  "version": "3.13.0",
+  "identifier": "com.hamidreza.budgetplanner.client",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5183",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Budget Planner",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 940,
+        "minHeight": 620,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true,
+        "transparent": false,
+        "label": "main"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ipc: http://ipc.localhost https://* http://*; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    }
+  },
+  "plugins": {
+    "single-instance": {
+      "label": "com.hamidreza.budgetplanner.client"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "Productivity",
+    "shortDescription": "Desktop client for your self-hosted Budget Planner server",
+    "longDescription": "Tauri v2 client for the Budget Planner web app. The app contains NO backend: on first launch it asks for the server address, verifies the /.well-known/budget-planner discovery endpoint, and remembers it. Designed to work over a home LAN, Tailscale, or HTTPS reverse proxy.",
+    "icon": [
+      "icons/icon.svg"
+    ],
+    "targets": "all",
+    "linux": {
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "entitlements": null,
+      "exceptionDomain": ""
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
+    },
+    "resources": [],
+    "externalBin": [],
+    "copyright": "Copyright (c) 2026 HamidrezaTg",
+    "category": "Productivity",
+    "shortDescription": "Desktop client for your self-hosted Budget Planner server",
+    "longDescription": "Tauri v2 client for the Budget Planner web app. The app contains NO backend: on first launch it asks for the server address, verifies the /.well-known/budget-planner discovery endpoint, and remembers it.",
+    "publisher": "HamidrezaTg"
+  }
+}

@@ -98,9 +98,11 @@
     </div>
   </div>
 
+  <script src="shell-picker.js"></script>
   <script>
-    const KEY = 'bp-server-urls';
-    const LEGACY_KEY = 'bp-server-url';
+    const { normalizeUrl, readSavedUrls, saveUrls, remember, forget, probe } = window.BudgetPlannerShell;
+    const KEY = window.BudgetPlannerShell.KEY;
+    const LEGACY_KEY = window.BudgetPlannerShell.LEGACY_KEY;
 
     const views = {
       connecting: document.getElementById('view-connecting'),
@@ -119,34 +121,6 @@
     let savedUrls = readSavedUrls();
     let activeUrl = savedUrls[0] || '';
 
-    function normalizeUrl(url) {
-      return String(url || '').trim().replace(/\/+$/, '');
-    }
-    function readSavedUrls() {
-      const stored = localStorage.getItem(KEY);
-      try {
-        const parsed = JSON.parse(stored || '[]');
-        if (stored !== null && Array.isArray(parsed)) return parsed.map(normalizeUrl).filter((url) => /^https?:\/\/.+/i.test(url));
-      } catch {}
-      const legacy = normalizeUrl(localStorage.getItem(LEGACY_KEY));
-      return legacy && /^https?:\/\/.+/i.test(legacy) ? [legacy] : [];
-    }
-    function saveUrls() {
-      localStorage.setItem(KEY, JSON.stringify(savedUrls));
-      localStorage.removeItem(LEGACY_KEY);
-    }
-    function remember(url) {
-      url = normalizeUrl(url);
-      savedUrls = [url, ...savedUrls.filter((item) => item !== url)].slice(0, 10);
-      saveUrls();
-      activeUrl = url;
-    }
-    function forget(url) {
-      savedUrls = savedUrls.filter((item) => item !== url);
-      saveUrls();
-      activeUrl = savedUrls[0] || '';
-    }
-
     function show(name) {
       for (const k of Object.keys(views)) views[k].classList.toggle('hidden', k !== name);
     }
@@ -156,17 +130,12 @@
       retryBtn.disabled = on;
     }
 
-    async function probe(url) {
-      const response = await fetch(url + '/.well-known/budget-planner', { signal: AbortSignal.timeout(8000) });
-      if (!response.ok) throw new Error('Not a planner server');
-      const info = await response.json();
-      if (info.name !== 'Budget Planner' || info.api !== '/api') throw new Error('Not a planner server');
-    }
-
     async function connectTo(url) {
       try {
         await probe(url);
-        remember(url);
+        savedUrls = remember(savedUrls, url);
+        saveUrls(savedUrls);
+        activeUrl = normalizeUrl(url);
         window.location.href = url + '/';
         return true;
       } catch {
@@ -228,7 +197,7 @@
         const remove = document.createElement('button');
         remove.className = 'ghost';
         remove.textContent = 'Forget';
-        remove.onclick = () => { forget(url); renderSaved(); if (activeUrl) input.value = activeUrl; };
+        remove.onclick = () => { savedUrls = forget(savedUrls, url); saveUrls(savedUrls); renderSaved(); activeUrl = savedUrls[0] || ''; if (activeUrl) input.value = activeUrl; };
         row.append(use, remove);
         savedList.append(row);
       }

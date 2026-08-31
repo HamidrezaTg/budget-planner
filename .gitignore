@@ -18,6 +18,12 @@ mobile/android/local.properties
 mobile/android/.idea/
 mobile/android/capacitor-cordova-android-plugins/
 
+# tauri build outputs (desktop-client-tauri/)
+desktop-client-tauri/node_modules/
+desktop-client-tauri/dist/
+desktop-client-tauri/src-tauri/target/
+desktop-client-tauri/src-tauri/gen/
+
 # environment & secrets
 .env
 .env.*

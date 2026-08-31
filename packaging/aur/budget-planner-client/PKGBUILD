@@ -1,0 +1,30 @@
+# PKGBUILD for budget-planner-client (Tauri v2, Arch Linux).
+# Maintainer: HamidrezaTg <hamidreza@users.noreply.github.com>
+# AUR package name: budget-planner-client
+# Built from the GitHub release artifacts (the official .deb or AppImage)
+# rather than from source so the Rust toolchain isn't required at install
+# time. The .deb path is preferred; AppImage is the fallback.
+#
+# To bump: update pkgver to match the GitHub release tag and `updpkgsums`.
+pkgname=budget-planner-client
+pkgver=3.13.0
+pkgrel=1
+pkgdesc="Desktop client for a self-hosted Budget Planner server (Tauri v2, no backend)"
+arch=('x86_64')
+url="https://github.com/HamidrezaTg/budget-planner"
+license=('MIT')
+depends=('gtk3' 'libsoup' 'webkit2gtk-4.1' 'libappindicator-gtk3' 'librsvg' 'hicolor-icon-theme' 'desktop-file-utils' 'xdg-utils')
+makedepends=('unzip')
+options=('!strip')
+install=budget-planner-client.install
+source=("https://github.com/HamidrezaTg/budget-planner/releases/download/v${pkgver}/budget-planner-client_${pkgver}_amd64.deb")
+# Update the sha256 below with `makepkg -g >> PKGBUILD && updpkgsums`.
+sha256sums=('SKIP')
+
+package() {
+  cd "$srcdir"
+  # dpkg-deb leaves a flat staging tree in the current directory; tar -x
+  # with -C "$pkgdir" gives us the same layout the .deb would have
+  # installed to a real root. fakeroot-friendly.
+  tar -xf data.tar.* -C "$pkgdir"
+}

@@ -46,12 +46,13 @@ to it as clients — over your LAN or a VPN such as Tailscale:
   reachability, remembers it, and auto-connects from then on. If the server is
   unreachable, the app offers **Try again** and **Change server address**.
   (A PWA install via "Add to Home Screen" works too.)
-- **Linux desktop** — download `budget-planner-client_<version>_amd64.deb` from
-  Releases (v3.8.3+ — the v3.8.0 package had a packaging bug showing the default
-  Electron page). Enter the server address on first launch; stored per user in
-  `~/.config/budget-planner-client/config.json`.
-- **Build them yourself** with `scripts/build-apk.sh` (needs a JDK) and
-  `scripts/build-deb-client.sh`.
+- **Linux desktop (Tauri v2)** — download `budget-planner-client_<version>_amd64.deb`
+  or the matching `.AppImage` from Releases. On first launch it asks for the server
+  address, verifies the `/.well-known/budget-planner` discovery endpoint, and
+  remembers it (up to ten servers, switchable from the picker). The package
+  contains no backend.
+- **Build the clients yourself** with `scripts/build-apk.sh` (Android, needs a JDK)
+  and `scripts/build-tauri-client.sh` (Linux/macOS/Windows, needs Rust + Node.js ≥ 22).
 
 Connection problems (phone can't reach the server, wrong account list, hostname
 traps): see [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).

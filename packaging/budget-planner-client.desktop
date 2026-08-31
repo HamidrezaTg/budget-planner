@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Budget Planner
-Comment=Client for your self-hosted Budget Planner server
-Exec=/opt/budget-planner-client/budget-planner-client
-Icon=budget-planner-client
-Terminal=false
-Categories=Office;Finance;
-StartupWMClass=budget-planner-client
