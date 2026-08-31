@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Budget Planner</string>
+	<key>CFBundleName</key>
+	<string>Budget Planner</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.finance</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright (c) 2026 HamidrezaTg</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Self-hosted servers may use plain HTTP on a LAN or Tailscale. -->
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

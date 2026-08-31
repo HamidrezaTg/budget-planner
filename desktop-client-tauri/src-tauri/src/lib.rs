@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
+use tauri::menu::{MenuBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_window_state::StateFlags;
 
 #[derive(Default)]
@@ -19,6 +20,44 @@ struct AppState {
 struct ClientConfig {
     #[serde(default)]
     url: String,
+}
+
+#[cfg(desktop)]
+fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
+    let file = SubmenuBuilder::new(app, "File")
+        .item(&PredefinedMenuItem::close_window(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::quit(app, None)?)
+        .build()?;
+    let edit = SubmenuBuilder::new(app, "Edit")
+        .item(&PredefinedMenuItem::undo(app, None)?)
+        .item(&PredefinedMenuItem::redo(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::cut(app, None)?)
+        .item(&PredefinedMenuItem::copy(app, None)?)
+        .item(&PredefinedMenuItem::paste(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::select_all(app, None)?)
+        .build()?;
+    let view = SubmenuBuilder::new(app, "View")
+        .item(&PredefinedMenuItem::minimize(app, None)?)
+        .item(&PredefinedMenuItem::maximize(app, None)?)
+        .item(&PredefinedMenuItem::fullscreen(app, None)?)
+        .build()?;
+    let help = SubmenuBuilder::new(app, "Help")
+        .item(&PredefinedMenuItem::about(
+            app,
+            Some("About Budget Planner"),
+            None,
+        )?)
+        .build()?;
+
+    MenuBuilder::new(app)
+        .item(&file)
+        .item(&edit)
+        .item(&view)
+        .item(&help)
+        .build()
 }
 
 #[tauri::command]
@@ -67,6 +106,11 @@ fn save_url(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .on_menu_event(|app, event| {
+            if event.id() == "quit" {
+                app.exit(0);
+            }
+        })
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             // Bring the existing window to the foreground when the user tries
             // to launch a second instance.
@@ -89,6 +133,9 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            #[cfg(desktop)]
+            app.set_menu(build_menu(app.handle())?)?;
+
             let path = app
                 .path()
                 .app_config_dir()

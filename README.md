@@ -51,6 +51,10 @@ to it as clients — over your LAN or a VPN such as Tailscale:
   address, verifies the `/.well-known/budget-planner` discovery endpoint, and
   remembers it (up to ten servers, switchable from the picker). The package
   contains no backend.
+- **macOS desktop (Tauri v2)** — download the matching unsigned
+  `budget-planner-client_<version>_<arch>.dmg`, drag Budget Planner to
+  Applications, and follow [`docs/INSTALL_MAC.md`](docs/INSTALL_MAC.md) if
+  Gatekeeper blocks the first launch.
 - **Build the clients yourself** with `scripts/build-apk.sh` (Android, needs a JDK),
   `scripts/build-tauri-client.sh` (Linux), or `npm run tauri:build` inside
   `desktop-client-tauri/` (macOS/Windows; needs Rust + Node.js ≥ 22).

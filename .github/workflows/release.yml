@@ -106,3 +106,34 @@ jobs:
           gh release create "$TAG" "${ARGS[@]}" \
             --title "v${VERSION}" \
             --generate-notes
+
+  macos-dmg:
+    needs: release
+    runs-on: macos-14
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop-client-tauri/src-tauri -> target
+
+      - name: Build unsigned DMG
+        run: ./scripts/build-dmg.sh
+
+      - name: Upload DMG to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          gh release upload "v${VERSION}" dist/*.dmg --clobber

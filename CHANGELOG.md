@@ -3,6 +3,16 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.14.0] — 2026-08-31
+
+### Added
+- Native Tauri **File**, **Edit**, **View**, and **Help** menus with platform
+  shortcuts, including `Cmd+Q` on macOS.
+- Sandboxed macOS bundle metadata and network entitlements for self-hosted LAN,
+  Tailscale, and HTTPS server connections.
+- Unsigned macOS DMG build/upload workflow and
+  [`docs/INSTALL_MAC.md`](docs/INSTALL_MAC.md) installation guidance.
+
 ## [3.13.1] — 2026-08-31
 
 ### Fixed
