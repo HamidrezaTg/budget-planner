@@ -3,6 +3,16 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.13.1] — 2026-08-31
+
+### Fixed
+- Added committed JavaScript and Rust lockfiles so clean CI and release builds
+  use reproducible dependency resolution.
+- Corrected Tauri configuration, native icon assets, Rust window navigation, and
+  Linux artifact names for Debian, AppImage, and AUR consumers.
+- CI now validates the Tauri client on Linux, macOS, and Windows, and the
+  release workflow uses the Tauri client instead of the removed Electron shell.
+
 ## [3.13.0] — 2026-08-31
 
 ### Added

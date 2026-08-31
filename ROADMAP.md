@@ -79,7 +79,7 @@ git push --follow-tags
 - [ ] v3.13.8 Document install paths, signing, AUR publishing.
 - [ ] v3.13.9 Test on each OS: server picker, server switch, tray behaviour.
 - [x] v3.13.10 Delete the now-redundant `desktop-client/` Electron directory.
-- [ ] v3.13.11 Validate all release gates, then tag `v3.13.0` and push
+- [ ] v3.13.11 Validate all release gates, then tag `v3.13.1` and push
       `--follow-tags`.
 
 ### v3.14 — macOS polish (unsigned)

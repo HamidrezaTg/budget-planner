@@ -1,6 +1,6 @@
 {
   "name": "budget-planner-client-tauri",
-  "version": "3.13.0",
+  "version": "3.13.1",
   "description": "Desktop client for a self-hosted Budget Planner server (Tauri v2, no backend)",
   "private": true,
   "type": "module",

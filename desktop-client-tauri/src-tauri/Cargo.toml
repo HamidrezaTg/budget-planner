@@ -1,6 +1,6 @@
 [package]
 name = "budget-planner-client"
-version = "3.13.0"
+version = "3.13.1"
 description = "Desktop client for a self-hosted Budget Planner server (Tauri v2, no backend)"
 authors = ["HamidrezaTg"]
 edition = "2021"
