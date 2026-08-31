@@ -630,10 +630,19 @@ tr.override-row td:first-child { border-left: 3px solid var(--orange); }
 .inline-form input[type='number'] { width: 110px; }
 .inline-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .inline-form label input { width: 110px; }
+.check-label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.check-label input { margin: 0; }
 .rule-form input { flex: 1; min-width: 200px; }
 .budget-input { width: 105px; font-family: var(--font-mono); }
 .env-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .env-actions input { width: 78px; }
+.transfer-review { margin-top: 14px; }
+.transfer-review .panel-head { margin-bottom: 8px; }
+.transfer-options { display: grid; gap: 8px; margin-top: 12px; }
+.transfer-option { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
+.transfer-option:hover { background: rgba(49, 87, 213, 0.05); }
+.transfer-option input { margin-top: 3px; }
+.transfer-option strong, .transfer-option .muted { display: block; }
 
 .add-fund-form {
   display: grid;

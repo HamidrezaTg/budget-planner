@@ -24,6 +24,7 @@ const groups = [
   {
     label: 'Planning',
     links: [
+      { to: '/accounts', label: 'Accounts', glyph: '◉' },
       { to: '/funds', label: 'Funds', glyph: '◎' },
       { to: '/commitments', label: 'Commitments', glyph: '¶' },
       { to: '/balances', label: 'Balances', glyph: '◍' },
@@ -48,11 +49,22 @@ export default function Layout({ me }) {
   const [theme, setTheme] = useState(
     () => document.documentElement.dataset.theme || 'light'
   );
+  const [nativeShell, setNativeShell] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('bp-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    setNativeShell(Boolean(window.Capacitor?.isNativePlatform?.()));
+  }, []);
+
+  const switchServer = () => {
+    // The native shell owns the saved-server picker. Returning with the hash
+    // tells it not to auto-connect to the current server again.
+    window.location.href = 'http://localhost/#server-picker';
+  };
 
   // Close the mobile drawer whenever a desktop-width viewport is (re)entered.
   useEffect(() => {
@@ -139,6 +151,7 @@ export default function Layout({ me }) {
           </div>
 
           <div className="side-actions">
+            {nativeShell && <button className="icon-btn" title="Switch server" onClick={switchServer}>⌘</button>}
             <button
               className="icon-btn"
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}

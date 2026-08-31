@@ -5,6 +5,8 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import authRoutes from './routes/auth.js';
+import accountRoutes from './routes/accounts.js';
+import personRoutes from './routes/persons.js';
 import categoryRoutes from './routes/categories.js';
 import transactionRoutes from './routes/transactions.js';
 import importRoutes from './routes/import.js';
@@ -67,11 +69,32 @@ app.get('/healthz', (_req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
 });
 
+// Cross-platform server discovery: the Android client (and other future
+// clients) probe this URL first to validate that they reached a real
+// planner server. Replies with the API base path, the build version, and
+// the documented feature set so the client can adapt.
+const PKG_VERSION = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
+).version;
+app.get('/.well-known/budget-planner', (_req, res) => {
+  // The Android shell is a separate origin and needs to inspect this small,
+  // non-sensitive discovery document before navigating to the planner.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.json({
+    api: '/api',
+    name: 'Budget Planner',
+    version: PKG_VERSION,
+    features: ['accounts', 'transfers', 'funds', 'recurrences', 'multi-currency', 'import', 'ai'],
+  });
+});
+
 // Count/queue API requests so administrative database swaps (backup restore)
 // can drain in-flight work before touching the file on disk.
 app.use('/api', gate);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/accounts', requireAuth, accountRoutes);
+app.use('/api/persons', requireAuth, personRoutes);
 app.use('/api/categories', requireAuth, categoryRoutes);
 app.use('/api/transactions', requireAuth, transactionRoutes);
 app.use('/api/import', requireAuth, importRoutes);

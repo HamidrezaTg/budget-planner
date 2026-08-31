@@ -29,7 +29,7 @@ export default function Users({ admin, me }) {
   const resetPassword = async (u) => {
     const pw = await prompt({
       title: `Reset password for "${u.username}"`,
-      label: 'New password (min 4 chars). They will be logged out everywhere.',
+      label: 'New password (min 8 chars). They will be logged out everywhere.',
       password: true,
     });
     if (!pw) return;
@@ -39,6 +39,20 @@ export default function Users({ admin, me }) {
     } catch (e) {
       toast(e.message, 'error');
     }
+  };
+
+  const rename = async (u) => {
+    const username = await prompt({
+      title: `Rename "${u.username}"`,
+      label: '2–32 lowercase letters, numbers, or underscores',
+      initial: u.username,
+    });
+    if (!username || username.trim().toLowerCase() === u.username) return;
+    try {
+      await api.patch(`/auth/users/${u.username}`, { username });
+      toast(`"${u.username}" renamed to "${username.trim().toLowerCase()}".`);
+      load();
+    } catch (e) { toast(e.message, 'error'); }
   };
 
   const remove = async (u) => {
@@ -103,7 +117,7 @@ export default function Users({ admin, me }) {
         <form onSubmit={add} className="add-user-form">
           <label title="2-32 characters, letters/numbers/_ only">Username
             <input
-              placeholder="Username (letters, numbers, . _ -)"
+              placeholder="Username (letters, numbers, _)"
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
             />
@@ -111,7 +125,7 @@ export default function Users({ admin, me }) {
           <label title="At least 8 characters">Password
             <input
               type="password"
-              placeholder="Password (min 4 chars)"
+              placeholder="Password (min 8 chars)"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
@@ -153,6 +167,7 @@ export default function Users({ admin, me }) {
                       title={`Reset "${u.username}"'s password — they'll be signed out everywhere`}
                       onClick={() => resetPassword(u)}
                     >Reset password</button>
+                    <button className="btn small" onClick={() => rename(u)}>Rename</button>
                     <button
                       className="btn danger small"
                       title={`Delete the "${u.username}" user and their entire database — cannot be undone`}

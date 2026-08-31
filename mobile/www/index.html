@@ -91,6 +91,7 @@
       <label for="server">Server address</label>
       <input id="server" type="url" inputmode="url" autocomplete="off"
              placeholder="http://192.168.1.10:2026" />
+      <div id="saved-list" class="hidden"></div>
       <div class="err" id="err"></div>
       <button id="go">Connect</button>
       <button id="forget" class="ghost hidden">Forget this server</button>
@@ -98,7 +99,8 @@
   </div>
 
   <script>
-    const KEY = 'bp-server-url';
+    const KEY = 'bp-server-urls';
+    const LEGACY_KEY = 'bp-server-url';
 
     const views = {
       connecting: document.getElementById('view-connecting'),
@@ -112,7 +114,38 @@
     const retryBtn = document.getElementById('retry');
     const editBtn = document.getElementById('edit-saved');
     const forgetBtn = document.getElementById('forget');
-    const savedUrl = localStorage.getItem(KEY);
+    const savedList = document.getElementById('saved-list');
+
+    let savedUrls = readSavedUrls();
+    let activeUrl = savedUrls[0] || '';
+
+    function normalizeUrl(url) {
+      return String(url || '').trim().replace(/\/+$/, '');
+    }
+    function readSavedUrls() {
+      const stored = localStorage.getItem(KEY);
+      try {
+        const parsed = JSON.parse(stored || '[]');
+        if (stored !== null && Array.isArray(parsed)) return parsed.map(normalizeUrl).filter((url) => /^https?:\/\/.+/i.test(url));
+      } catch {}
+      const legacy = normalizeUrl(localStorage.getItem(LEGACY_KEY));
+      return legacy && /^https?:\/\/.+/i.test(legacy) ? [legacy] : [];
+    }
+    function saveUrls() {
+      localStorage.setItem(KEY, JSON.stringify(savedUrls));
+      localStorage.removeItem(LEGACY_KEY);
+    }
+    function remember(url) {
+      url = normalizeUrl(url);
+      savedUrls = [url, ...savedUrls.filter((item) => item !== url)].slice(0, 10);
+      saveUrls();
+      activeUrl = url;
+    }
+    function forget(url) {
+      savedUrls = savedUrls.filter((item) => item !== url);
+      saveUrls();
+      activeUrl = savedUrls[0] || '';
+    }
 
     function show(name) {
       for (const k of Object.keys(views)) views[k].classList.toggle('hidden', k !== name);
@@ -124,16 +157,16 @@
     }
 
     async function probe(url) {
-      // The shell runs from the Capacitor origin, so probing the server is a
-      // cross-origin request: no-cors resolves when the host answers and
-      // rejects when it cannot be reached.
-      await fetch(url + '/api/auth/status', { mode: 'no-cors', signal: AbortSignal.timeout(8000) });
+      const response = await fetch(url + '/.well-known/budget-planner', { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error('Not a planner server');
+      const info = await response.json();
+      if (info.name !== 'Budget Planner' || info.api !== '/api') throw new Error('Not a planner server');
     }
 
     async function connectTo(url) {
       try {
         await probe(url);
-        localStorage.setItem(KEY, url);
+        remember(url);
         window.location.href = url + '/';
         return true;
       } catch {
@@ -149,21 +182,21 @@
     const navType = performance.getEntriesByType('navigation')[0]?.type;
     const returnedHere = navType === 'back_forward' || location.hash === '#server-picker';
 
-    if (savedUrl && !returnedHere) {
+    if (activeUrl && !returnedHere) {
       // Auto-connect to the saved server; fall back to a recovery view.
-      document.getElementById('connecting-url').textContent = savedUrl;
+      document.getElementById('connecting-url').textContent = activeUrl;
       show('connecting');
       busy(true);
-      connectTo(savedUrl).then((ok) => {
+       connectTo(activeUrl).then((ok) => {
         busy(false);
         if (ok) return;
-        document.getElementById('offline-url').textContent = savedUrl;
+         document.getElementById('offline-url').textContent = activeUrl;
         show('offline');
       });
     } else {
       // Setup view — prefilled when a server is already known.
-      if (savedUrl) {
-        input.value = savedUrl;
+      if (activeUrl) {
+        input.value = activeUrl;
         document.getElementById('setup-intro').textContent =
           'Your planner lives at the address below. Connect, or change it if you moved servers.';
         forgetBtn.classList.remove('hidden');
@@ -171,8 +204,39 @@
       show('setup');
     }
 
+    function renderSaved() {
+      savedList.replaceChildren();
+      if (!savedUrls.length) {
+        savedList.classList.add('hidden');
+        return;
+      }
+      savedList.classList.remove('hidden');
+      const label = document.createElement('p');
+      label.textContent = 'Saved servers';
+      label.style.margin = '14px 0 6px';
+      savedList.append(label);
+      for (const url of savedUrls) {
+        const row = document.createElement('div');
+        row.className = 'actions';
+        row.style.gridTemplateColumns = '1fr auto';
+        row.style.marginTop = '6px';
+        const use = document.createElement('button');
+        use.className = 'ghost';
+        use.textContent = url;
+        use.title = 'Use this server';
+        use.onclick = () => { input.value = url; activeUrl = url; };
+        const remove = document.createElement('button');
+        remove.className = 'ghost';
+        remove.textContent = 'Forget';
+        remove.onclick = () => { forget(url); renderSaved(); if (activeUrl) input.value = activeUrl; };
+        row.append(use, remove);
+        savedList.append(row);
+      }
+    }
+    renderSaved();
+
     goBtn.addEventListener('click', async () => {
-      let url = input.value.trim().replace(/\/+$/, '');
+      let url = normalizeUrl(input.value);
       err.textContent = '';
       if (!/^https?:\/\/.+/i.test(url)) {
         err.textContent = 'Enter a full address starting with http:// or https://';
@@ -196,18 +260,18 @@
 
     retryBtn.addEventListener('click', async () => {
       show('connecting');
-      document.getElementById('connecting-url').textContent = savedUrl;
+       document.getElementById('connecting-url').textContent = activeUrl;
       busy(true);
-      const ok = await connectTo(savedUrl);
+       const ok = await connectTo(activeUrl);
       busy(false);
       if (!ok) {
-        document.getElementById('offline-url').textContent = savedUrl;
+         document.getElementById('offline-url').textContent = activeUrl;
         show('offline');
       }
     });
 
     editBtn.addEventListener('click', () => {
-      input.value = savedUrl || '';
+       input.value = activeUrl || '';
       document.getElementById('setup-intro').textContent =
         'Enter the new address of the machine running the server.';
       forgetBtn.classList.remove('hidden');
@@ -216,8 +280,8 @@
     });
 
     forgetBtn.addEventListener('click', () => {
-      localStorage.removeItem(KEY);
-      location.reload();
+       forget(activeUrl);
+       location.reload();
     });
   </script>
 </body>

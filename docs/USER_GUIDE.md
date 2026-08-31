@@ -25,7 +25,7 @@ Passwords must be at least **8 characters**.
 |---|---|
 | Overview | Dashboard, Projection, Reports |
 | Money in & out | Import, Transactions, Recurring, Budgets, Income |
-| Planning | Funds, Commitments, Balances, Categories |
+| Planning | Accounts, Funds, Commitments, Balances, Categories |
 | Assistant | AI Chat, Settings, Help |
 
 ---
@@ -103,6 +103,19 @@ The month at a glance. Use **← / Today / →** to change months — every figu
 - **Account** — which account the category is paid from. Every category should have
   one; untagged categories are flagged on the Dashboard.
 
+## Accounts
+
+Manage the places where money lives: bank accounts, cards, cash, and spending pots.
+
+- **Opening balance** — the real balance when you start using the planner. It is the
+  starting point for per-account reconciliation and projection totals.
+- **Edit** — rename the account, change its type, update the opening balance, or mark
+  it as a spending pot.
+- **Delete** — only succeeds when no transactions or balance observations reference
+  the account; nothing is silently detached.
+- **People** — the same page manages names used by income sources. Deleting a person
+  leaves the income source and clears only its person link.
+
 ## Income
 
 - **Usual** — the recurring amount the projection uses when a month has no actual entry.
@@ -177,6 +190,11 @@ Ollama (local, no key), LM Studio (local, no key), Custom.
   snapshotted before the swap; a failed restore rolls back automatically.
 - **Danger zone: reset** — deletes all transactions and attachments, keeps
   budgets, rules, funds and income sources.
+
+### Username
+Change your username from the Identity section. The current password is required;
+the private database, uploads, and the active session move with the account. Admins
+can rename other users from **Admin → Users**.
 
 ### Password & theme
 Change your password (invalidates all sessions) and switch light/dark.

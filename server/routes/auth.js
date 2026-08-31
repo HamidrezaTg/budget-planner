@@ -7,12 +7,14 @@ import {
   destroySession,
   changePassword,
   hashPasswordAsync,
+  renameUser,
   requireAuth,
   requireAdmin,
   PASSWORD_MIN,
 } from '../auth.js';
 import { getSetting, setSetting, db } from '../db.js';
 import { rateLimit, consume, clear } from '../rate-limit.js';
+import { pauseRequests, resumeRequests } from '../request-gate.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -125,7 +127,58 @@ router.post('/change-password', requireAuth, rateLimit({ windowMs: 60 * 1000, ma
     await changePassword(req.username, current_password, new_password);
     res.json({ ok: true });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
+// Rename the logged-in user. Requires the current password (a hijacked
+// session can't rename you). Drained under the request gate so the on-disk
+// rename of the user's database file doesn't race an in-flight query.
+router.patch('/me', requireAuth, rateLimit({ windowMs: 60 * 1000, max: 3, key: (req) => `rename|${req.username}` }), async (req, res) => {
+  const { username: newUsername, current_password } = req.body ?? {};
+  if (!newUsername || !current_password)
+    return res.status(400).json({ error: 'username and current_password are required' });
+  try {
+    const oldName = req.username;
+    let acquired = false;
+    await pauseRequests();
+    acquired = true;
+    try {
+      const newName = await renameUser(oldName, newUsername, current_password);
+      // All old sessions are invalidated. Issue a fresh one for the new
+      // username so the caller stays signed in.
+      createSession(res, newName);
+      res.json({ ok: true, username: newName });
+    } finally {
+      if (acquired) resumeRequests();
+    }
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
+// Admin-only: rename any user without a password check. Same drain.
+router.patch('/users/:username', requireAuth, requireAdmin, async (req, res) => {
+  const target = String(req.params.username ?? '').toLowerCase();
+  const { username: newUsername } = req.body ?? {};
+  if (!newUsername) return res.status(400).json({ error: 'username is required' });
+  const exists = master.prepare('SELECT 1 FROM users WHERE username = ?').get(target);
+  if (!exists) return res.status(404).json({ error: 'User not found' });
+  try {
+    let acquired = false;
+    await pauseRequests();
+    acquired = true;
+    try {
+      const newName = await renameUser(target, newUsername);
+      // The target's sessions are invalidated; if the renamed user happens
+      // to be the caller, re-issue a session cookie so the admin stays in.
+      if (req.username === target) createSession(res, newName);
+      res.json({ ok: true, username: newName });
+    } finally {
+      if (acquired) resumeRequests();
+    }
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message });
   }
 });
 

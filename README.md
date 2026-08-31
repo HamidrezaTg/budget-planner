@@ -103,8 +103,10 @@ npm run dev       # development mode with hot reload
   arbitrary bank exports, read-only chat over your data, and dev-mode change
   proposals that apply only on your explicit confirmation — fully audit-logged;
   works with local models (Ollama, LM Studio)
+- **Accounts & people** — manage bank accounts, cards, cash, spending pots, opening
+  balances, and the people attached to income sources
 - **Multi-user** — username + password, one private SQLite database per user,
-  admin user management
+  admin user management, and safe username changes
 
 ## Privacy & data ownership
 
@@ -163,6 +165,12 @@ cookies, so prefer one of:
 2. a private VPN such as Tailscale for devices anywhere;
 3. an HTTPS reverse proxy (e.g. Caddy) in front of the server — set
    `SECURE_COOKIE=1` and `TRUST_PROXY=1` in `/etc/default/budget-planner`.
+
+**Tailscale phone setup.** Install Tailscale on both the server machine and the
+phone, then enter the server's Tailscale IP (`100.x.y.z`) or MagicDNS hostname in
+the Android app. Keep the planner port in the address, for example
+`http://100.x.y.z:2026`. The Android shell remembers up to ten server addresses,
+so LAN and Tailscale endpoints can coexist.
 
 ## Documentation
 

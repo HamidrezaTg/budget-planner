@@ -1,17 +1,27 @@
-// Pause/resume for API requests. A backup restore swaps the user's database
-// file on disk; in-flight requests still holding the old handle would either
-// write to the detached inode (silently lost) or crash on the closed handle.
-// pauseRequests() drains the API first — all handlers here are short pieces of
-// synchronous SQLite work — and resumeRequests() releases the queued ones.
+// Pause/resume for API requests. A backup restore (or username rename)
+// swaps the user's database file on disk; in-flight requests still
+// holding the old handle would either write to the detached inode
+// (silently lost) or crash on the closed handle. pauseRequests() drains
+// the API first — all handlers here are short pieces of synchronous
+// SQLite work — and resumeRequests() releases the queued ones.
 
 let paused = false;
+// Requests currently mid-handler (after the gate, before the response
+// closes). The admin or self-rename handler marks itself as "exempt from
+// drain" via req.gateExempt so it doesn't wait on itself.
 let inFlight = 0;
 let waiter = null;
 const queued = [];
 
 export function gate(req, res, next) {
-  // The restore request itself must pass while everything else waits.
-  if (req.method === 'POST' && req.path === '/settings/restore') return next();
+  // The restore and rename handlers must pass while everything else waits.
+  if (
+    (req.method === 'POST' && req.path === '/settings/restore') ||
+    (req.method === 'PATCH' && (req.path === '/auth/me' || req.path.startsWith('/auth/users/')))
+  ) {
+    req.gateExempt = true;
+    return next();
+  }
   const enter = () => {
     inFlight++;
     // 'close' fires exactly once per response (also on client aborts).
@@ -29,9 +39,10 @@ export function gate(req, res, next) {
   else enter();
 }
 
-// Waits until no API request is in flight. On timeout it un-pauses (queued
-// requests proceed) and rejects, so a hung AI call cannot wedge restores
-// forever — the caller just reports the failure.
+// Waits until no NON-EXEMPT API request is in flight. The caller is
+// expected to have marked itself exempt via req.gateExempt. On timeout it
+// un-pauses (queued requests proceed) and rejects, so a hung request cannot
+// wedge restore/rename forever — the caller just reports the failure.
 export function pauseRequests(timeoutMs = 30000) {
   paused = true;
   if (inFlight === 0) return Promise.resolve();

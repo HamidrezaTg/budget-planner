@@ -22,6 +22,7 @@ import Settings from './pages/Settings.jsx';
 import Help from './pages/Help.jsx';
 import Users from './pages/Users.jsx';
 import Recurring from './pages/Recurring.jsx';
+import Accounts from './pages/Accounts.jsx';
 
 export default function App() {
   const [status, setStatus] = useState(null);
@@ -100,11 +101,12 @@ export default function App() {
             <Route path="/funds" element={<Funds />} />
             <Route path="/commitments" element={<Commitments />} />
             <Route path="/income" element={<Income />} />
+            <Route path="/accounts" element={<Accounts />} />
             <Route path="/balances" element={<Balances />} />
             <Route path="/projection" element={<Projection />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/chat" element={<Chat />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings" element={<Settings me={me} />} />
             <Route path="/help" element={<Help />} />
             {me?.admin && <Route path="/users" element={<Users admin me={me.username} />} />}
             <Route path="*" element={<Navigate to="/" replace />} />

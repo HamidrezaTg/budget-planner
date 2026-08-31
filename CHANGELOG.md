@@ -3,7 +3,23 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
-## [3.11.0] — unreleased
+## [3.12.0] — 2026-08-31
+
+### Added
+- **Accounts page** with create, edit, opening-balance, spending-pot, and guarded delete controls.
+- **People management** for names used by income sources, including safe rename and delete.
+- `GET /api/accounts` and `POST`/`PATCH`/`DELETE /api/accounts/:id` for account management.
+- `GET /api/persons` and `POST`/`PATCH`/`DELETE /api/persons/:id` for person management.
+- Self-service and admin username renaming. Existing databases, uploads, and sessions are handled safely.
+- `/.well-known/budget-planner` discovery metadata for clients.
+- Android saved-server list with discovery validation and a mobile server-switch action.
+
+### Fixed
+- Account and person partial updates no longer require unrelated fields.
+- Username database-file moves close cached SQLite handles and roll back file changes if the master update fails.
+- API request draining no longer deadlocks a rename request on itself.
+
+## [3.11.0] — 2026-08-31
 
 ### Added (data model)
 - `accounts.opening_balance` — per-account starting balance. Reflected in the

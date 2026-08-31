@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, setCurrency } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
-export default function Settings() {
+export default function Settings({ me }) {
   const { confirm, toast } = useDialogs();
   const [cfg, setCfg] = useState(null);
   const [provider, setProvider] = useState('');
@@ -21,6 +21,12 @@ export default function Settings() {
   const [pwMsg, setPwMsg] = useState(null);
   const [dataMsg, setDataMsg] = useState(null);
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'light');
+  const [rename, setRename] = useState({ username: me?.username || '', current_password: '' });
+  const [renameMsg, setRenameMsg] = useState(null);
+
+  useEffect(() => {
+    if (me?.username) setRename((previous) => ({ ...previous, username: previous.username || me.username }));
+  }, [me?.username]);
 
   useEffect(() => {
     api.get('/settings').then((s) => {
@@ -163,6 +169,18 @@ export default function Settings() {
     }
   };
 
+  const renameAccount = async (e) => {
+    e.preventDefault();
+    setRenameMsg(null);
+    try {
+      await api.patch('/auth/me', rename);
+      // The server replaces the session cookie under the new username.
+      window.location.reload();
+    } catch (err) {
+      setRenameMsg({ ok: false, text: err.message });
+    }
+  };
+
   const deleteSpending = async () => {
     const ok = await confirm({
       title: 'Delete all spending data?',
@@ -252,6 +270,28 @@ export default function Settings() {
           </select>
           <p className="muted tiny">Changes the display format only. Exchange rates for foreign transactions are managed below.</p>
         </div>
+      </div>
+
+      <div className="card settings-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Identity</p>
+            <h2 style={{ fontSize: 18, margin: 0 }}>Change username</h2>
+          </div>
+        </div>
+        <p className="muted tiny">Use 2–32 lowercase letters, numbers, or underscores. Your data stays with the account.</p>
+        <form className="settings-section" onSubmit={renameAccount}>
+          <label className="muted tiny">New username
+            <input value={rename.username} maxLength={32} onChange={(e) => setRename({ ...rename, username: e.target.value })} autoComplete="username" required />
+          </label>
+          <label className="muted tiny">Current password
+            <input type="password" value={rename.current_password} onChange={(e) => setRename({ ...rename, current_password: e.target.value })} autoComplete="current-password" required />
+          </label>
+          <div className="btn-row" style={{ alignItems: 'center' }}>
+            <button className="btn primary" type="submit" disabled={!rename.username.trim() || !rename.current_password}>Change username</button>
+            {renameMsg && <span className={renameMsg.ok ? 'good' : 'error'}>{renameMsg.text}</span>}
+          </div>
+        </form>
       </div>
 
       {/* Account */}

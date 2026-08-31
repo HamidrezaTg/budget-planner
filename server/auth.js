@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
-import { master, getUserDb, als, isAdmin } from './db.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { master, getUserDb, als, isAdmin, safeDbFilename, DATA_DIR, closeUserDb } from './db.js';
 
 const COOKIE = 'bp_session';
 
@@ -82,6 +84,96 @@ export function requireAdmin(req, res, next) {
 
 export function userExists(username) {
   return !!master.prepare('SELECT 1 FROM users WHERE username = ?').get(username);
+}
+
+const USERNAME_RE = /^[a-z0-9_]{2,32}$/;
+
+// Validate a candidate username (lowercased). Returns the normalized name or
+// throws an Error. Same rules as createUser: a-z, 0-9, _, 2-32 chars.
+export function normalizeUsername(username) {
+  const name = String(username ?? '').trim().toLowerCase();
+  if (!USERNAME_RE.test(name)) throw new Error('Username must be 2–32 chars: letters, numbers, _');
+  return name;
+}
+
+// Rename a user. Optionally verifies the caller's current password first
+// (used for the self-service endpoint) or skips the check (admin override).
+// Atomic: the rename runs inside the request gate so no in-flight request
+// can hold the old handle. All sessions for the old name are invalidated
+// (a re-login is required) and a new session is created for the new name.
+export async function renameUser(currentName, newUsername, verifyWithPassword = null) {
+  const target = normalizeUsername(newUsername);
+  if (verifyWithPassword !== null) {
+    if (!(await verifyLogin(currentName, verifyWithPassword))) {
+      throw new Error('Current password is wrong');
+    }
+  }
+  if (target === currentName) return target;   // authenticated no-op
+  // Reject if the new name is already in use.
+  const exists = master
+    .prepare('SELECT 1 FROM users WHERE username = ?')
+    .get(target);
+  if (exists) throw new Error('That username is already taken');
+  // The request gate has drained other API work, so the cached SQLite handle
+  // can be closed before moving its database files.
+  closeUserDb(currentName);
+  // Move the files first, then update master.db. If the database update fails,
+  // the returned undo function puts every moved file back.
+  let undoFiles;
+  try {
+    undoFiles = await renameUserFiles(currentName, target);
+  } catch (e) {
+    getUserDb(currentName);
+    throw e;
+  }
+  try {
+    master.exec('BEGIN');
+    // Invalidate every session for the old name. The caller will receive a
+    // fresh session in the self-service route.
+    master.prepare('DELETE FROM sessions WHERE username = ?').run(currentName);
+    master.prepare('UPDATE users SET username = ? WHERE username = ?').run(target, currentName);
+    master.exec('COMMIT');
+  } catch (e) {
+    try { master.exec('ROLLBACK'); } catch {}
+    try { undoFiles(); } catch {}
+    getUserDb(currentName);
+    throw e;
+  }
+  return target;
+}
+
+async function renameUserFiles(oldName, newName) {
+  const usersDir = path.join(DATA_DIR, 'users');
+  const oldSafe = safeDbFilename(oldName);
+  const newSafe = safeDbFilename(newName);
+  const oldPath = path.join(usersDir, `${oldSafe}.db`);
+  const newPath = path.join(usersDir, `${newSafe}.db`);
+  const moves = [];
+  const move = (from, to) => {
+    if (!fs.existsSync(from)) return;
+    if (fs.existsSync(to)) throw new Error(`rename target already exists: ${to}`);
+    fs.renameSync(from, to);
+    moves.push([to, from]);
+  };
+  try {
+    if (oldPath !== newPath) {
+      for (const suffix of ['', '-wal', '-shm']) move(oldPath + suffix, newPath + suffix);
+    }
+    // Upload directory rename (also uses the encoded username).
+    const oldUploads = path.join(DATA_DIR, 'uploads', oldSafe);
+    const newUploads = path.join(DATA_DIR, 'uploads', newSafe);
+    if (oldUploads !== newUploads) move(oldUploads, newUploads);
+  } catch (e) {
+    for (const [from, to] of moves.reverse()) {
+      try { fs.renameSync(from, to); } catch {}
+    }
+    throw new Error(`Could not rename user data: ${e.message}`);
+  }
+  return () => {
+    for (const [from, to] of moves.reverse()) {
+      try { fs.renameSync(from, to); } catch {}
+    }
+  };
 }
 
 export async function changePassword(username, currentPassword, newPassword) {
