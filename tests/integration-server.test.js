@@ -12,7 +12,7 @@ let srv;
 let cookies = '';
 
 before(async () => {
-  srv = await startServer(dir);
+  srv = await startServer(dir, 0, { METRICS_ENABLED: '1' });
 });
 after(async () => {
   await srv?.stop();
@@ -25,6 +25,13 @@ test('security headers are present and X-Powered-By is gone', async () => {
   assert.equal(r.headers.get('x-frame-options'), 'SAMEORIGIN');
   assert.ok(r.headers.get('content-security-policy')?.includes("script-src 'self'"));
   assert.equal(r.headers.get('x-powered-by'), null);
+});
+
+test('optional metrics expose request counters without budget data', async () => {
+  const r = await fetch(`${srv.url}/metrics`);
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-type'), /^text\/plain;.*version=0\.0\.4/);
+  assert.match(await r.text(), /budget_planner_requests_total \d+/);
 });
 
 test('setup rejects short passwords', async () => {

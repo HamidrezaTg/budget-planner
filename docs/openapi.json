@@ -31,6 +31,19 @@
         "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
       }
     },
+    "/metrics": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Expose optional Prometheus metrics",
+        "operationId": "getMetrics",
+        "servers": [{ "url": "/", "description": "Server root (outside /api)" }],
+        "security": [],
+        "responses": {
+          "200": { "$ref": "#/components/responses/MetricsResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
     "/.well-known/budget-planner": {
       "get": {
         "tags": ["Public"],
@@ -1148,6 +1161,10 @@
       }
     },
     "responses": {
+      "MetricsResponse": {
+        "description": "Prometheus text exposition; available only when METRICS_ENABLED=1.",
+        "content": { "text/plain": { "schema": { "type": "string" } } }
+      },
       "JsonResponse": {
         "description": "Endpoint-specific JSON response.",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Json" } } }

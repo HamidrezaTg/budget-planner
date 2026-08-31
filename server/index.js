@@ -63,6 +63,32 @@ app.use((_req, res, next) => {
   next();
 });
 
+const responseCounts = new Map();
+let requestCount = 0;
+app.use((req, res, next) => {
+  if (req.path !== '/metrics') {
+    requestCount++;
+    res.on('finish', () => {
+      responseCounts.set(res.statusCode, (responseCounts.get(res.statusCode) ?? 0) + 1);
+    });
+  }
+  next();
+});
+
+app.get('/metrics', (_req, res) => {
+  if (process.env.METRICS_ENABLED !== '1') return res.status(404).end();
+  const lines = [
+    '# HELP budget_planner_requests_total Total HTTP requests handled by Budget Planner.',
+    '# TYPE budget_planner_requests_total counter',
+    `budget_planner_requests_total ${requestCount}`,
+  ];
+  for (const [status, count] of responseCounts) {
+    lines.push(`budget_planner_responses_total{status="${status}"} ${count}`);
+  }
+  res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+  res.send(`${lines.join('\n')}\n`);
+});
+
 // Unauthenticated health probe for systemd/uptime monitors. No data, no auth
 // side effects — just liveness.
 app.get('/healthz', (_req, res) => {

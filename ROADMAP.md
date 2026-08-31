@@ -122,7 +122,7 @@ git push --follow-tags
 - [x] v3.17.4 Coverage reports: `c8` for server, `vitest --coverage` for client.
 - [x] v3.17.5 Dependency audit automation.
 - [x] v3.17.6 Optional Caddy/HTTPS recipes in docs.
-- [ ] v3.17.7 Optional `/metrics` for Prometheus.
+- [x] v3.17.7 Optional `/metrics` for Prometheus.
 - [ ] v3.17.8 Tag `v3.17.0`, push `--follow-tags`.
 
 ### v3.18 — Optional big modules

@@ -9,6 +9,7 @@ const document = JSON.parse(
 
 const expectedOperations = [
   ['GET', '/healthz'],
+  ['GET', '/metrics'],
   ['GET', '/.well-known/budget-planner'],
   ['GET', '/auth/status'],
   ['POST', '/auth/setup'],

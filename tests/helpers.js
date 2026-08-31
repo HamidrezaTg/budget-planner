@@ -30,11 +30,17 @@ export async function loadAuth(dataDir) {
 
 // Start a real server on an ephemeral-ish port with an isolated data dir.
 // Returns { url, stop }.
-export async function startServer(dataDir, port = 0) {
+export async function startServer(dataDir, port = 0, extraEnv = {}) {
   const usedPort = port || 21300 + Math.floor(Math.random() * 300);
   const child = spawn(process.execPath, ['server/index.js'], {
     cwd: path.join(import.meta.dirname, '..'),
-    env: { ...process.env, DATA_DIR: dataDir, PORT: String(usedPort), NODE_ENV: 'test' },
+    env: {
+      ...process.env,
+      DATA_DIR: dataDir,
+      PORT: String(usedPort),
+      NODE_ENV: 'test',
+      ...extraEnv,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stderr = '';

@@ -136,6 +136,7 @@ npm run dev       # development mode with hot reload
 | `BIND_IP` | all interfaces | Listen address (`127.0.0.1` for localhost-only) |
 | `SECURE_COOKIE` | off | Set to `1` when serving behind HTTPS so session cookies are marked `Secure` |
 | `TRUST_PROXY` | off | Set to `1` when behind a reverse proxy (for correct client IPs/rate limiting) |
+| `METRICS_ENABLED` | off | Set to `1` to expose request counters at `/metrics` for Prometheus |
 | `SETUP_TOKEN` | – | Optional token in `X-Setup-Token` for first-run setup from a non-localhost address |
 | `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | – | AI fallback if not set in Settings (`AI_MODEL` defaults to `gpt-4o-mini`) |
 
@@ -173,6 +174,10 @@ cookies, so prefer one of:
 2. a private VPN such as Tailscale for devices anywhere;
 3. an HTTPS reverse proxy (e.g. Caddy) in front of the server — set
    `SECURE_COOKIE=1` and `TRUST_PROXY=1` in `/etc/default/budget-planner`.
+
+The optional `/metrics` endpoint is disabled by default. If enabled, restrict it
+to the Prometheus network at the reverse proxy or firewall; it is intentionally
+not protected by a Budget Planner session cookie.
 
 **Tailscale phone setup.** Install Tailscale on both the server machine and the
 phone, then enter the server's Tailscale IP (`100.x.y.z`) or MagicDNS hostname in
