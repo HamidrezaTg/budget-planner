@@ -123,6 +123,7 @@ const PAGES = [
     items: [      ['Provider / API key / Model', 'Choose an AI provider, enter your key, load the models available to your key, pick one. Stored in your own database only.'],
       ['Test connection', 'Sends a trivial request to verify the setup works.'],
       ['Exchange rates', 'Monthly conversion rates from foreign currencies into your display currency. Fetch them from the ECB with one click or type any rate manually. Transactions without a rate count 1:1 and show a dashboard warning.'],
+      ['Privacy mode', 'Use the eye button in the sidebar to blur financial values while keeping navigation and labels visible. The choice is remembered in this browser.'],
     ],
   },
   {

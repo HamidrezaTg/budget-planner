@@ -3,6 +3,15 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.16.0] — 2026-08-31
+
+### Added
+- Persistent privacy mode that blurs financial values without hiding navigation.
+- Keyboard navigation shortcuts: `g+d`, `g+t`, `g+r`, and `?` for Help.
+- Drag-and-drop statement import with remembered import account selection.
+- Per-category monthly spending trends, month-over-month comparisons, and
+  browser Print / PDF output on Reports.
+
 ## [3.15.0] — 2026-08-31
 
 ### Added
