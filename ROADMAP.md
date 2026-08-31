@@ -111,7 +111,7 @@ git push --follow-tags
 - [x] v3.16.4 Reports: per-category trend chart and MoM comparison.
 - [x] v3.16.5 Import UX: drag-and-drop, remember last account.
 - [x] v3.16.6 PDF export per month/year.
-- [ ] v3.16.7 Tag `v3.16.0`, push `--follow-tags`.
+- [x] v3.16.7 Tag `v3.16.0`, push `--follow-tags`.
 
 ### v3.17 — Hardening and infrastructure
 
