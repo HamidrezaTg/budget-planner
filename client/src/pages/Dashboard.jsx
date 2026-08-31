@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, eur, currentMonth, monthLabel } from '../api.js';
 
@@ -18,12 +18,18 @@ export default function Dashboard() {
   const [upcoming, setUpcoming] = useState(null);
 
   useEffect(() => {
-    api.get(`/dashboard/${month}`).then(setData).catch(() => {});
+    api
+      .get(`/dashboard/${month}`)
+      .then(setData)
+      .catch(() => {});
   }, [month]);
 
   useEffect(() => {
     if (month === currentMonth()) {
-      api.get('/recurrences').then((r) => setUpcoming(r.upcoming)).catch(() => {});
+      api
+        .get('/recurrences')
+        .then((r) => setUpcoming(r.upcoming))
+        .catch(() => {});
     } else {
       setUpcoming(null);
     }
@@ -38,22 +44,24 @@ export default function Dashboard() {
   };
 
   const spentPct =
-    data.planned_total > 0
-      ? Math.min(100, (data.actual_total / data.planned_total) * 100)
-      : 0;
+    data.planned_total > 0 ? Math.min(100, (data.actual_total / data.planned_total) * 100) : 0;
   const isCurrent = month === currentMonth();
-  const now = new Date();
 
   // Server sends raw numbers in `fields`; format here so amounts follow the
   // currency chosen on the Settings page.
   const insightText = (ins) => {
     const f = ins.fields ?? {};
     switch (ins.kind) {
-      case 'over-budget': return `${eur(f.amount_over)} over its planned budget.`;
-      case 'pace': return `${f.spent_pct}% of plan used · ${f.elapsed_pct}% of month elapsed.`;
-      case 'fund-goal': return `${eur(f.monthly_needed)} per month needed to reach ${eur(f.target)}.`;
-      case 'fund-overdue': return `${f.months_late} month${f.months_late === 1 ? '' : 's'} past target — still ${eur(f.missing)} short.`;
-      default: return ins.message || '';
+      case 'over-budget':
+        return `${eur(f.amount_over)} over its planned budget.`;
+      case 'pace':
+        return `${f.spent_pct}% of plan used · ${f.elapsed_pct}% of month elapsed.`;
+      case 'fund-goal':
+        return `${eur(f.monthly_needed)} per month needed to reach ${eur(f.target)}.`;
+      case 'fund-overdue':
+        return `${f.months_late} month${f.months_late === 1 ? '' : 's'} past target — still ${eur(f.missing)} short.`;
+      default:
+        return ins.message || '';
     }
   };
 
@@ -64,13 +72,18 @@ export default function Dashboard() {
           <p className="eyebrow">Monthly check-in</p>
           <h1>{monthLabel(month)}</h1>
           <p className="muted">
-            Planned {eur(data.planned_total)} · Actual {eur(data.actual_total)} · Income {eur(data.income)}
+            Planned {eur(data.planned_total)} · Actual {eur(data.actual_total)} · Income{' '}
+            {eur(data.income)}
           </p>
         </div>
         <div className="month-nav">
-          <button className="btn" aria-label="Previous month" onClick={() => shiftMonth(-1)}>‹</button>
+          <button className="btn" aria-label="Previous month" onClick={() => shiftMonth(-1)}>
+            ‹
+          </button>
           <strong>{isCurrent ? 'This month' : monthLabel(month)}</strong>
-          <button className="btn" aria-label="Next month" onClick={() => shiftMonth(1)}>›</button>
+          <button className="btn" aria-label="Next month" onClick={() => shiftMonth(1)}>
+            ›
+          </button>
           {!isCurrent && (
             <button
               className="btn"
@@ -81,7 +94,11 @@ export default function Dashboard() {
             </button>
           )}
           {data.notification_count > 0 && (
-            <a className="notification-pill" href="#insights" aria-label={`${data.notification_count} dashboard alerts`}>
+            <a
+              className="notification-pill"
+              href="#insights"
+              aria-label={`${data.notification_count} dashboard alerts`}
+            >
               <span className="notification-dot" />
               {data.notification_count} alert{data.notification_count === 1 ? '' : 's'}
             </a>
@@ -91,7 +108,9 @@ export default function Dashboard() {
 
       <div className="stats-row">
         <div className="card stat highlight">
-          <div className="stat-label"><span>Transfer to Revolut</span></div>
+          <div className="stat-label">
+            <span>Transfer to Revolut</span>
+          </div>
           <div className="stat-value">{eur(data.transfer_to_revolut)}</div>
           <p>move this amount to your spending account</p>
           <div className="safe-meter">
@@ -99,24 +118,35 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="card stat">
-          <div className="stat-label"><span>Income (actual)</span></div>
+          <div className="stat-label">
+            <span>Income (actual)</span>
+          </div>
           <div className="stat-value income">{eur(data.income)}</div>
           <p>entered on the Income page</p>
         </div>
         <div className="card stat">
-          <div className="stat-label"><span>Spent</span></div>
+          <div className="stat-label">
+            <span>Spent</span>
+          </div>
           <div className="stat-value">{eur(data.actual_total)}</div>
-          <p>of {eur(data.planned_total)} planned · {Math.round(spentPct)}%</p>
+          <p>
+            of {eur(data.planned_total)} planned · {Math.round(spentPct)}%
+          </p>
         </div>
         <div className="card stat">
-          <div className="stat-label"><span>Month result</span></div>
+          <div className="stat-label">
+            <span>Month result</span>
+          </div>
           <div className={`stat-value ${data.month_result >= 0 ? 'income' : 'expense'}`}>
-            {data.month_result >= 0 ? '+' : ''}{eur(data.month_result)}
+            {data.month_result >= 0 ? '+' : ''}
+            {eur(data.month_result)}
           </div>
           <p>{data.month_result >= 0 ? 'under' : 'over'} the plan, all groups</p>
         </div>
         <Link to="/transactions?review=1" className="card stat review-link">
-          <div className="stat-label"><span>Needs review</span></div>
+          <div className="stat-label">
+            <span>Needs review</span>
+          </div>
           <div className={`stat-value ${data.warnings.needs_review > 0 ? 'warn' : ''}`}>
             {data.warnings.needs_review}
           </div>
@@ -160,7 +190,9 @@ export default function Dashboard() {
                 <div className="insight-copy">
                   <strong>{insight.title}</strong>
                   <p>{insightText(insight)}</p>
-                  <Link to={insight.link}>{insight.action} <span aria-hidden="true">→</span></Link>
+                  <Link to={insight.link}>
+                    {insight.action} <span aria-hidden="true">→</span>
+                  </Link>
                 </div>
               </div>
             ))}
@@ -179,7 +211,10 @@ export default function Dashboard() {
           </div>
           {upcoming.slice(0, 8).map((u, i) => (
             <div key={i} className="bill-row">
-              <div className="bill-date"><strong>{String(u.day).padStart(2, '0')}</strong><span>{u.month.slice(5)}</span></div>
+              <div className="bill-date">
+                <strong>{String(u.day).padStart(2, '0')}</strong>
+                <span>{u.month.slice(5)}</span>
+              </div>
               <div className="transaction-main">
                 <strong>{u.name}</strong>
                 <small>{u.auto_post ? 'auto-posts' : 'confirm on Recurring page'}</small>
@@ -209,7 +244,12 @@ export default function Dashboard() {
               </span>
             </div>
             {g.rows.map((r) => {
-              const pct = r.planned > 0 ? Math.min(100, (r.actual / r.planned) * 100) : r.actual > 0 ? 100 : 0;
+              const pct =
+                r.planned > 0
+                  ? Math.min(100, (r.actual / r.planned) * 100)
+                  : r.actual > 0
+                    ? 100
+                    : 0;
               return (
                 <div key={r.id} className="category-row">
                   <div className="category-name">
@@ -226,7 +266,11 @@ export default function Dashboard() {
                     />
                   </div>
                   <div className="category-meta">
-                    <span>{r.planned > 0 ? `${Math.round((r.actual / r.planned) * 100)}% used` : 'no plan'}</span>
+                    <span>
+                      {r.planned > 0
+                        ? `${Math.round((r.actual / r.planned) * 100)}% used`
+                        : 'no plan'}
+                    </span>
                     <span>
                       {r.planned > 0
                         ? r.difference >= 0

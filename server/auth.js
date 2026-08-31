@@ -40,7 +40,9 @@ function verifyPasswordAsync(password, storedHash) {
 }
 
 export async function createUser(username, password, role = 'user') {
-  const name = String(username ?? '').trim().toLowerCase();
+  const name = String(username ?? '')
+    .trim()
+    .toLowerCase();
   // "." and "-" are excluded: they collided with "_" under the legacy
   // filename sanitizer and must never enter the system again (new usernames).
   if (!/^[a-z0-9_]{2,32}$/.test(name))
@@ -63,9 +65,11 @@ export async function createUser(username, password, role = 'user') {
 const DUMMY_HASH =
   'TgUqIPyhFmzoIhLhX8FGyw==:5fd9cd424d71a2c3f48e4566788ab09d12e3f4a5b6c7d8910e2f4c3adeaf90b2';
 export async function verifyLogin(username, password) {
-  const row = master
-    .prepare('SELECT username, password_hash FROM users WHERE username = ?')
-    .get(String(username ?? '').trim().toLowerCase());
+  const row = master.prepare('SELECT username, password_hash FROM users WHERE username = ?').get(
+    String(username ?? '')
+      .trim()
+      .toLowerCase(),
+  );
   if (!row) {
     await verifyPasswordAsync(password ?? '', DUMMY_HASH);
     return null;
@@ -91,7 +95,9 @@ const USERNAME_RE = /^[a-z0-9_]{2,32}$/;
 // Validate a candidate username (lowercased). Returns the normalized name or
 // throws an Error. Same rules as createUser: a-z, 0-9, _, 2-32 chars.
 export function normalizeUsername(username) {
-  const name = String(username ?? '').trim().toLowerCase();
+  const name = String(username ?? '')
+    .trim()
+    .toLowerCase();
   if (!USERNAME_RE.test(name)) throw new Error('Username must be 2–32 chars: letters, numbers, _');
   return name;
 }
@@ -108,11 +114,9 @@ export async function renameUser(currentName, newUsername, verifyWithPassword = 
       throw new Error('Current password is wrong');
     }
   }
-  if (target === currentName) return target;   // authenticated no-op
+  if (target === currentName) return target; // authenticated no-op
   // Reject if the new name is already in use.
-  const exists = master
-    .prepare('SELECT 1 FROM users WHERE username = ?')
-    .get(target);
+  const exists = master.prepare('SELECT 1 FROM users WHERE username = ?').get(target);
   if (exists) throw new Error('That username is already taken');
   // The request gate has drained other API work, so the cached SQLite handle
   // can be closed before moving its database files.
@@ -134,8 +138,12 @@ export async function renameUser(currentName, newUsername, verifyWithPassword = 
     master.prepare('UPDATE users SET username = ? WHERE username = ?').run(target, currentName);
     master.exec('COMMIT');
   } catch (e) {
-    try { master.exec('ROLLBACK'); } catch {}
-    try { undoFiles(); } catch {}
+    try {
+      master.exec('ROLLBACK');
+    } catch {}
+    try {
+      undoFiles();
+    } catch {}
     getUserDb(currentName);
     throw e;
   }
@@ -165,20 +173,23 @@ async function renameUserFiles(oldName, newName) {
     if (oldUploads !== newUploads) move(oldUploads, newUploads);
   } catch (e) {
     for (const [from, to] of moves.reverse()) {
-      try { fs.renameSync(from, to); } catch {}
+      try {
+        fs.renameSync(from, to);
+      } catch {}
     }
     throw new Error(`Could not rename user data: ${e.message}`);
   }
   return () => {
     for (const [from, to] of moves.reverse()) {
-      try { fs.renameSync(from, to); } catch {}
+      try {
+        fs.renameSync(from, to);
+      } catch {}
     }
   };
 }
 
 export async function changePassword(username, currentPassword, newPassword) {
-  if (!(await verifyLogin(username, currentPassword)))
-    throw new Error('Current password is wrong');
+  if (!(await verifyLogin(username, currentPassword))) throw new Error('Current password is wrong');
   if (!newPassword || newPassword.length < PASSWORD_MIN)
     throw new Error(`New password must be at least ${PASSWORD_MIN} characters`);
   master

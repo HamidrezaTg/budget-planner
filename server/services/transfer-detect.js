@@ -10,7 +10,7 @@
 // the importer sets a shared `transfer_group` on both rows so the model
 // excludes them from spend/income/category sums.
 
-const AMOUNT_EPSILON = 0.005;   // half a cent — tolerates tiny FX rounding
+const AMOUNT_EPSILON = 0.005; // half a cent — tolerates tiny FX rounding
 
 function amountKey(t) {
   return Math.round(Math.abs(Number(t.amount) || 0) * 100);
@@ -19,13 +19,13 @@ function amountKey(t) {
 // Find every transfer pair in a list of previews. `accountIdByName` is a
 // best-effort matcher so the user sees "Bank account ↔ Card" instead of
 // numeric ids; pass `null` if no account has been picked yet.
-export function detectTransferPairs(previews, accountId = null) {
+export function detectTransferPairs(previews, _accountId = null) {
   // Index by (date, amount). Only keep rows that are non-zero amounts
   // (zero-amount rows are usually summaries and never form a pair).
   const buckets = new Map();
   for (let i = 0; i < previews.length; i++) {
     const t = previews[i];
-    if (t.duplicate) continue;   // already on the books; nothing to do
+    if (t.duplicate) continue; // already on the books; nothing to do
     if (!t.date || !Number.isFinite(Number(t.amount)) || Number(t.amount) === 0) continue;
     const k = `${t.date}|${amountKey(t)}`;
     if (!buckets.has(k)) buckets.set(k, []);
@@ -50,7 +50,8 @@ export function detectTransferPairs(previews, accountId = null) {
         // Different accounts, or one of them unassigned. If both are
         // unassigned, we still link them — many statements split a single
         // top-up across two rows for no reason.
-        if (ta.account_id != null && tb.account_id != null && ta.account_id === tb.account_id) continue;
+        if (ta.account_id != null && tb.account_id != null && ta.account_id === tb.account_id)
+          continue;
         if (Math.abs(Math.abs(ta.amount) - Math.abs(tb.amount)) > AMOUNT_EPSILON) continue;
         // Confidence: high when amounts match exactly AND descriptions share
         // a transfer-like keyword; medium when amounts match exactly; low
@@ -106,6 +107,13 @@ export function annotateWithTransferPairs(previews, accountId = null) {
   }
   return previews.map((t, i) => {
     const m = byIndex.get(i);
-    return m ? { ...t, transfer_pair_id: m.id, transfer_pair_other: m.other, transfer_pair_confidence: m.confidence } : t;
+    return m
+      ? {
+          ...t,
+          transfer_pair_id: m.id,
+          transfer_pair_other: m.other,
+          transfer_pair_confidence: m.confidence,
+        }
+      : t;
   });
 }

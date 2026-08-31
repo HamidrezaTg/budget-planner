@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { incomeForMonth, addMonths, currentMonth } from '../services/model.js';
+import { incomeForMonth, currentMonth } from '../services/model.js';
 
 const router = Router();
 
@@ -10,14 +10,15 @@ router.get('/', (req, res) => {
   const sources = db
     .prepare(
       `SELECT s.*, p.name AS person_name FROM income_sources s
-       LEFT JOIN persons p ON p.id = s.person_id ORDER BY s.id`
+       LEFT JOIN persons p ON p.id = s.person_id ORDER BY s.id`,
     )
     .all()
     .map((s) => ({
       ...s,
       entry_amount:
-        db.prepare('SELECT amount FROM income_entries WHERE source_id = ? AND month = ?').get(s.id, month)
-          ?.amount ?? null,
+        db
+          .prepare('SELECT amount FROM income_entries WHERE source_id = ? AND month = ?')
+          .get(s.id, month)?.amount ?? null,
     }));
   const view = incomeForMonth(month);
   res.json({ month, sources, total: view.total });
@@ -37,13 +38,13 @@ router.put('/:month/:sourceId', (req, res) => {
     if (isNaN(amt)) return res.status(400).json({ error: 'Invalid amount' });
     db.prepare(
       `INSERT INTO income_entries (source_id, month, amount) VALUES (?, ?, ?)
-       ON CONFLICT(source_id, month) DO UPDATE SET amount = excluded.amount`
+       ON CONFLICT(source_id, month) DO UPDATE SET amount = excluded.amount`,
     ).run(sourceId, month, amt);
   }
   if (req.body?.current_amount !== undefined) {
     db.prepare('UPDATE income_sources SET current_amount = ? WHERE id = ?').run(
       Number(req.body.current_amount) || 0,
-      sourceId
+      sourceId,
     );
   }
   res.json({ ok: true });

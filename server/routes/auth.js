@@ -1,5 +1,16 @@
 import { Router } from 'express';
-import { hasAnyUser, getUserDb, als, listUsers, deleteUser, closeUserDb, isAdmin, master, safeDbFilename, DATA_DIR } from '../db.js';
+import {
+  hasAnyUser,
+  getUserDb,
+  als,
+  listUsers,
+  deleteUser,
+  closeUserDb,
+  isAdmin,
+  master,
+  safeDbFilename,
+  DATA_DIR,
+} from '../db.js';
 import {
   createUser,
   verifyLogin,
@@ -42,7 +53,10 @@ function behindProxy(req) {
 function rateLimitIp(req) {
   const xff = req.headers['x-forwarded-for'];
   if (isLoopback(req.ip) && typeof xff === 'string' && xff.trim()) {
-    const parts = xff.split(',').map((s) => s.trim()).filter(Boolean);
+    const parts = xff
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (parts.length) return parts[parts.length - 1];
   }
   return req.ip;
@@ -74,7 +88,8 @@ router.post(
   rateLimit({ windowMs: 60 * 1000, max: 5 }),
   requireLocalSetup,
   async (req, res) => {
-    if (hasAnyUser()) return res.status(400).json({ error: 'An account already exists — please log in' });
+    if (hasAnyUser())
+      return res.status(400).json({ error: 'An account already exists — please log in' });
     const { username, password } = req.body ?? {};
     try {
       const name = await createUser(username, password, 'admin');
@@ -84,13 +99,15 @@ router.post(
     } catch (e) {
       res.status(400).json({ error: e.message });
     }
-  }
+  },
 );
 
 // Login is rate-limited per IP+username (10 tries / minute), with a generic
 // error so usernames cannot be enumerated.
 router.post('/login', async (req, res) => {
-  const username = String(req.body?.username ?? '').trim().toLowerCase();
+  const username = String(req.body?.username ?? '')
+    .trim()
+    .toLowerCase();
   // Two buckets: per-IP+username AND a wider per-IP bucket, so rotating
   // usernames cannot dodge the per-username throttle. Behind a local proxy the
   // bucket keys fall back to the real client IP (see rateLimitIp).
@@ -121,41 +138,51 @@ router.get('/me', requireAuth, (req, res) => {
 
 // Throttled: it verifies the current password, so an attacker with a hijacked
 // session must not be able to brute-force it without limit.
-router.post('/change-password', requireAuth, rateLimit({ windowMs: 60 * 1000, max: 5, key: (req) => `pw|${req.username}` }), async (req, res) => {
-  const { current_password, new_password } = req.body ?? {};
-  try {
-    await changePassword(req.username, current_password, new_password);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(e.status || 400).json({ error: e.message });
-  }
-});
+router.post(
+  '/change-password',
+  requireAuth,
+  rateLimit({ windowMs: 60 * 1000, max: 5, key: (req) => `pw|${req.username}` }),
+  async (req, res) => {
+    const { current_password, new_password } = req.body ?? {};
+    try {
+      await changePassword(req.username, current_password, new_password);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(e.status || 400).json({ error: e.message });
+    }
+  },
+);
 
 // Rename the logged-in user. Requires the current password (a hijacked
 // session can't rename you). Drained under the request gate so the on-disk
 // rename of the user's database file doesn't race an in-flight query.
-router.patch('/me', requireAuth, rateLimit({ windowMs: 60 * 1000, max: 3, key: (req) => `rename|${req.username}` }), async (req, res) => {
-  const { username: newUsername, current_password } = req.body ?? {};
-  if (!newUsername || !current_password)
-    return res.status(400).json({ error: 'username and current_password are required' });
-  try {
-    const oldName = req.username;
-    let acquired = false;
-    await pauseRequests();
-    acquired = true;
+router.patch(
+  '/me',
+  requireAuth,
+  rateLimit({ windowMs: 60 * 1000, max: 3, key: (req) => `rename|${req.username}` }),
+  async (req, res) => {
+    const { username: newUsername, current_password } = req.body ?? {};
+    if (!newUsername || !current_password)
+      return res.status(400).json({ error: 'username and current_password are required' });
     try {
-      const newName = await renameUser(oldName, newUsername, current_password);
-      // All old sessions are invalidated. Issue a fresh one for the new
-      // username so the caller stays signed in.
-      createSession(res, newName);
-      res.json({ ok: true, username: newName });
-    } finally {
-      if (acquired) resumeRequests();
+      const oldName = req.username;
+      let acquired = false;
+      await pauseRequests();
+      acquired = true;
+      try {
+        const newName = await renameUser(oldName, newUsername, current_password);
+        // All old sessions are invalidated. Issue a fresh one for the new
+        // username so the caller stays signed in.
+        createSession(res, newName);
+        res.json({ ok: true, username: newName });
+      } finally {
+        if (acquired) resumeRequests();
+      }
+    } catch (e) {
+      res.status(e.status || 400).json({ error: e.message });
     }
-  } catch (e) {
-    res.status(e.status || 400).json({ error: e.message });
-  }
-});
+  },
+);
 
 // Admin-only: rename any user without a password check. Same drain.
 router.patch('/users/:username', requireAuth, requireAdmin, async (req, res) => {
@@ -192,7 +219,10 @@ router.post('/users', requireAuth, requireAdmin, async (req, res) => {
   try {
     const name = await createUser(username, password, 'user');
     als.run(getUserDb(name), () => {
-      db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run('currency', 'EUR');
+      db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(
+        'currency',
+        'EUR',
+      );
     });
     res.json({ ok: true, username: name });
   } catch (e) {

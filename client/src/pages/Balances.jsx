@@ -1,16 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, eur } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
 export default function Balances() {
   const [data, setData] = useState(null);
   const [form, setForm] = useState({ account_id: '', month: '', balance: '' });
-  const [editingAccount, setEditingAccount] = useState({});   // { [id]: { opening_balance, ...saving } }
+  const [editingAccount, setEditingAccount] = useState({}); // { [id]: { opening_balance, ...saving } }
   const [msg, setMsg] = useState('');
   const { confirm } = useDialogs();
 
-  const load = () => api.get('/balances').then(setData).catch((err) => setMsg(err.message));
-  useEffect(() => { load(); }, []);
+  const load = () =>
+    api
+      .get('/balances')
+      .then(setData)
+      .catch((err) => setMsg(err.message));
+  useEffect(() => {
+    load();
+  }, []);
   if (!data) return <div className="loading">{msg ? `Failed to load: ${msg}` : 'Loading…'}</div>;
 
   const submit = async (e) => {
@@ -20,14 +26,20 @@ export default function Balances() {
       await api.post('/balances', form);
       setForm({ account_id: '', month: '', balance: '' });
       load();
-    } catch (err) { setMsg(err.message); }
+    } catch (err) {
+      setMsg(err.message);
+    }
   };
 
   const startEditAccount = (a) => {
     setEditingAccount((p) => ({ ...p, [a.id]: { opening_balance: a.opening_balance } }));
   };
   const cancelEditAccount = (id) => {
-    setEditingAccount((p) => { const n = { ...p }; delete n[id]; return n; });
+    setEditingAccount((p) => {
+      const n = { ...p };
+      delete n[id];
+      return n;
+    });
   };
   const saveEditAccount = async (a) => {
     const e = editingAccount[a.id];
@@ -37,22 +49,32 @@ export default function Balances() {
       setMsg('');
       cancelEditAccount(a.id);
       load();
-    } catch (err) { setMsg(err.message); }
+    } catch (err) {
+      setMsg(err.message);
+    }
   };
 
   return (
     <div>
       <h1>Balance check</h1>
       <p className="muted">
-        Type in the real bank balance each month. The projection re-anchors to it instead of
-        letting drift compound silently — the variance is shown as a discrete, explained figure.
+        Type in the real bank balance each month. The projection re-anchors to it instead of letting
+        drift compound silently — the variance is shown as a discrete, explained figure.
       </p>
       {data.anchored_at && (
         <div className="card success-box" style={{ marginBottom: 12 }}>
           📍 Projection currently anchored to <b>{data.anchored_at}</b>
           {data.reconciled.find((r) => r.month === data.anchored_at) && (
-            <> · variance there:{' '}
-              <b className={data.reconciled.find((r) => r.month === data.anchored_at).variance >= 0 ? 'good' : 'bad'}>
+            <>
+              {' '}
+              · variance there:{' '}
+              <b
+                className={
+                  data.reconciled.find((r) => r.month === data.anchored_at).variance >= 0
+                    ? 'good'
+                    : 'bad'
+                }
+              >
                 {eur(data.reconciled.find((r) => r.month === data.anchored_at).variance)}
               </b>
             </>
@@ -68,45 +90,89 @@ export default function Balances() {
           </div>
         </div>
         <table>
-          <thead><tr><th>Account</th><th>Kind</th><th className="num">Opening balance</th><th className="num">Predicted (this month)</th><th className="num">Latest observation</th><th className="num">Variance</th><th></th></tr></thead>
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Kind</th>
+              <th className="num">Opening balance</th>
+              <th className="num">Predicted (this month)</th>
+              <th className="num">Latest observation</th>
+              <th className="num">Variance</th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
             {data.per_account.map((a) => {
               const edit = editingAccount[a.id];
               return (
                 <tr key={a.id}>
-                  <td>{a.name}{a.is_spending_pot ? <span className="pill-badge accent-badge" style={{ marginLeft: 6 }}>spending pot</span> : null}</td>
+                  <td>
+                    {a.name}
+                    {a.is_spending_pot ? (
+                      <span className="pill-badge accent-badge" style={{ marginLeft: 6 }}>
+                        spending pot
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="muted">{a.kind}</td>
                   <td className="num">
                     {edit ? (
                       <input
-                        type="number" step="0.01" style={{ width: 110 }}
+                        type="number"
+                        step="0.01"
+                        style={{ width: 110 }}
                         title="Money already in the account when you started using the planner"
                         value={edit.opening_balance}
-                        onChange={(e) => setEditingAccount((p) => ({ ...p, [a.id]: { ...p[a.id], opening_balance: e.target.value } }))}
+                        onChange={(e) =>
+                          setEditingAccount((p) => ({
+                            ...p,
+                            [a.id]: { ...p[a.id], opening_balance: e.target.value },
+                          }))
+                        }
                       />
-                    ) : eur(a.opening_balance)}
+                    ) : (
+                      eur(a.opening_balance)
+                    )}
                   </td>
                   <td className="num muted">{eur(a.predicted_at_month)}</td>
                   <td className="num muted">
-                    {a.latest_observation
-                      ? `${a.latest_observation.month} · ${eur(a.latest_observation.balance)}`
-                      : <span className="muted tiny">no observation</span>}
+                    {a.latest_observation ? (
+                      `${a.latest_observation.month} · ${eur(a.latest_observation.balance)}`
+                    ) : (
+                      <span className="muted tiny">no observation</span>
+                    )}
                   </td>
-                  <td className={`num ${a.variance == null ? 'muted' : a.variance >= 0 ? 'good' : 'bad'}`}>
+                  <td
+                    className={`num ${a.variance == null ? 'muted' : a.variance >= 0 ? 'good' : 'bad'}`}
+                  >
                     {a.variance == null ? '—' : (a.variance >= 0 ? '+' : '') + eur(a.variance)}
                   </td>
                   <td>
                     {edit ? (
                       <>
-                        <button className="btn small primary" title="Save the new opening balance" onClick={() => saveEditAccount(a)}>Save</button>
-                        <button className="btn ghost small" title="Cancel without saving" onClick={() => cancelEditAccount(a.id)}>Cancel</button>
+                        <button
+                          className="btn small primary"
+                          title="Save the new opening balance"
+                          onClick={() => saveEditAccount(a)}
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="btn ghost small"
+                          title="Cancel without saving"
+                          onClick={() => cancelEditAccount(a.id)}
+                        >
+                          Cancel
+                        </button>
                       </>
                     ) : (
                       <button
                         className="btn ghost small"
                         title={`Edit the opening balance for ${a.name}`}
                         onClick={() => startEditAccount(a)}
-                      >✎</button>
+                      >
+                        ✎
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -118,17 +184,38 @@ export default function Balances() {
 
       <div className="filters card">
         <form onSubmit={submit} className="inline-form">
-          <select title="Which account this observation is for" value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
+          <select
+            title="Which account this observation is for"
+            value={form.account_id}
+            onChange={(e) => setForm({ ...form, account_id: e.target.value })}
+          >
             <option value="">Account…</option>
-            {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            {data.accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
           </select>
-          <input title="The month this balance is for" type="month" value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value })} />
           <input
-            type="number" step="0.01" placeholder="Actual balance €"
-            title="The real balance you saw in your bank on that month"
-            value={form.balance} onChange={(e) => setForm({ ...form, balance: e.target.value })}
+            title="The month this balance is for"
+            type="month"
+            value={form.month}
+            onChange={(e) => setForm({ ...form, month: e.target.value })}
           />
-          <button className="btn primary" title="Record the real bank balance for this month and account">Record</button>
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Actual balance €"
+            title="The real balance you saw in your bank on that month"
+            value={form.balance}
+            onChange={(e) => setForm({ ...form, balance: e.target.value })}
+          />
+          <button
+            className="btn primary"
+            title="Record the real bank balance for this month and account"
+          >
+            Record
+          </button>
           {msg && <span className="error">{msg}</span>}
         </form>
       </div>
@@ -137,17 +224,30 @@ export default function Balances() {
       <div className="card table-card tight">
         <table>
           <thead>
-            <tr><th>Month</th><th>Account</th><th className="num">Observed</th><th className="num">Model predicted</th><th className="num">Variance</th><th></th></tr>
+            <tr>
+              <th>Month</th>
+              <th>Account</th>
+              <th className="num">Observed</th>
+              <th className="num">Model predicted</th>
+              <th className="num">Variance</th>
+              <th></th>
+            </tr>
           </thead>
           <tbody>
             {data.reconciled.map((r) => (
               <tr key={r.id}>
-                <td>{r.month}{r.month === data.anchored_at && <span className="pill-badge accent-badge">anchor</span>}</td>
+                <td>
+                  {r.month}
+                  {r.month === data.anchored_at && (
+                    <span className="pill-badge accent-badge">anchor</span>
+                  )}
+                </td>
                 <td>{r.account_name}</td>
                 <td className="num">{eur(r.balance)}</td>
                 <td className="num">{eur(r.predicted)}</td>
                 <td className={`num ${r.variance >= 0 ? 'good' : 'bad'}`}>
-                  {r.variance >= 0 ? '+' : ''}{eur(r.variance)}
+                  {r.variance >= 0 ? '+' : ''}
+                  {eur(r.variance)}
                 </td>
                 <td>
                   <button
@@ -165,15 +265,23 @@ export default function Balances() {
                           await api.del(`/balances/${r.id}`);
                           setMsg('');
                           load();
-                        } catch (err) { setMsg(err.message); }
+                        } catch (err) {
+                          setMsg(err.message);
+                        }
                       }
                     }}
-                  >Delete</button>
+                  >
+                    Delete
+                  </button>
                 </td>
               </tr>
             ))}
             {data.reconciled.length === 0 && (
-              <tr><td colSpan="6" className="muted">No observations yet — enter your first real balance above.</td></tr>
+              <tr>
+                <td colSpan="6" className="muted">
+                  No observations yet — enter your first real balance above.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

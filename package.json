@@ -7,7 +7,10 @@
     "dev": "concurrently -k \"node server/index.js\" \"npm --prefix client run dev\"",
     "build": "npm --prefix client run build",
     "start": "node server/index.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "lint": "eslint .",
+    "format:check": "prettier --check \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"*.config.js\" \"client/*.config.js\"",
+    "format": "prettier --write \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"*.config.js\" \"client/*.config.js\""
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",
@@ -17,6 +20,11 @@
     "xlsx": "npm:@e965/xlsx@0.20.3"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.9.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6"
   }
 }

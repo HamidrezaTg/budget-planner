@@ -9,7 +9,9 @@ const dbm = await loadDb(dir);
 const accountsRoute = (await import('../server/routes/accounts.js')).default;
 const personsRoute = (await import('../server/routes/persons.js')).default;
 const { als } = dbm;
-after(() => { cleanup(dir); });
+after(() => {
+  cleanup(dir);
+});
 
 // Spin up an Express app that wraps every request in ALS for the test user.
 function app() {
@@ -25,15 +27,34 @@ function call(method, path, body) {
     const server = app().listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       const data = body !== undefined ? JSON.stringify(body) : undefined;
-      const req = http.request({
-        method, host: '127.0.0.1', port, path,
-        headers: { 'Content-Type': 'application/json', 'Content-Length': data ? Buffer.byteLength(data) : 0 },
-      }, (res) => {
-        let buf = '';
-        res.on('data', (c) => { buf += c; });
-        res.on('end', () => { server.close(); dbm.closeUserDb('test-user'); resolve({ status: res.statusCode, body: buf ? JSON.parse(buf) : null }); });
+      const req = http.request(
+        {
+          method,
+          host: '127.0.0.1',
+          port,
+          path,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': data ? Buffer.byteLength(data) : 0,
+          },
+        },
+        (res) => {
+          let buf = '';
+          res.on('data', (c) => {
+            buf += c;
+          });
+          res.on('end', () => {
+            server.close();
+            dbm.closeUserDb('test-user');
+            resolve({ status: res.statusCode, body: buf ? JSON.parse(buf) : null });
+          });
+        },
+      );
+      req.on('error', (e) => {
+        server.close();
+        dbm.closeUserDb('test-user');
+        reject(e);
       });
-      req.on('error', (e) => { server.close(); dbm.closeUserDb('test-user'); reject(e); });
       if (data) req.write(data);
       req.end();
     });
@@ -69,7 +90,13 @@ test('account: partial PATCH (rename) preserves is_spending_pot', async () => {
 test('account: delete refused when transactions reference it', async () => {
   const a = await call('POST', '/api/accounts', { name: 'Used' });
   const db = dbm.getUserDb('test-user');
-  als.run(db, () => db.prepare('INSERT INTO transactions (date, description, amount, currency, account_id, dedup_key) VALUES (?, ?, ?, ?, ?, ?)').run('2026-08-15', 'X', -1, 'EUR', a.body.id, 'a-test-1'));
+  als.run(db, () =>
+    db
+      .prepare(
+        'INSERT INTO transactions (date, description, amount, currency, account_id, dedup_key) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run('2026-08-15', 'X', -1, 'EUR', a.body.id, 'a-test-1'),
+  );
   const d = await call('DELETE', `/api/accounts/${a.body.id}`);
   assert.equal(d.status, 409);
 });

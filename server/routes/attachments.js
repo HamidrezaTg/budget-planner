@@ -23,12 +23,18 @@ function contentMatchesDeclared(buffer, mime) {
   const ascii = (offset, text) =>
     buffer.subarray(offset, offset + text.length).toString('latin1') === text;
   switch (mime) {
-    case 'application/pdf': return ascii(0, '%PDF-');
-    case 'image/png': return buffer[0] === 0x89 && ascii(1, 'PNG\r\n\x1a\n'.slice(1));
-    case 'image/jpeg': return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-    case 'image/webp': return ascii(0, 'RIFF') && ascii(8, 'WEBP');
-    case 'text/csv': return !buffer.subarray(0, 4096).includes(0);
-    default: return false;
+    case 'application/pdf':
+      return ascii(0, '%PDF-');
+    case 'image/png':
+      return buffer[0] === 0x89 && ascii(1, 'PNG\r\n\x1a\n'.slice(1));
+    case 'image/jpeg':
+      return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    case 'image/webp':
+      return ascii(0, 'RIFF') && ascii(8, 'WEBP');
+    case 'text/csv':
+      return !buffer.subarray(0, 4096).includes(0);
+    default:
+      return false;
   }
 }
 
@@ -71,7 +77,9 @@ router.get('/', (req, res) => {
     return res.status(400).json({ error: 'Valid transaction_id required' });
   res.json({
     attachments: req.attDb
-      .prepare('SELECT id, original_name, mime, size, created_at FROM attachments WHERE transaction_id = ? ORDER BY id')
+      .prepare(
+        'SELECT id, original_name, mime, size, created_at FROM attachments WHERE transaction_id = ? ORDER BY id',
+      )
       .all(txId),
   });
 });
@@ -85,9 +93,13 @@ router.post('/', upload.single('file'), (req, res) => {
 
   const ext = ALLOWED[req.file.mimetype];
   if (!ext)
-    return res.status(400).json({ error: `Unsupported file type (${req.file.mimetype}). Allowed: PDF, PNG, JPEG, WebP, CSV` });
+    return res.status(400).json({
+      error: `Unsupported file type (${req.file.mimetype}). Allowed: PDF, PNG, JPEG, WebP, CSV`,
+    });
   if (!contentMatchesDeclared(req.file.buffer, req.file.mimetype))
-    return res.status(400).json({ error: `File content does not look like a ${req.file.mimetype}` });
+    return res
+      .status(400)
+      .json({ error: `File content does not look like a ${req.file.mimetype}` });
 
   const original = String(req.file.originalname ?? 'file').slice(0, 200);
   const storedName = `${txId}-${crypto.randomUUID()}${ext}`;
@@ -102,7 +114,9 @@ router.post('/', upload.single('file'), (req, res) => {
   }
 
   const r = req.attDb
-    .prepare('INSERT INTO attachments (transaction_id, filename, original_name, mime, size) VALUES (?, ?, ?, ?, ?)')
+    .prepare(
+      'INSERT INTO attachments (transaction_id, filename, original_name, mime, size) VALUES (?, ?, ?, ?, ?)',
+    )
     .run(txId, storedName, original, req.file.mimetype, req.file.size);
 
   const row = findAttachment(req.attDb, r.lastInsertRowid);
@@ -120,15 +134,19 @@ router.get('/:id/file', (req, res) => {
   const row = findAttachment(req.attDb, req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   const file = attachmentPath(req.uploadDir, row.filename);
-  if (!file || !fs.existsSync(file)) return res.status(404).json({ error: 'File missing from disk' });
+  if (!file || !fs.existsSync(file))
+    return res.status(404).json({ error: 'File missing from disk' });
 
   const inline = req.query.inline === '1';
   res.setHeader(
     'Content-Type',
-    inline && row.mime.startsWith('image/') ? row.mime : 'application/octet-stream'
+    inline && row.mime.startsWith('image/') ? row.mime : 'application/octet-stream',
   );
   const safeName = row.original_name.replace(/[\r\n"\\]/g, '_');
-  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`);
+  res.setHeader(
+    'Content-Disposition',
+    `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`,
+  );
   res.sendFile(file);
 });
 
@@ -137,7 +155,9 @@ router.delete('/:id', (req, res) => {
   if (!row) return res.status(404).json({ error: 'Not found' });
   const file = attachmentPath(req.uploadDir, row.filename);
   if (file) {
-    try { fs.unlinkSync(file); } catch {}
+    try {
+      fs.unlinkSync(file);
+    } catch {}
   }
   req.attDb.prepare('DELETE FROM attachments WHERE id = ?').run(row.id);
   res.json({ ok: true });
@@ -145,7 +165,8 @@ router.delete('/:id', (req, res) => {
 
 // map multer errors to clean client responses
 router.use((err, _req, res, _next) => {
-  if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File exceeds the 10 MB limit' });
+  if (err?.code === 'LIMIT_FILE_SIZE')
+    return res.status(413).json({ error: 'File exceeds the 10 MB limit' });
   if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
 });
 

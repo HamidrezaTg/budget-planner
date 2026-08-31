@@ -73,7 +73,11 @@ router.patch('/:id', (req, res) => {
     // Allow setting a token to mark this row as part of a transfer pair, or
     // clearing it (null) to make the row count as normal spend/income again.
     sets.push('transfer_group = ?');
-    args.push(b.transfer_group === null || b.transfer_group === '' ? null : String(b.transfer_group).slice(0, 80));
+    args.push(
+      b.transfer_group === null || b.transfer_group === ''
+        ? null
+        : String(b.transfer_group).slice(0, 80),
+    );
   }
 
   if (b.description !== undefined) {
@@ -84,7 +88,8 @@ router.patch('/:id', (req, res) => {
   }
 
   if (b.date !== undefined) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date))
+      return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
     sets.push('date = ?');
     args.push(b.date);
   }
@@ -105,9 +110,9 @@ router.patch('/:id', (req, res) => {
          FROM transactions t
          LEFT JOIN categories c ON c.id = t.category_id
          LEFT JOIN funds f ON f.id = t.fund_id
-         WHERE t.id = ?`
+         WHERE t.id = ?`,
       )
-      .get(req.params.id)
+      .get(req.params.id),
   );
 });
 
@@ -127,7 +132,10 @@ router.delete('/:id', (req, res) => {
   // survive pointing at missing files.
   const ids = [
     tx.id,
-    ...db.prepare('SELECT id FROM transactions WHERE split_of = ?').all(tx.id).map((r) => r.id),
+    ...db
+      .prepare('SELECT id FROM transactions WHERE split_of = ?')
+      .all(tx.id)
+      .map((r) => r.id),
   ];
   const placeholders = ids.map(() => '?').join(',');
   const files = db
@@ -146,7 +154,9 @@ router.delete('/:id', (req, res) => {
     for (const f of files) {
       const resolved = path.resolve(dir, f.filename);
       if (resolved.startsWith(path.resolve(dir) + path.sep)) {
-        try { fs.unlinkSync(resolved); } catch {}
+        try {
+          fs.unlinkSync(resolved);
+        } catch {}
       }
     }
   }
@@ -160,7 +170,10 @@ router.delete('/:id', (req, res) => {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function computeDedupKey(date, amount, currency, description) {
-  const desc = String(description ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const desc = String(description ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
   return `${date}|${Number(amount).toFixed(2)}|${currency}|${desc}`;
 }
 
@@ -171,7 +184,7 @@ function buildInsertStatement() {
   return db.prepare(
     `INSERT INTO transactions
        (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key, fund_id, transfer_group)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 }
 
@@ -181,9 +194,11 @@ function validateManualEntry(t, index) {
   else {
     if (!DATE_RE.test(t.date || '')) errors.push(`row ${index + 1}: date must be YYYY-MM-DD`);
     const desc = String(t.description ?? '').trim();
-    if (!desc || desc.length > 200) errors.push(`row ${index + 1}: description required (1-200 chars)`);
+    if (!desc || desc.length > 200)
+      errors.push(`row ${index + 1}: description required (1-200 chars)`);
     const amt = Number(t.amount);
-    if (!Number.isFinite(amt) || amt === 0) errors.push(`row ${index + 1}: amount must be a non-zero number`);
+    if (!Number.isFinite(amt) || amt === 0)
+      errors.push(`row ${index + 1}: amount must be a non-zero number`);
     const currency = String(t.currency ?? 'EUR').toUpperCase();
     if (currency.length !== 3) errors.push(`row ${index + 1}: currency must be 3 letters`);
     if (t.account_id != null && t.account_id !== '') {
@@ -223,7 +238,7 @@ function insertOne(t) {
     'manual',
     dedupKey,
     fundId,
-    transferGroup
+    transferGroup,
   );
   return result.lastInsertRowid;
 }
@@ -232,7 +247,8 @@ router.post('/', (req, res) => {
   const body = req.body ?? {};
   const list = Array.isArray(body) ? body : [body];
   if (list.length === 0) return res.status(400).json({ error: 'Provide at least one transaction' });
-  if (list.length > 200) return res.status(400).json({ error: 'Bulk add is limited to 200 transactions per request' });
+  if (list.length > 200)
+    return res.status(400).json({ error: 'Bulk add is limited to 200 transactions per request' });
 
   const errors = [];
   for (let i = 0; i < list.length; i++) {
@@ -245,7 +261,12 @@ router.post('/', (req, res) => {
   db.exec('BEGIN');
   try {
     for (const t of list) {
-      const dedupKey = computeDedupKey(t.date, Number(t.amount), String(t.currency ?? 'EUR').toUpperCase(), t.description);
+      const dedupKey = computeDedupKey(
+        t.date,
+        Number(t.amount),
+        String(t.currency ?? 'EUR').toUpperCase(),
+        t.description,
+      );
       const existing = db.prepare('SELECT id FROM transactions WHERE dedup_key = ?').get(dedupKey);
       if (existing) {
         duplicates.push({ dedup_key: dedupKey, existing_id: existing.id });
@@ -259,7 +280,12 @@ router.post('/', (req, res) => {
     db.exec('ROLLBACK');
     throw e;
   }
-  res.json({ ok: true, created: created.length, duplicates: duplicates.length, ids: created.map((c) => c.id) });
+  res.json({
+    ok: true,
+    created: created.length,
+    duplicates: duplicates.length,
+    ids: created.map((c) => c.id),
+  });
 });
 
 // ------------------------------------------------------------- splits
@@ -268,7 +294,8 @@ router.post('/', (req, res) => {
 router.post('/:id/split', (req, res) => {
   const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
   if (!tx) return res.status(404).json({ error: 'Transaction not found' });
-  if (tx.split_group) return res.status(400).json({ error: 'Transaction is already split (or a split part)' });
+  if (tx.split_group)
+    return res.status(400).json({ error: 'Transaction is already split (or a split part)' });
 
   const parts = req.body?.parts;
   if (!Array.isArray(parts) || parts.length < 2)
@@ -288,15 +315,23 @@ router.post('/:id/split', (req, res) => {
   const group = `split-${tx.id}-${Date.now()}`;
   const ins = db.prepare(
     `INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key, split_group, split_of)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
   );
   db.exec('BEGIN');
   try {
     parts.forEach((p, i) => {
       ins.run(
-        tx.date, tx.description, Number(p.amount), tx.tx_type, tx.currency,
-        tx.account_id, Number(p.category_id), `split:${tx.id}`, `split|${tx.id}|${i}`,
-        group, tx.id
+        tx.date,
+        tx.description,
+        Number(p.amount),
+        tx.tx_type,
+        tx.currency,
+        tx.account_id,
+        Number(p.category_id),
+        `split:${tx.id}`,
+        `split|${tx.id}|${i}`,
+        group,
+        tx.id,
       );
     });
     db.prepare('UPDATE transactions SET split_group = ? WHERE id = ?').run(group, tx.id);
@@ -313,7 +348,8 @@ router.post('/:id/unsplit', (req, res) => {
   const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
   if (!tx) return res.status(404).json({ error: 'Transaction not found' });
   if (!tx.split_group) return res.status(400).json({ error: 'Not split' });
-  if (tx.split_of) return res.status(400).json({ error: 'This is a split part — delete it instead' });
+  if (tx.split_of)
+    return res.status(400).json({ error: 'This is a split part — delete it instead' });
 
   // Collect attachment files of the split children, delete the rows, and only
   // unlink after the delete committed (see DELETE above).
@@ -340,7 +376,9 @@ router.post('/:id/unsplit', (req, res) => {
     for (const f of files) {
       const resolved = path.resolve(dir, f.filename);
       if (resolved.startsWith(path.resolve(dir) + path.sep)) {
-        try { fs.unlinkSync(resolved); } catch {}
+        try {
+          fs.unlinkSync(resolved);
+        } catch {}
       }
     }
   }
@@ -350,14 +388,14 @@ router.post('/:id/unsplit', (req, res) => {
 // Rules management
 router.get('/rules/all', (_req, res) => {
   const keywordRules = db
-      .prepare(
-        `SELECT r.*, c.name AS category_name,
+    .prepare(
+      `SELECT r.*, c.name AS category_name,
                 (SELECT COUNT(*) FROM transactions t WHERE LOWER(t.description) LIKE '%' || r.keyword || '%') AS matches
          FROM category_rules r JOIN categories c ON c.id = r.category_id
-         ORDER BY r.keyword`
-      )
-      .all()
-      .map((r) => ({ ...r, rule_type: 'keyword' }));
+         ORDER BY r.keyword`,
+    )
+    .all()
+    .map((r) => ({ ...r, rule_type: 'keyword' }));
   const automationRules = db
     .prepare(
       `SELECT r.*, c.name AS category_name,
@@ -368,7 +406,7 @@ router.get('/rules/all', (_req, res) => {
                  AND (r.account_id IS NULL OR t.account_id = r.account_id)
                  AND (r.tx_type IS NULL OR LOWER(COALESCE(t.tx_type, '')) = LOWER(r.tx_type))) AS matches
        FROM category_automation_rules r JOIN categories c ON c.id = r.category_id
-       ORDER BY r.priority DESC, r.id`
+       ORDER BY r.priority DESC, r.id`,
     )
     .all()
     .map((r) => ({ ...r, rule_type: 'advanced' }));
@@ -385,15 +423,26 @@ router.post('/rules', (req, res) => {
 
 router.post('/rules/advanced', (req, res) => {
   const b = req.body ?? {};
-  const hasCondition = [b.description_contains, b.amount_min, b.amount_max, b.account_id, b.tx_type]
-    .some((value) => value !== undefined && value !== null && String(value).trim() !== '');
+  const hasCondition = [
+    b.description_contains,
+    b.amount_min,
+    b.amount_max,
+    b.account_id,
+    b.tx_type,
+  ].some((value) => value !== undefined && value !== null && String(value).trim() !== '');
   if (!b.category_id || !hasCondition)
     return res.status(400).json({ error: 'At least one condition and a category are required' });
   if (b.amount_min !== '' && b.amount_min != null && !Number.isFinite(Number(b.amount_min)))
     return res.status(400).json({ error: 'Minimum amount must be numeric' });
   if (b.amount_max !== '' && b.amount_max != null && !Number.isFinite(Number(b.amount_max)))
     return res.status(400).json({ error: 'Maximum amount must be numeric' });
-  if (b.amount_min !== '' && b.amount_max !== '' && b.amount_min != null && b.amount_max != null && Number(b.amount_min) > Number(b.amount_max))
+  if (
+    b.amount_min !== '' &&
+    b.amount_max !== '' &&
+    b.amount_min != null &&
+    b.amount_max != null &&
+    Number(b.amount_min) > Number(b.amount_max)
+  )
     return res.status(400).json({ error: 'Minimum amount cannot exceed maximum amount' });
   if (!db.prepare('SELECT id FROM categories WHERE id = ?').get(b.category_id))
     return res.status(400).json({ error: 'Unknown category' });
@@ -407,9 +456,15 @@ router.post('/rules/test', (req, res) => {
     account_id: req.body?.account_id || null,
     tx_type: req.body?.tx_type || '',
   });
-  res.json(result
-    ? { category_id: result.category_id, category_name: result.category_name || null, rule: result.rule }
-    : { category_id: null, category_name: null, rule: null });
+  res.json(
+    result
+      ? {
+          category_id: result.category_id,
+          category_name: result.category_name || null,
+          rule: result.rule,
+        }
+      : { category_id: null, category_name: null, rule: null },
+  );
 });
 
 router.delete('/rules/:id', (req, res) => {

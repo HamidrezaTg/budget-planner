@@ -82,7 +82,9 @@ http
     if (req.method === 'GET' && req.url.endsWith('/models')) {
       res.setHeader('Content-Type', 'application/json');
       res.end(
-        JSON.stringify({ data: [{ id: 'mock-large' }, { id: 'mock-mini' }, { id: 'mock-vision' }] })
+        JSON.stringify({
+          data: [{ id: 'mock-large' }, { id: 'mock-mini' }, { id: 'mock-vision' }],
+        }),
       );
       return;
     }

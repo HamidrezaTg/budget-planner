@@ -1,8 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectTransferPairs, annotateWithTransferPairs } from '../server/services/transfer-detect.js';
+import {
+  detectTransferPairs,
+  annotateWithTransferPairs,
+} from '../server/services/transfer-detect.js';
 
-function tx(o) { return { date: o.date, amount: o.amount, description: o.description ?? '', account_id: o.account_id ?? null }; }
+function tx(o) {
+  return {
+    date: o.date,
+    amount: o.amount,
+    description: o.description ?? '',
+    account_id: o.account_id ?? null,
+  };
+}
 
 test('detects a matching bank↔card pair on the same date', () => {
   const pairs = detectTransferPairs([

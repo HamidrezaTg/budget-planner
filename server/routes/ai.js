@@ -12,11 +12,13 @@ router.use(requireAuth);
 // endpoints in the app. Per-user limits keep a runaway client (or a compromised
 // session) from burning quota; per-user rather than per-IP because a household
 // legitimately shares one IP.
-router.use(rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  key: (req) => `ai:${req.username}`,
-}));
+router.use(
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    key: (req) => `ai:${req.username}`,
+  }),
+);
 
 // Client-supplied history is untrusted: cap each message and the whole
 // conversation so one huge paste cannot balloon the prompt (or the bill).
@@ -30,9 +32,9 @@ function boundedHistory(raw) {
 }
 
 const audit = (kind, detail, status = 'ok') =>
-  db.prepare('INSERT INTO ai_audit_log (kind, detail, status) VALUES (?, ?, ?)').run(
-    kind, String(detail).slice(0, 2000), status
-  );
+  db
+    .prepare('INSERT INTO ai_audit_log (kind, detail, status) VALUES (?, ?, ?)')
+    .run(kind, String(detail).slice(0, 2000), status);
 
 // ---------------------------------------------------------------- helpers
 function fail(res, e, kind) {
@@ -48,7 +50,7 @@ router.post('/suggest-categories', async (req, res) => {
     const txs = db
       .prepare(
         `SELECT id, description, amount, date FROM transactions
-         WHERE needs_review = 1 ORDER BY date DESC LIMIT ?`
+         WHERE needs_review = 1 ORDER BY date DESC LIMIT ?`,
       )
       .all(limit);
     if (!txs.length) return res.json({ suggestions: [] });
@@ -123,7 +125,8 @@ router.post('/chat', async (req, res) => {
           'Use the run_sql tool to query the database when needed — never invent numbers. ' +
           'Amounts in transactions: negative = expense, positive = refund/credit. ' +
           `Today is ${new Date().toISOString().slice(0, 10)}. Currency is EUR.\n\n` +
-          'Database schema:\n' + schemaContext(),
+          'Database schema:\n' +
+          schemaContext(),
       },
       ...history,
     ];
@@ -179,23 +182,19 @@ router.post('/dev-chat', async (req, res) => {
           'Prefer one clear proposal over several vague ones. If information is missing ' +
           '(e.g. which month, which amount), ask instead of guessing. ' +
           'Months are YYYY-MM. Amounts are EUR numbers. ' +
-          'Current state:\n' + schemaContext(),
+          'Current state:\n' +
+          schemaContext(),
       },
       ...history,
     ];
 
     const msg = await chatComplete(cfg, messages, DEV_TOOLS);
-    const proposals = (msg.tool_calls ?? [])
-      .map((c) => proposalFromToolCall(c))
-      .filter(Boolean);
+    const proposals = (msg.tool_calls ?? []).map((c) => proposalFromToolCall(c)).filter(Boolean);
 
     if (!proposals.length && msg.content) {
       return res.json({ reply: msg.content, proposals: [] });
     }
-    audit(
-      'proposal',
-      proposals.map((p) => `${p.type}:${p.summary}`).join(' | ')
-    );
+    audit('proposal', proposals.map((p) => `${p.type}:${p.summary}`).join(' | '));
     res.json({
       reply: msg.content || 'Here are my proposed changes — review and apply.',
       proposals,
@@ -218,9 +217,7 @@ router.post('/dev-apply', (req, res) => {
 });
 
 router.get('/audit', (_req, res) => {
-  res.json(
-    db.prepare('SELECT * FROM ai_audit_log ORDER BY id DESC LIMIT 100').all()
-  );
+  res.json(db.prepare('SELECT * FROM ai_audit_log ORDER BY id DESC LIMIT 100').all());
 });
 
 export default router;

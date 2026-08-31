@@ -5,8 +5,18 @@ import { freshDataDir, cleanup, loadDb } from './helpers.js';
 
 const dir = freshDataDir();
 const dbm = await loadDb(dir);
-const { project, currentMonth, addMonths, plannedForCategory, monthView, actualByCategory, fundBalanceAt } = await import('../server/services/model.js');
-after(() => { cleanup(dir); });
+const {
+  project,
+  currentMonth,
+  addMonths,
+  plannedForCategory,
+  monthView,
+  actualByCategory,
+  fundBalanceAt,
+} = await import('../server/services/model.js');
+after(() => {
+  cleanup(dir);
+});
 
 function prepareProjectionData() {
   dbm.getUserDb('proj-user');
@@ -15,11 +25,15 @@ function prepareProjectionData() {
   raw.prepare("INSERT INTO categories (name, monthly_budget) VALUES ('RentX', 1000)").run();
   const acc = raw.prepare("INSERT INTO accounts (name) VALUES ('Bank')").run().lastInsertRowid;
   const from = currentMonth();
-  const y = Number(from.split('-')[0]);
-  const mo = Number(from.split('-')[1]);
   const anchor = addMonths(from, -3); // three months before the start
-  raw.prepare('INSERT INTO balance_observations (account_id, month, balance) VALUES (?, ?, ?)').run(acc, anchor, 5000);
-  raw.prepare(`INSERT INTO income_sources (name, current_amount, recurring) VALUES ('Salary', 3000, 1)`).run();
+  raw
+    .prepare('INSERT INTO balance_observations (account_id, month, balance) VALUES (?, ?, ?)')
+    .run(acc, anchor, 5000);
+  raw
+    .prepare(
+      `INSERT INTO income_sources (name, current_amount, recurring) VALUES ('Salary', 3000, 1)`,
+    )
+    .run();
   raw.close();
   return from;
 }
@@ -52,17 +66,24 @@ test('budget rollover accumulates across multiple months', () => {
     const m2 = addMonths(currentMonth(), -1);
     const m3 = currentMonth();
     // Activity + tiny spend each month: 10 of 100(+carry) spent each time.
-    for (const [m, day] of [[m0, '05'], [m1, '05'], [m2, '05']]) {
+    for (const [m, day] of [
+      [m0, '05'],
+      [m1, '05'],
+      [m2, '05'],
+    ]) {
       setup(
         `INSERT INTO transactions (date, description, amount, currency, category_id, account_id, dedup_key)
          VALUES (?, 'spend', -10, 'EUR', ?, ?, ?)`,
-        `${m}-${day}`, catId, accId, `roll-${m}`
+        `${m}-${day}`,
+        catId,
+        accId,
+        `roll-${m}`,
       );
     }
     // m3 planning: m2 effective plan = 100 + carry(m1) ...
     const planned = plannedForCategory(
       { id: catId, is_active: 1, monthly_budget: 100, roll_overs: 1 },
-      m3
+      m3,
     );
     // Three months of 10/100 spending: carries 90, 180, 270 → month 3 = 100+270.
     assert.equal(planned, 100 + 270);
@@ -94,25 +115,32 @@ test('transfer rows are excluded from category spend and from month totals', () 
     setup('DELETE FROM accounts');
     const acc = setup("INSERT INTO accounts (name) VALUES ('Bank')").lastInsertRowid;
     const card = setup("INSERT INTO accounts (name) VALUES ('Card')").lastInsertRowid;
-    const cat = setup("INSERT INTO categories (name, account_id) VALUES ('Groceries', ?)", card).lastInsertRowid;
+    const cat = setup(
+      "INSERT INTO categories (name, account_id) VALUES ('Groceries', ?)",
+      card,
+    ).lastInsertRowid;
     const m = currentMonth();
     // 80 of real groceries.
     setup(
       `INSERT INTO transactions (date, description, amount, currency, category_id, account_id, dedup_key)
        VALUES (?, 'REWE', -80, 'EUR', ?, ?, 'groc')`,
-      `${m}-05`, cat, card
+      `${m}-05`,
+      cat,
+      card,
     );
     // 100 transfer out of Bank, 100 transfer into Card — both sides get a
     // shared transfer_group, so neither counts.
     setup(
       `INSERT INTO transactions (date, description, amount, currency, account_id, transfer_group, dedup_key)
        VALUES (?, 'TOP-UP', -100, 'EUR', ?, 'tg-1', 'xfer-a')`,
-      `${m}-01`, acc
+      `${m}-01`,
+      acc,
     );
     setup(
       `INSERT INTO transactions (date, description, amount, currency, account_id, transfer_group, dedup_key)
        VALUES (?, 'TOP-UP', 100, 'EUR', ?, 'tg-1', 'xfer-b')`,
-      `${m}-01`, card
+      `${m}-01`,
+      card,
     );
 
     // Only Groceries should be in the category sum (80).
@@ -136,17 +164,21 @@ test('a transaction linked to a fund draws the fund balance down', () => {
     const m = currentMonth();
     const fund = setup(
       `INSERT INTO funds (name, start_month, monthly_contribution, opening_balance) VALUES (?, ?, 50, 0)`,
-      'Vet fund', m
+      'Vet fund',
+      m,
     );
     setup(
       `INSERT INTO transactions (date, description, amount, currency, category_id, account_id, fund_id, dedup_key)
        VALUES (?, 'Vet bill', -30, 'EUR', ?, ?, ?, 'vet-1')`,
-      `${m}-10`, cat, acc, fund.lastInsertRowid
+      `${m}-10`,
+      cat,
+      acc,
+      fund.lastInsertRowid,
     );
     // The fund balance = opening 0 + 1 month × 50 contribution − 30 vet bill = 20.
     const bal = fundBalanceAt(
       db.prepare('SELECT * FROM funds WHERE id = ?').get(fund.lastInsertRowid),
-      m
+      m,
     );
     assert.equal(Math.round(bal * 100) / 100, 20);
   });
@@ -157,7 +189,9 @@ test('projection includes per-account opening_balance in the total predicted', (
   const db = dbm.getUserDb('opening-user');
   const from = dbm.als.run(db, () => {
     db.prepare("INSERT INTO accounts (name, opening_balance) VALUES ('Bank', 1000)").run();
-    db.prepare(`INSERT INTO income_sources (name, current_amount, recurring) VALUES ('Salary', 0, 1)`).run();
+    db.prepare(
+      `INSERT INTO income_sources (name, current_amount, recurring) VALUES ('Salary', 0, 1)`,
+    ).run();
     return currentMonth();
   });
   const out = dbm.als.run(db, () => project(2, from));

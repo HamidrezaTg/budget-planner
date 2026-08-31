@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import XLSX from 'xlsx';
 import { db } from '../db.js';
-import { monthView, currentMonth, addMonths, ensureMonthlyReports, monthlyReportHistory } from '../services/model.js';
+import { monthView, ensureMonthlyReports, monthlyReportHistory } from '../services/model.js';
 
 const router = Router();
 
@@ -22,14 +22,23 @@ function sendXlsx(res, filename, sheets) {
   };
   const wb = XLSX.utils.book_new();
   for (const { name, rows } of sheets) {
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.map((r) => {
-      const out = {};
-      for (const [k, v] of Object.entries(r)) out[k] = safe(v);
-      return out;
-    })), name.slice(0, 31));
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        rows.map((r) => {
+          const out = {};
+          for (const [k, v] of Object.entries(r)) out[k] = safe(v);
+          return out;
+        }),
+      ),
+      name.slice(0, 31),
+    );
   }
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  );
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(buf);
 }
@@ -42,14 +51,24 @@ router.get('/export/monthly/:month.xlsx', (req, res) => {
       `SELECT t.date AS Date, t.description AS Description, t.amount AS Amount, t.currency AS Currency,
               COALESCE(c.name,'Uncategorized') AS Category
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
-       WHERE substr(t.date,1,7) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) ORDER BY t.date`
+       WHERE substr(t.date,1,7) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) ORDER BY t.date`,
     )
     .all(month);
   const view = monthView(month);
   const summary = view.rows
     .filter((r) => r.actual > 0 || r.planned > 0)
-    .map((r) => ({ Category: r.name, Planned: r.planned, Actual: r.actual, Difference: r.difference }));
-  summary.unshift({ Category: 'TOTAL', Planned: view.planned_total, Actual: view.actual_total, Difference: view.month_result });
+    .map((r) => ({
+      Category: r.name,
+      Planned: r.planned,
+      Actual: r.actual,
+      Difference: r.difference,
+    }));
+  summary.unshift({
+    Category: 'TOTAL',
+    Planned: view.planned_total,
+    Actual: view.actual_total,
+    Difference: view.month_result,
+  });
   sendXlsx(res, `report-${month}.xlsx`, [
     { name: 'Transactions', rows: txs },
     { name: 'Summary', rows: summary },
@@ -65,7 +84,7 @@ router.get('/export/yearly/:year.xlsx', (req, res) => {
               COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END),0) AS Income,
               COALESCE(SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END),0) AS Expenses
        FROM transactions t WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)
-       GROUP BY substr(t.date,1,7)`
+       GROUP BY substr(t.date,1,7)`,
     )
     .all(year);
   const byCategory = db
@@ -74,7 +93,7 @@ router.get('/export/yearly/:year.xlsx', (req, res) => {
               SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END) AS Spent
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
        WHERE substr(t.date,1,4) = ? AND t.amount < 0 AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)
-       GROUP BY c.id ORDER BY Spent`
+       GROUP BY c.id ORDER BY Spent`,
     )
     .all(year);
   sendXlsx(res, `report-${year}.xlsx`, [
@@ -94,7 +113,8 @@ router.get('/monthly/:month', (req, res) => {
       expenses: -view.actual_total,
       planned: view.planned_total,
       result: view.month_result,
-      n: db.prepare('SELECT COUNT(*) AS c FROM transactions WHERE substr(date,1,7) = ?').get(month).c,
+      n: db.prepare('SELECT COUNT(*) AS c FROM transactions WHERE substr(date,1,7) = ?').get(month)
+        .c,
     },
     byCategory: view.rows
       .filter((r) => r.actual > 0 || r.planned > 0)
@@ -115,7 +135,7 @@ router.get('/yearly/:year', (req, res) => {
         `SELECT COALESCE(SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount > 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END),0) AS income,
                 COALESCE(SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount < 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END),0) AS expenses
          FROM transactions t LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
-         WHERE substr(t.date,1,7) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)`
+         WHERE substr(t.date,1,7) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)`,
       )
       .get(m);
     months.push({ month: m, expenses: t.expenses, income: t.income });
@@ -127,7 +147,7 @@ router.get('/yearly/:year', (req, res) => {
               SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount < 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END) AS spent
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
        LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
-       WHERE substr(t.date,1,4) = ? AND (COALESCE(f.rate, 1)) * t.amount < 0 AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) GROUP BY c.id ORDER BY spent`
+       WHERE substr(t.date,1,4) = ? AND (COALESCE(f.rate, 1)) * t.amount < 0 AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) GROUP BY c.id ORDER BY spent`,
     )
     .all(year);
 
@@ -136,7 +156,7 @@ router.get('/yearly/:year', (req, res) => {
       `SELECT COALESCE(SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount > 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END),0) AS income,
               COALESCE(SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount < 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END),0) AS expenses
        FROM transactions t LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
-       WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)`
+       WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)`,
     )
     .get(year);
 
@@ -144,7 +164,7 @@ router.get('/yearly/:year', (req, res) => {
     .prepare(
       `SELECT COALESCE(SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount < 0 THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END),0) AS expenses
        FROM transactions t LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
-       WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)`
+       WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)`,
     )
     .get(String(Number(year) - 1));
 
@@ -157,11 +177,18 @@ router.get('/yearly/:year', (req, res) => {
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
        LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
        WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)
-       GROUP BY substr(t.date,1,7), c.id ORDER BY month, name`
+       GROUP BY substr(t.date,1,7), c.id ORDER BY month, name`,
     )
     .all(year);
 
-  res.json({ year, months, byCategory, byCategoryMonthly, totals, prevYearExpenses: prev.expenses });
+  res.json({
+    year,
+    months,
+    byCategory,
+    byCategoryMonthly,
+    totals,
+    prevYearExpenses: prev.expenses,
+  });
 });
 
 // CSV exports keep the ORIGINAL stored amounts and currency codes —
@@ -177,7 +204,7 @@ function sendCsv(res, filename, rows) {
   };
   const header = 'date,description,amount,currency,category';
   const body = rows.map((r) =>
-    [r.date, esc(r.description), r.amount, r.currency, esc(r.category)].join(',')
+    [r.date, esc(r.description), r.amount, r.currency, esc(r.category)].join(','),
   );
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -191,7 +218,7 @@ const exportMonthly = (req, res) => {
     .prepare(
       `SELECT t.date, t.description, t.amount, t.currency, COALESCE(c.name,'Uncategorized') AS category
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
-       WHERE substr(t.date,1,7) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) ORDER BY t.date`
+       WHERE substr(t.date,1,7) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) ORDER BY t.date`,
     )
     .all(month);
   sendCsv(res, `report-${month}.csv`, rows);
@@ -204,7 +231,7 @@ const exportYearly = (req, res) => {
     .prepare(
       `SELECT t.date, t.description, t.amount, t.currency, COALESCE(c.name,'Uncategorized') AS category
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
-       WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) ORDER BY t.date`
+       WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL) ORDER BY t.date`,
     )
     .all(year);
   sendCsv(res, `report-${year}.csv`, rows);

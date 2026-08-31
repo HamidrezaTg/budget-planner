@@ -4,7 +4,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import XLSX from 'xlsx';
-import { parseStatement, toISODate, parseAmountValue, transactionsFromGrid } from '../server/services/parser.js';
+import {
+  parseStatement,
+  toISODate,
+  parseAmountValue,
+  transactionsFromGrid,
+} from '../server/services/parser.js';
 
 test('toISODate rejects impossible calendar dates', () => {
   assert.equal(toISODate('31/31/2026', 'string'), null);
@@ -69,12 +74,16 @@ test('AI-imported grids enforce row and column limits', () => {
     col_amount: 2,
   };
   assert.throws(
-    () => transactionsFromGrid(Array.from({ length: 100_002 }, () => []), spec),
-    /100000-row limit/
+    () =>
+      transactionsFromGrid(
+        Array.from({ length: 100_002 }, () => []),
+        spec,
+      ),
+    /100000-row limit/,
   );
   assert.throws(
     () => transactionsFromGrid([Array.from({ length: 257 }, () => '')], spec),
-    /maximum 256/
+    /maximum 256/,
   );
 });
 

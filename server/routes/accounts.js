@@ -41,13 +41,13 @@ router.post('/', (req, res) => {
   const r = db
     .prepare(
       `INSERT INTO accounts (name, kind, is_spending_pot, opening_balance)
-       VALUES (?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?)`,
     )
     .run(
       String(b.name).trim(),
       String(b.kind ?? 'other'),
       b.is_spending_pot ? 1 : 0,
-      Number(b.opening_balance ?? 0)
+      Number(b.opening_balance ?? 0),
     );
   res.json(db.prepare('SELECT * FROM accounts WHERE id = ?').get(r.lastInsertRowid));
 });
@@ -60,10 +60,22 @@ router.patch('/:id', (req, res) => {
   if (err) return res.status(400).json({ error: err });
   const sets = [];
   const args = [];
-  if (b.name !== undefined) { sets.push('name = ?'); args.push(String(b.name).trim()); }
-  if (b.kind !== undefined) { sets.push('kind = ?'); args.push(String(b.kind)); }
-  if (b.is_spending_pot !== undefined) { sets.push('is_spending_pot = ?'); args.push(b.is_spending_pot ? 1 : 0); }
-  if (b.opening_balance !== undefined) { sets.push('opening_balance = ?'); args.push(Number(b.opening_balance)); }
+  if (b.name !== undefined) {
+    sets.push('name = ?');
+    args.push(String(b.name).trim());
+  }
+  if (b.kind !== undefined) {
+    sets.push('kind = ?');
+    args.push(String(b.kind));
+  }
+  if (b.is_spending_pot !== undefined) {
+    sets.push('is_spending_pot = ?');
+    args.push(b.is_spending_pot ? 1 : 0);
+  }
+  if (b.opening_balance !== undefined) {
+    sets.push('opening_balance = ?');
+    args.push(Number(b.opening_balance));
+  }
   if (sets.length === 0) return res.status(400).json({ error: 'No editable fields provided' });
   args.push(req.params.id);
   db.prepare(`UPDATE accounts SET ${sets.join(', ')} WHERE id = ?`).run(...args);

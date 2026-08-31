@@ -15,7 +15,6 @@ function upcoming(fromMonth, fromDay, count) {
   const recs = db.prepare('SELECT * FROM recurrences WHERE active = 1 ORDER BY day_of_month').all();
   const items = [];
   let m = fromMonth;
-  let d = fromDay;
   while (items.length < count) {
     const dim = daysInMonth(m);
     for (const r of recs) {
@@ -38,7 +37,6 @@ function upcoming(fromMonth, fromDay, count) {
     }
     if (m > addMonths(fromMonth, 13)) break; // safety
     m = addMonths(m, 1);
-    d = 1;
     if (m === addMonths(fromMonth, 2)) break; // only current + next month
   }
   return items;
@@ -49,9 +47,7 @@ function autoPost() {
   const now = new Date();
   const m = currentMonth();
   const today = now.getDate();
-  const recs = db
-    .prepare('SELECT * FROM recurrences WHERE active = 1 AND auto_post = 1')
-    .all();
+  const recs = db.prepare('SELECT * FROM recurrences WHERE active = 1 AND auto_post = 1').all();
   let posted = 0;
   for (const r of recs) {
     const day = Math.min(r.day_of_month, daysInMonth(m));
@@ -69,18 +65,28 @@ function post(r, month, day) {
   // Recurring amounts are planning figures — they live in the base currency.
   // Returns true only when a row was actually created; re-attempts hit the
   // dedup key (e.g. a future month was posted early) and must not count.
-  const ins = db.prepare(
-    `INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
+  const ins = db
+    .prepare(
+      `INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
      VALUES (?, ?, ?, 'Recurring', ?, ?, ?, 0, 'recurring', ?)
-     ON CONFLICT(dedup_key) DO NOTHING`
-  ).run(`${month}-${String(day).padStart(2, '0')}`, r.name, r.amount, getSetting('currency') || 'EUR', r.account_id, r.category_id, dedupKey);
+     ON CONFLICT(dedup_key) DO NOTHING`,
+    )
+    .run(
+      `${month}-${String(day).padStart(2, '0')}`,
+      r.name,
+      r.amount,
+      getSetting('currency') || 'EUR',
+      r.account_id,
+      r.category_id,
+      dedupKey,
+    );
   // Never let last_posted_month move backwards (e.g. posting a past month).
   db.prepare(
     `UPDATE recurrences
      SET last_posted_month = CASE
        WHEN last_posted_month IS NULL OR ? > last_posted_month THEN ?
        ELSE last_posted_month END
-     WHERE id = ?`
+     WHERE id = ?`,
   ).run(month, month, r.id);
   return ins.changes > 0;
 }
@@ -93,7 +99,7 @@ router.get('/', (req, res) => {
        FROM recurrences r
        LEFT JOIN accounts a ON a.id = r.account_id
        LEFT JOIN categories c ON c.id = r.category_id
-       ORDER BY r.day_of_month, r.name`
+       ORDER BY r.day_of_month, r.name`,
     )
     .all();
   const up = upcoming(currentMonth(), new Date().getDate(), 12);
@@ -101,13 +107,20 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { name, amount, day_of_month, account_id = null, category_id = null, auto_post = false } = req.body ?? {};
+  const {
+    name,
+    amount,
+    day_of_month,
+    account_id = null,
+    category_id = null,
+    auto_post = false,
+  } = req.body ?? {};
   const day = Number(day_of_month);
   if (!name?.trim() || isNaN(Number(amount)) || !(day >= 1 && day <= 28))
     return res.status(400).json({ error: 'name, signed amount and day_of_month (1-28) required' });
   const r = db
     .prepare(
-      'INSERT INTO recurrences (name, amount, day_of_month, account_id, category_id, auto_post) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO recurrences (name, amount, day_of_month, account_id, category_id, auto_post) VALUES (?, ?, ?, ?, ?, ?)',
     )
     .run(name.trim(), Number(amount), day, account_id, category_id, auto_post ? 1 : 0);
   res.json(db.prepare('SELECT * FROM recurrences WHERE id = ?').get(r.lastInsertRowid));
@@ -118,12 +131,15 @@ router.patch('/:id', (req, res) => {
   if (!row) return res.status(404).json({ error: 'Not found' });
   const b = req.body ?? {};
   // Same validation as POST: PATCH must not become the path around it.
-  if (b.day_of_month !== undefined && !(Number(b.day_of_month) >= 1 && Number(b.day_of_month) <= 28))
+  if (
+    b.day_of_month !== undefined &&
+    !(Number(b.day_of_month) >= 1 && Number(b.day_of_month) <= 28)
+  )
     return res.status(400).json({ error: 'day_of_month must be 1-28' });
   if (b.amount !== undefined && !Number.isFinite(Number(b.amount)))
     return res.status(400).json({ error: 'amount must be a number' });
   db.prepare(
-    'UPDATE recurrences SET name=?, amount=?, day_of_month=?, account_id=?, category_id=?, auto_post=?, active=? WHERE id=?'
+    'UPDATE recurrences SET name=?, amount=?, day_of_month=?, account_id=?, category_id=?, auto_post=?, active=? WHERE id=?',
   ).run(
     b.name ?? row.name,
     Number(b.amount ?? row.amount),
@@ -132,7 +148,7 @@ router.patch('/:id', (req, res) => {
     b.category_id !== undefined ? b.category_id : row.category_id,
     b.auto_post !== undefined ? (b.auto_post ? 1 : 0) : row.auto_post,
     b.active !== undefined ? (b.active ? 1 : 0) : row.active,
-    req.params.id
+    req.params.id,
   );
   res.json(db.prepare('SELECT * FROM recurrences WHERE id = ?').get(row.id));
 });
@@ -145,7 +161,8 @@ router.post('/:id/post', (req, res) => {
   const match = /^(\d{4})-(\d{2})$/.exec(String(raw));
   if (!match) return res.status(400).json({ error: 'month must be a valid YYYY-MM' });
   const [, y, mo] = match;
-  if (Number(mo) < 1 || Number(mo) > 12) return res.status(400).json({ error: 'month must be a valid YYYY-MM' });
+  if (Number(mo) < 1 || Number(mo) > 12)
+    return res.status(400).json({ error: 'month must be a valid YYYY-MM' });
   const month = `${y}-${mo}`;
   const day = Math.min(r.day_of_month, daysInMonth(month));
   post(r, month, day);

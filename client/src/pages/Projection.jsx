@@ -1,10 +1,30 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart,
+  Area,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
 } from 'recharts';
-import { api, eur, currentMonth } from '../api.js';
+import { api, eur } from '../api.js';
 
-const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const monthNames = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 const label = (m) => `${monthNames[Number(m.slice(5)) - 1]} ${m.slice(2, 4)}`;
 
 export default function Projection() {
@@ -12,10 +32,14 @@ export default function Projection() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.get('/projection?months=96').then(setData).catch((e) => setError(e.message));
+    api
+      .get('/projection?months=96')
+      .then(setData)
+      .catch((e) => setError(e.message));
   }, []);
 
-  if (!data) return <div className="loading">{error ? `Failed to load: ${error}` : 'Loading…'}</div>;
+  if (!data)
+    return <div className="loading">{error ? `Failed to load: ${error}` : 'Loading…'}</div>;
 
   const chart = data.months.map((m) => ({
     name: label(m.month),
@@ -65,8 +89,22 @@ export default function Projection() {
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip formatter={(v) => eur(v)} />
             <Legend />
-            <Area dataKey="committed" stackId="1" fill="#6366f1" stroke="#6366f1" name="Committed (funds)" fillOpacity={0.7} />
-            <Area dataKey="free" stackId="1" fill="#22d3ee" stroke="#22d3ee" name="Free savings" fillOpacity={0.7} />
+            <Area
+              dataKey="committed"
+              stackId="1"
+              fill="#6366f1"
+              stroke="#6366f1"
+              name="Committed (funds)"
+              fillOpacity={0.7}
+            />
+            <Area
+              dataKey="free"
+              stackId="1"
+              fill="#22d3ee"
+              stroke="#22d3ee"
+              name="Free savings"
+              fillOpacity={0.7}
+            />
             <Bar dataKey="net" fill="rgba(251,191,36,0.25)" stroke="#fbbf24" name="Monthly net" />
           </ComposedChart>
         </ResponsiveContainer>
@@ -76,24 +114,35 @@ export default function Projection() {
         <table>
           <thead>
             <tr>
-              <th>Month</th><th className="num">Income</th><th className="num">Commitments</th>
-              <th className="num">Variable</th><th className="num">Net</th>
-              <th className="num">Free</th><th className="num">Committed</th><th className="num">Total</th>
+              <th>Month</th>
+              <th className="num">Income</th>
+              <th className="num">Commitments</th>
+              <th className="num">Variable</th>
+              <th className="num">Net</th>
+              <th className="num">Free</th>
+              <th className="num">Committed</th>
+              <th className="num">Total</th>
             </tr>
           </thead>
           <tbody>
-            {data.months.filter((_, i) => i % 3 === 0 || i < 6).map((m) => (
-              <tr key={m.month}>
-                <td>{m.month}</td>
-                <td className="num">{eur(m.income)}</td>
-                <td className="num">{eur(m.commitments)}</td>
-                <td className="num">{eur(m.variable)}</td>
-                <td className={`num ${m.net >= 0 ? 'income' : 'expense'}`}>{eur(m.net)}</td>
-                <td className={`num ${m.free_savings < 0 ? 'bad' : ''}`}>{eur(m.free_savings)}</td>
-                <td className="num">{eur(m.committed_savings)}</td>
-                <td className={`num ${m.total_predicted < 0 ? 'bad' : ''}`}><b>{eur(m.total_predicted)}</b></td>
-              </tr>
-            ))}
+            {data.months
+              .filter((_, i) => i % 3 === 0 || i < 6)
+              .map((m) => (
+                <tr key={m.month}>
+                  <td>{m.month}</td>
+                  <td className="num">{eur(m.income)}</td>
+                  <td className="num">{eur(m.commitments)}</td>
+                  <td className="num">{eur(m.variable)}</td>
+                  <td className={`num ${m.net >= 0 ? 'income' : 'expense'}`}>{eur(m.net)}</td>
+                  <td className={`num ${m.free_savings < 0 ? 'bad' : ''}`}>
+                    {eur(m.free_savings)}
+                  </td>
+                  <td className="num">{eur(m.committed_savings)}</td>
+                  <td className={`num ${m.total_predicted < 0 ? 'bad' : ''}`}>
+                    <b>{eur(m.total_predicted)}</b>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>

@@ -11,7 +11,9 @@ export function freshDataDir() {
 }
 
 export function cleanup(dir) {
-  try { rmSync(dir, { recursive: true, force: true }); } catch {}
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {}
 }
 
 // Load the server's db module against an isolated temp data directory.
@@ -36,7 +38,9 @@ export async function startServer(dataDir, port = 0) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stderr = '';
-  child.stderr.on('data', (d) => { stderr += d; });
+  child.stderr.on('data', (d) => {
+    stderr += d;
+  });
 
   const url = `http://127.0.0.1:${usedPort}`;
   // wait until /api/auth/status responds

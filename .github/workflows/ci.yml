@@ -33,6 +33,12 @@ jobs:
       - name: Run server tests
         run: npm test
 
+      - name: Lint JavaScript
+        run: npm run lint
+
+      - name: Check JavaScript formatting
+        run: npm run format:check
+
       - name: Build the web client
         run: npm run build
 

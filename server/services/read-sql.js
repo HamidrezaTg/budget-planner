@@ -10,10 +10,23 @@ const FORBIDDEN =
 // Tables the AI may query. Explicitly excludes `settings` (holds the AI API
 // key), `ai_audit_log` (internal), and anything not budget-related.
 const ALLOWED_TABLES = new Set([
-  'transactions', 'fx_rates', 'categories', 'category_groups', 'accounts',
-  'budget_lines', 'commitments', 'funds', 'fund_movements', 'income_sources',
-  'income_entries', 'balance_observations', 'category_rules',
-  'category_automation_rules', 'recurrences', 'attachments', 'monthly_reports',
+  'transactions',
+  'fx_rates',
+  'categories',
+  'category_groups',
+  'accounts',
+  'budget_lines',
+  'commitments',
+  'funds',
+  'fund_movements',
+  'income_sources',
+  'income_entries',
+  'balance_observations',
+  'category_rules',
+  'category_automation_rules',
+  'recurrences',
+  'attachments',
+  'monthly_reports',
 ]);
 
 const MAX_AI_ROWS = 200;
@@ -90,9 +103,12 @@ export function validateReadOnlySql(query) {
   if (FORBIDDEN.test(q)) throw new Error('Query contains forbidden keywords');
   const stripped = q.replace(/;+\s*$/, '');
   if (/;/.test(stripped)) throw new Error('Only a single statement is allowed');
-  if (hasCommaJoin(stripped)) throw new Error('Comma-joined table sources are not available to the assistant');
+  if (hasCommaJoin(stripped))
+    throw new Error('Comma-joined table sources are not available to the assistant');
   if (hasSelfJoin(stripped))
-    throw new Error('Referencing the same table twice (self-join) is not available to the assistant');
+    throw new Error(
+      'Referencing the same table twice (self-join) is not available to the assistant',
+    );
 
   // Restrict to the allowlist so credential-bearing tables stay out of reach.
   const seen = new Set();
@@ -102,8 +118,7 @@ export function validateReadOnlySql(query) {
   }
   if (seen.size === 0) throw new Error('Query must reference a table');
   for (const t of seen) {
-    if (!ALLOWED_TABLES.has(t))
-      throw new Error(`Table "${t}" is not available to the assistant`);
+    if (!ALLOWED_TABLES.has(t)) throw new Error(`Table "${t}" is not available to the assistant`);
   }
 
   // Cap user-supplied limits regardless of what the AI asked for. Checked on
@@ -111,8 +126,7 @@ export function validateReadOnlySql(query) {
   const text = stripSqlStrings(stripped);
   const depths = parenDepths(text);
   for (const m of text.matchAll(/\blimit\s+(\d+)\b/gi)) {
-    if (Number(m[1]) > MAX_AI_ROWS)
-      throw new Error(`LIMIT may not exceed ${MAX_AI_ROWS} rows`);
+    if (Number(m[1]) > MAX_AI_ROWS) throw new Error(`LIMIT may not exceed ${MAX_AI_ROWS} rows`);
   }
   // A LIMIT inside a subquery does not bound the outer result — only a
   // top-level one counts.
@@ -134,23 +148,26 @@ export function runReadOnlySql(query) {
         return sqlite.SQLITE_DENY;
       }
     }
-    if ([
-      sqlite.SQLITE_INSERT,
-      sqlite.SQLITE_UPDATE,
-      sqlite.SQLITE_DELETE,
-      sqlite.SQLITE_CREATE_INDEX,
-      sqlite.SQLITE_CREATE_TABLE,
-      sqlite.SQLITE_CREATE_TRIGGER,
-      sqlite.SQLITE_CREATE_VIEW,
-      sqlite.SQLITE_DROP_INDEX,
-      sqlite.SQLITE_DROP_TABLE,
-      sqlite.SQLITE_DROP_TRIGGER,
-      sqlite.SQLITE_DROP_VIEW,
-      sqlite.SQLITE_ATTACH,
-      sqlite.SQLITE_DETACH,
-      sqlite.SQLITE_ALTER_TABLE,
-      sqlite.SQLITE_PRAGMA,
-    ].includes(action)) return sqlite.SQLITE_DENY;
+    if (
+      [
+        sqlite.SQLITE_INSERT,
+        sqlite.SQLITE_UPDATE,
+        sqlite.SQLITE_DELETE,
+        sqlite.SQLITE_CREATE_INDEX,
+        sqlite.SQLITE_CREATE_TABLE,
+        sqlite.SQLITE_CREATE_TRIGGER,
+        sqlite.SQLITE_CREATE_VIEW,
+        sqlite.SQLITE_DROP_INDEX,
+        sqlite.SQLITE_DROP_TABLE,
+        sqlite.SQLITE_DROP_TRIGGER,
+        sqlite.SQLITE_DROP_VIEW,
+        sqlite.SQLITE_ATTACH,
+        sqlite.SQLITE_DETACH,
+        sqlite.SQLITE_ALTER_TABLE,
+        sqlite.SQLITE_PRAGMA,
+      ].includes(action)
+    )
+      return sqlite.SQLITE_DENY;
     return sqlite.SQLITE_OK;
   });
   try {
@@ -172,14 +189,14 @@ export function schemaContext() {
     .prepare(
       `SELECT c.id, c.name, c.monthly_budget, g.name AS grp, a.name AS acc
        FROM categories c LEFT JOIN category_groups g ON g.id=c.group_id
-       LEFT JOIN accounts a ON a.id=c.account_id ORDER BY g.sort, c.name`
+       LEFT JOIN accounts a ON a.id=c.account_id ORDER BY g.sort, c.name`,
     )
     .all();
   const funds = db.prepare('SELECT id, name, monthly_contribution, start_month FROM funds').all();
   const sources = db
     .prepare(
       `SELECT s.id, s.name, s.current_amount, p.name AS person FROM income_sources s
-       LEFT JOIN persons p ON p.id = s.person_id`
+       LEFT JOIN persons p ON p.id = s.person_id`,
     )
     .all();
   const commitments = db

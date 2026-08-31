@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { fundBalanceAt, currentMonth, addMonths, monthsBetween, monthsLeftTo } from '../services/model.js';
+import { fundBalanceAt, currentMonth, monthsBetween, monthsLeftTo } from '../services/model.js';
 
 const router = Router();
 
@@ -14,7 +14,7 @@ router.get('/', (req, res) => {
   const funds = db
     .prepare(
       `SELECT f.*, c.name AS category_name FROM funds f
-       LEFT JOIN categories c ON c.id = f.category_id ORDER BY f.name`
+       LEFT JOIN categories c ON c.id = f.category_id ORDER BY f.name`,
     )
     .all()
     .map((f) => {
@@ -23,7 +23,9 @@ router.get('/', (req, res) => {
           ? Math.max(0, monthsBetween(f.start_month, month) + 1) * f.monthly_contribution
           : 0;
       const withdrawn = db
-        .prepare(`SELECT COALESCE(SUM(amount),0) AS s FROM fund_movements WHERE fund_id=? AND kind='withdrawal' AND month<=?`)
+        .prepare(
+          `SELECT COALESCE(SUM(amount),0) AS s FROM fund_movements WHERE fund_id=? AND kind='withdrawal' AND month<=?`,
+        )
         .get(f.id, month).s;
       const balance = Math.round(fundBalanceAt(f, month) * 100) / 100;
 
@@ -39,7 +41,11 @@ router.get('/', (req, res) => {
           progress: Math.min(100, Math.round((balance / f.target_amount) * 1000) / 10),
           months_left: monthsLeft,
           monthly_needed:
-            monthsLeft === null ? null : monthsLeft === 0 ? remaining : Math.round((remaining / monthsLeft) * 100) / 100,
+            monthsLeft === null
+              ? null
+              : monthsLeft === 0
+                ? remaining
+                : Math.round((remaining / monthsLeft) * 100) / 100,
           on_track:
             monthsLeft === null
               ? null
@@ -60,7 +66,7 @@ router.get('/', (req, res) => {
   const movements = db
     .prepare(
       `SELECT m.*, f.name AS fund_name FROM fund_movements m
-       JOIN funds f ON f.id = m.fund_id ORDER BY m.created_at DESC, m.id DESC LIMIT 100`
+       JOIN funds f ON f.id = m.fund_id ORDER BY m.created_at DESC, m.id DESC LIMIT 100`,
     )
     .all();
   res.json({ month, funds, movements });
@@ -77,7 +83,7 @@ router.post('/:id/movement', (req, res) => {
   if (!amt || amt <= 0) return res.status(400).json({ error: 'amount must be positive' });
   const m = /^\d{4}-\d{2}$/.test(month ?? '') ? month : currentMonth();
   db.prepare(
-    'INSERT INTO fund_movements (fund_id, month, amount, kind, note) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO fund_movements (fund_id, month, amount, kind, note) VALUES (?, ?, ?, ?, ?)',
   ).run(fund.id, m, kind === 'contribution' ? amt : -amt, kind, note ?? null);
   res.json({ ok: true });
 });
@@ -104,22 +110,32 @@ router.patch('/:id', (req, res) => {
   if (b.start_month != null && b.start_month !== '' && !MONTH_RE.test(String(b.start_month)))
     return res.status(400).json({ error: 'start_month must be YYYY-MM' });
   db.prepare(
-    'UPDATE funds SET name=?, monthly_contribution=?, start_month=?, opening_balance=?, category_id=?, target_amount=?, target_date=? WHERE id=?'
+    'UPDATE funds SET name=?, monthly_contribution=?, start_month=?, opening_balance=?, category_id=?, target_amount=?, target_date=? WHERE id=?',
   ).run(
     b.name ?? row.name,
     contribution,
     b.start_month ?? row.start_month,
     opening,
     b.category_id ?? row.category_id,
-    b.target_amount !== undefined ? (b.target_amount === null ? null : Number(b.target_amount) || null) : row.target_amount,
-    b.target_date !== undefined ? (b.target_date || null) : row.target_date,
-    req.params.id
+    b.target_amount !== undefined
+      ? b.target_amount === null
+        ? null
+        : Number(b.target_amount) || null
+      : row.target_amount,
+    b.target_date !== undefined ? b.target_date || null : row.target_date,
+    req.params.id,
   );
   res.json(db.prepare('SELECT * FROM funds WHERE id = ?').get(row.id));
 });
 
 router.post('/', (req, res) => {
-  const { name, monthly_contribution = 0, start_month, opening_balance = 0, category_id = null } = req.body ?? {};
+  const {
+    name,
+    monthly_contribution = 0,
+    start_month,
+    opening_balance = 0,
+    category_id = null,
+  } = req.body ?? {};
   if (!name?.trim() || !start_month)
     return res.status(400).json({ error: 'name and start_month required' });
   if (!MONTH_RE.test(start_month))
@@ -132,7 +148,9 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'opening_balance must be a number' });
   try {
     const r = db
-      .prepare('INSERT INTO funds (name, monthly_contribution, start_month, opening_balance, category_id) VALUES (?, ?, ?, ?, ?)')
+      .prepare(
+        'INSERT INTO funds (name, monthly_contribution, start_month, opening_balance, category_id) VALUES (?, ?, ?, ?, ?)',
+      )
       .run(name.trim(), contribution, start_month, opening, category_id);
     res.json(db.prepare('SELECT * FROM funds WHERE id = ?').get(r.lastInsertRowid));
   } catch {

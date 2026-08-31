@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 
@@ -43,16 +43,10 @@ const groups = [
 
 export default function Layout({ me }) {
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem('bp-collapsed') === '1'
-  );
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('bp-collapsed') === '1');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [theme, setTheme] = useState(
-    () => document.documentElement.dataset.theme || 'light'
-  );
-  const [privacy, setPrivacy] = useState(
-    () => localStorage.getItem('bp-privacy') === '1'
-  );
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'light');
+  const [privacy, setPrivacy] = useState(() => localStorage.getItem('bp-privacy') === '1');
   const [nativeShell, setNativeShell] = useState(false);
 
   useEffect(() => {
@@ -72,9 +66,9 @@ export default function Layout({ me }) {
     const routes = { d: '/', t: '/transactions', r: '/reports' };
     const onKeyDown = (event) => {
       const target = event.target;
-      const typing = target instanceof HTMLElement && (
-        target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)
-      );
+      const typing =
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName));
       if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key === '?') {
         event.preventDefault();
@@ -85,7 +79,9 @@ export default function Layout({ me }) {
       if (event.key.toLowerCase() === 'g') {
         waitingForRoute = true;
         clearTimeout(timeout);
-        timeout = setTimeout(() => { waitingForRoute = false; }, 1000);
+        timeout = setTimeout(() => {
+          waitingForRoute = false;
+        }, 1000);
         return;
       }
       if (waitingForRoute && routes[event.key.toLowerCase()]) {
@@ -131,7 +127,9 @@ export default function Layout({ me }) {
   const logout = async () => {
     // The session cookie is server-side anyway — always land on /login, even
     // if the logout call itself fails (e.g. offline).
-    try { await api.post('/auth/logout'); } catch {}
+    try {
+      await api.post('/auth/logout');
+    } catch {}
     window.location.href = '/login';
   };
 
@@ -159,10 +157,17 @@ export default function Layout({ me }) {
         </button>
         <button
           className="brand"
-          onClick={() => { setMenuOpen(false); toggleCollapse(); }}
+          onClick={() => {
+            setMenuOpen(false);
+            toggleCollapse();
+          }}
           title={collapsed ? 'Expand menu' : 'Collapse menu'}
         >
-          <span className="brand-mark"><i></i><i></i><i></i></span>
+          <span className="brand-mark">
+            <i></i>
+            <i></i>
+            <i></i>
+          </span>
           <span className="brand-name">Budget Planner</span>
         </button>
 
@@ -197,7 +202,11 @@ export default function Layout({ me }) {
           </div>
 
           <div className="side-actions">
-            {nativeShell && <button className="icon-btn" title="Switch server" onClick={switchServer}>⌘</button>}
+            {nativeShell && (
+              <button className="icon-btn" title="Switch server" onClick={switchServer}>
+                ⌘
+              </button>
+            )}
             <button
               className="icon-btn"
               title={privacy ? 'Show financial values' : 'Hide financial values'}
@@ -214,7 +223,9 @@ export default function Layout({ me }) {
             >
               {theme === 'dark' ? '☀' : '☾'}
             </button>
-            <button className="icon-btn" title="Log out" onClick={logout}>⇥</button>
+            <button className="icon-btn" title="Log out" onClick={logout}>
+              ⇥
+            </button>
           </div>
 
           <div className="profile">

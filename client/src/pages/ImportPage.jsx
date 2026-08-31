@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, eur } from '../api.js';
 
@@ -8,14 +8,16 @@ function transferCandidates(preview = []) {
     if (!tx.transfer_pair_id || seen.has(tx.transfer_pair_id)) return [];
     seen.add(tx.transfer_pair_id);
     const other = preview[tx.transfer_pair_other];
-    return [{
-      id: tx.transfer_pair_id,
-      date: tx.date,
-      amount: Math.abs(tx.amount),
-      first: tx.description,
-      second: other?.description || 'matching entry',
-      confidence: tx.transfer_pair_confidence,
-    }];
+    return [
+      {
+        id: tx.transfer_pair_id,
+        date: tx.date,
+        amount: Math.abs(tx.amount),
+        first: tx.description,
+        second: other?.description || 'matching entry',
+        confidence: tx.transfer_pair_confidence,
+      },
+    ];
   });
 }
 
@@ -25,13 +27,16 @@ export default function ImportPage() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);
   const [accountId, setAccountId] = useState(
-    () => localStorage.getItem('bp-last-import-account') || ''
+    () => localStorage.getItem('bp-last-import-account') || '',
   );
   const [accounts, setAccounts] = useState([]);
   const [selectedTransfers, setSelectedTransfers] = useState([]);
 
   useEffect(() => {
-    api.get('/categories/meta/all').then((m) => setAccounts(m.accounts)).catch((e) => setError(e.message));
+    api
+      .get('/categories/meta/all')
+      .then((m) => setAccounts(m.accounts))
+      .catch((e) => setError(e.message));
   }, []);
 
   const processFile = async (file, endpoint) => {
@@ -56,7 +61,9 @@ export default function ImportPage() {
           setAccountId('');
           localStorage.removeItem('bp-last-import-account');
           setResult(data);
-          setError(`The remembered account is unavailable. Please choose an account before confirming. ${err.message}`);
+          setError(
+            `The remembered account is unavailable. Please choose an account before confirming. ${err.message}`,
+          );
         }
       } else {
         setResult(data);
@@ -111,7 +118,10 @@ export default function ImportPage() {
     setBusy(true);
     setError('');
     try {
-      const r = await api.post('/import/preview', { token: result.token, account_id: value || null });
+      const r = await api.post('/import/preview', {
+        token: result.token,
+        account_id: value || null,
+      });
       setResult((prev) => ({ ...prev, ...r }));
     } catch (err) {
       setError(err.message);
@@ -124,9 +134,9 @@ export default function ImportPage() {
     <div>
       <h1>Import statement</h1>
       <p className="muted">
-        Upload your bank export (.csv or .xlsx — Revolut files are detected automatically).
-        Only COMPLETED transactions are imported; pendings from previous months count as
-        completed; duplicates are skipped.
+        Upload your bank export (.csv or .xlsx — Revolut files are detected automatically). Only
+        COMPLETED transactions are imported; pendings from previous months count as completed;
+        duplicates are skipped.
       </p>
 
       <div
@@ -139,9 +149,18 @@ export default function ImportPage() {
           {busy ? 'Processing…' : 'Choose CSV / XLSX file'}
           <input type="file" accept=".csv,.xlsx,.xls" onChange={onFile} disabled={busy} hidden />
         </label>
-        <label className="btn file-btn" title="AI detects the format of any bank export and converts it">
+        <label
+          className="btn file-btn"
+          title="AI detects the format of any bank export and converts it"
+        >
           Analyze format with AI
-          <input type="file" accept=".csv,.xlsx,.xls" onChange={smartAnalyze} disabled={busy} hidden />
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={smartAnalyze}
+            disabled={busy}
+            hidden
+          />
         </label>
         {error && <div className="error">{error}</div>}
       </div>
@@ -160,10 +179,8 @@ export default function ImportPage() {
           {done.skippedDuplicates > 0 && ` · skipped ${done.skippedDuplicates} duplicate(s)`}
           {done.remainingReview > 0 && (
             <>
-              {' '}·{' '}
-              <Link to="/transactions?review=1">
-                {done.remainingReview} need review →
-              </Link>
+              {' '}
+              · <Link to="/transactions?review=1">{done.remainingReview} need review →</Link>
             </>
           )}
         </div>
@@ -172,14 +189,22 @@ export default function ImportPage() {
       {/* Rows the parser could not read: never silently dropped — show what and why. */}
       {result?.errors?.length > 0 && (
         <div className="card warn-box" role="alert">
-          <b>{result.errors.at(-1)?.truncated
-            ? `${result.stats.invalid} row(s) could not be read`
-            : `${result.errors.length} row(s) could not be read`}.</b>{' '}
-            Check the file — these were skipped:
+          <b>
+            {result.errors.at(-1)?.truncated
+              ? `${result.stats.invalid} row(s) could not be read`
+              : `${result.errors.length} row(s) could not be read`}
+            .
+          </b>{' '}
+          Check the file — these were skipped:
           <ul style={{ margin: '8px 0 0 18px' }}>
-            {result.errors.filter((e) => !e.truncated).map((e, i) => (
-              <li key={i}>row {e.row}: {e.reason}{e.value ? ` — "${e.value}"` : ''}</li>
-            ))}
+            {result.errors
+              .filter((e) => !e.truncated)
+              .map((e, i) => (
+                <li key={i}>
+                  row {e.row}: {e.reason}
+                  {e.value ? ` — "${e.value}"` : ''}
+                </li>
+              ))}
           </ul>
         </div>
       )}
@@ -187,32 +212,65 @@ export default function ImportPage() {
       {result && (
         <>
           <div className="stats-row">
-            <div className="card stat"><div className="stat-label">To import</div><div className="stat-value">{result.summary.toImport}</div></div>
-            <div className="card stat"><div className="stat-label">Duplicates</div><div className="stat-value">{result.summary.duplicates}</div></div>
-            <div className="card stat"><div className="stat-label">Needs review</div><div className="stat-value warn">{result.summary.needsReview}</div></div>
-            <div className="card stat"><div className="stat-label">Income / Expenses</div><div className="stat-value small-value">{result.summary.income} / {result.summary.expenses}</div></div>
+            <div className="card stat">
+              <div className="stat-label">To import</div>
+              <div className="stat-value">{result.summary.toImport}</div>
+            </div>
+            <div className="card stat">
+              <div className="stat-label">Duplicates</div>
+              <div className="stat-value">{result.summary.duplicates}</div>
+            </div>
+            <div className="card stat">
+              <div className="stat-label">Needs review</div>
+              <div className="stat-value warn">{result.summary.needsReview}</div>
+            </div>
+            <div className="card stat">
+              <div className="stat-label">Income / Expenses</div>
+              <div className="stat-value small-value">
+                {result.summary.income} / {result.summary.expenses}
+              </div>
+            </div>
           </div>
           {transferCandidates(result.preview).length > 0 && (
-            <div className="card transfer-review" role="group" aria-labelledby="transfer-review-title">
+            <div
+              className="card transfer-review"
+              role="group"
+              aria-labelledby="transfer-review-title"
+            >
               <div className="panel-head">
                 <div>
                   <p className="eyebrow">Review before import</p>
-                  <h2 id="transfer-review-title" style={{ fontSize: 18, margin: 0 }}>Possible transfers</h2>
+                  <h2 id="transfer-review-title" style={{ fontSize: 18, margin: 0 }}>
+                    Possible transfers
+                  </h2>
                 </div>
                 <span className="muted tiny">Nothing is marked automatically.</span>
               </div>
-              <p className="muted tiny">Select only rows that are two sides of the same movement between your own accounts. Selected rows will not count as income or spending.</p>
+              <p className="muted tiny">
+                Select only rows that are two sides of the same movement between your own accounts.
+                Selected rows will not count as income or spending.
+              </p>
               <div className="transfer-options">
                 {transferCandidates(result.preview).map((pair) => (
                   <label key={pair.id} className="transfer-option">
                     <input
                       type="checkbox"
                       checked={selectedTransfers.includes(pair.id)}
-                      onChange={(e) => setSelectedTransfers((previous) => e.target.checked ? [...previous, pair.id] : previous.filter((id) => id !== pair.id))}
+                      onChange={(e) =>
+                        setSelectedTransfers((previous) =>
+                          e.target.checked
+                            ? [...previous, pair.id]
+                            : previous.filter((id) => id !== pair.id),
+                        )
+                      }
                     />
                     <span>
-                      <strong>{pair.date} · {eur(pair.amount)}</strong>
-                      <span className="muted tiny">{pair.first} ↔ {pair.second} · {pair.confidence} confidence</span>
+                      <strong>
+                        {pair.date} · {eur(pair.amount)}
+                      </strong>
+                      <span className="muted tiny">
+                        {pair.first} ↔ {pair.second} · {pair.confidence} confidence
+                      </span>
                     </span>
                   </label>
                 ))}
@@ -222,7 +280,11 @@ export default function ImportPage() {
           <div style={{ marginTop: 16 }} className="inline-form">
             <select value={accountId} onChange={pickAccount}>
               <option value="">Import into account…</option>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
             </select>
             <button className="btn primary" onClick={confirm} disabled={busy}>
               Confirm import ({result.summary.toImport})
@@ -232,7 +294,11 @@ export default function ImportPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Date</th><th>Description</th><th>Amount</th><th>Suggested category</th><th>Status</th>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th>Suggested category</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>

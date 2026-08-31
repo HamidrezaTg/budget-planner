@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, eur } from '../api.js';
+import { api } from '../api.js';
 
 export default function Chat() {
   const [tab, setTab] = useState('finance');
@@ -13,7 +13,10 @@ export default function Chat() {
   const tabRef = React.useRef(tab);
 
   useEffect(() => {
-    api.get('/settings').then((s) => setAiReady(!!s.base_url)).catch(() => setAiReady(false));
+    api
+      .get('/settings')
+      .then((s) => setAiReady(!!s.base_url))
+      .catch(() => setAiReady(false));
   }, [tab]);
 
   const switchTab = (t) => {
@@ -34,7 +37,8 @@ export default function Chat() {
     try {
       if (forTab === 'finance') {
         const r = await api.post('/ai/chat', { messages: next });
-        if (tabRef.current === forTab) setMessages([...next, { role: 'assistant', content: r.reply }]);
+        if (tabRef.current === forTab)
+          setMessages([...next, { role: 'assistant', content: r.reply }]);
       } else {
         const r = await api.post('/ai/dev-chat', { messages: next });
         if (tabRef.current === forTab) {
@@ -60,7 +64,12 @@ export default function Chat() {
           role: 'assistant',
           content:
             'Applied:\n' +
-            r.results.map((x) => `${x.ok ? '[ok]' : '[failed]'} ${x.summary || x.type}${x.error ? ` — ${x.error}` : ''}`).join('\n'),
+            r.results
+              .map(
+                (x) =>
+                  `${x.ok ? '[ok]' : '[failed]'} ${x.summary || x.type}${x.error ? ` — ${x.error}` : ''}`,
+              )
+              .join('\n'),
         },
       ]);
       setProposals([]);
@@ -90,10 +99,16 @@ export default function Chat() {
       <div className="page-head">
         <h1>{tab === 'finance' ? 'Ask your finances' : 'Dev mode (guarded)'}</h1>
         <div className="month-nav">
-          <button className={`btn ghost ${tab === 'finance' ? 'active' : ''}`} onClick={() => switchTab('finance')}>
+          <button
+            className={`btn ghost ${tab === 'finance' ? 'active' : ''}`}
+            onClick={() => switchTab('finance')}
+          >
             Finance — read-only
           </button>
-          <button className={`btn ghost ${tab === 'dev' ? 'active' : ''}`} onClick={() => switchTab('dev')}>
+          <button
+            className={`btn ghost ${tab === 'dev' ? 'active' : ''}`}
+            onClick={() => switchTab('dev')}
+          >
             Dev mode
           </button>
         </div>
@@ -102,8 +117,8 @@ export default function Chat() {
       {tab === 'dev' && (
         <p className="muted">
           The assistant can only <b>propose</b> whitelisted changes (budgets, rules, categories,
-          commitments, funds, income, balances). Nothing is applied until you press Apply — no
-          raw SQL, no deletions, everything logged.
+          commitments, funds, income, balances). Nothing is applied until you press Apply — no raw
+          SQL, no deletions, everything logged.
         </p>
       )}
 
@@ -130,7 +145,9 @@ export default function Chat() {
           {proposals.map((p, i) => (
             <div key={i} className={`proposal ${p.error ? 'bad' : ''}`}>
               <span>{p.error ? p.summary : `→ ${p.summary}`}</span>
-              <button className="btn danger small" onClick={() => dismiss(i)}>Dismiss</button>
+              <button className="btn danger small" onClick={() => dismiss(i)}>
+                Dismiss
+              </button>
             </div>
           ))}
           <button className="btn primary" onClick={applyAll} disabled={busy}>
@@ -141,7 +158,10 @@ export default function Chat() {
 
       <form
         className="chat-input"
-        onSubmit={(e) => { e.preventDefault(); send(); }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          send();
+        }}
       >
         <input
           placeholder="Ask something…"

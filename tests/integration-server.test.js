@@ -45,7 +45,11 @@ test('setup creates the admin account and logs in', async () => {
     body: JSON.stringify({ username: 'alice', password: 'correct-horse-battery' }),
   });
   assert.equal(r.status, 200);
-  cookies = r.headers.getSetCookie?.().map((c) => c.split(';')[0]).join('; ') ?? '';
+  cookies =
+    r.headers
+      .getSetCookie?.()
+      .map((c) => c.split(';')[0])
+      .join('; ') ?? '';
   assert.ok(cookies.length > 0);
 
   const me = await fetch(`${srv.url}/api/auth/me`, { headers: { Cookie: cookies } });
@@ -85,7 +89,11 @@ test('staged imports cannot be confirmed by another user', async () => {
     body: JSON.stringify({ username: 'bob', password: 'another-secure-pw' }),
   });
   assert.equal(login.status, 200);
-  const bobCookies = login.headers.getSetCookie?.().map((c) => c.split(';')[0]).join('; ') ?? '';
+  const bobCookies =
+    login.headers
+      .getSetCookie?.()
+      .map((c) => c.split(';')[0])
+      .join('; ') ?? '';
 
   const confirm = await fetch(`${srv.url}/api/import/confirm`, {
     method: 'POST',
@@ -137,12 +145,17 @@ test('full import → split → delete-parent flow removes split children via th
   const tx = listed.rows.find((r) => r.description === 'Shop');
   assert.ok(tx);
 
-  const parts = await api(`/transactions/${tx.id}/split`, 'POST', {
-    parts: [
-      { category_id: catId, amount: -60 },
-      { category_id: catId, amount: -40 },
-    ],
-  }, cookies);
+  const parts = await api(
+    `/transactions/${tx.id}/split`,
+    'POST',
+    {
+      parts: [
+        { category_id: catId, amount: -60 },
+        { category_id: catId, amount: -40 },
+      ],
+    },
+    cookies,
+  );
   assert.equal(parts.parts, 2);
 
   const listedSplit = await api('/transactions', 'GET', null, cookies);
@@ -176,19 +189,25 @@ test('healthz responds without authentication', async () => {
 });
 
 test('recurrence posting is idempotent and future posts do not suppress the current month', async () => {
-  const accs = await api('/accounts', 'GET', null, cookies).catch(() => null);
+  await api('/accounts', 'GET', null, cookies).catch(() => null);
   // /api/accounts may not exist; the categories route is enough for a valid category
   const cats = await api('/categories', 'GET', null, cookies);
-  const catId = cats.find?.((c) => c.id)?.id ?? cat.id;
+  const catId = cats.find?.((c) => c.id)?.id;
+  assert.ok(catId);
 
-  const rec = await api('/recurrences', 'POST', {
-    name: 'Integration Rent',
-    amount: -50,
-    day_of_month: 1,
-    account_id: null,
-    category_id: catId,
-    auto_post: true,
-  }, cookies);
+  const rec = await api(
+    '/recurrences',
+    'POST',
+    {
+      name: 'Integration Rent',
+      amount: -50,
+      day_of_month: 1,
+      account_id: null,
+      category_id: catId,
+      auto_post: true,
+    },
+    cookies,
+  );
   assert.ok(rec.id);
 
   // Invalid month is rejected before any transaction exists.
@@ -201,10 +220,10 @@ test('recurrence posting is idempotent and future posts do not suppress the curr
 
   // Post a FUTURE month explicitly.
   const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const nextMonth = now.getMonth() === 11
-    ? `${now.getFullYear() + 1}-01`
-    : `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, '0')}`;
+  const nextMonth =
+    now.getMonth() === 11
+      ? `${now.getFullYear() + 1}-01`
+      : `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, '0')}`;
   const posted = await api(`/recurrences/${rec.id}/post`, 'POST', { month: nextMonth }, cookies);
   assert.equal(posted.ok, true);
 
@@ -217,18 +236,21 @@ test('recurrence posting is idempotent and future posts do not suppress the curr
   assert.equal(mine.last_posted_month, nextMonth);
 
   // Both months exist exactly once — re-listing must not duplicate anything.
-  const before = (await api('/transactions?limit=1000', 'GET', null, cookies))
-    .rows.filter((t) => t.description === 'Integration Rent').length;
+  const before = (await api('/transactions?limit=1000', 'GET', null, cookies)).rows.filter(
+    (t) => t.description === 'Integration Rent',
+  ).length;
   const listed2 = await api('/recurrences', 'GET', null, cookies);
-  const after = (await api('/transactions?limit=1000', 'GET', null, cookies))
-    .rows.filter((t) => t.description === 'Integration Rent').length;
+  const after = (await api('/transactions?limit=1000', 'GET', null, cookies)).rows.filter(
+    (t) => t.description === 'Integration Rent',
+  ).length;
   assert.equal(listed2.autoPosted, 0); // nothing due anymore this run
   assert.equal(after, before);
 
   // Posting the same future month again changes nothing (idempotent dedup).
   await api(`/recurrences/${rec.id}/post`, 'POST', { month: nextMonth }, cookies);
-  const finalCount = (await api('/transactions?limit=1000', 'GET', null, cookies))
-    .rows.filter((t) => t.description === 'Integration Rent').length;
+  const finalCount = (await api('/transactions?limit=1000', 'GET', null, cookies)).rows.filter(
+    (t) => t.description === 'Integration Rent',
+  ).length;
   assert.equal(finalCount, after);
 
   await api(`/recurrences/${rec.id}`, 'DELETE', null, cookies);
@@ -314,14 +336,24 @@ test('re-importing the same statement inserts nothing; duplicates within one fil
   // both as new, confirm inserts both.
   const first = await upload();
   assert.equal(first.summary.toImport, 2);
-  const firstDone = await api('/import/confirm', 'POST', { token: first.token, account_id: null }, cookies);
+  const firstDone = await api(
+    '/import/confirm',
+    'POST',
+    { token: first.token, account_id: null },
+    cookies,
+  );
   assert.equal(firstDone.inserted, 2);
 
   // Re-import of the same file: preview flags both as duplicates, confirm inserts nothing.
   const second = await upload();
   assert.equal(second.summary.toImport, 0);
   assert.equal(second.summary.duplicates, 2);
-  const secondDone = await api('/import/confirm', 'POST', { token: second.token, account_id: null }, cookies);
+  const secondDone = await api(
+    '/import/confirm',
+    'POST',
+    { token: second.token, account_id: null },
+    cookies,
+  );
   assert.equal(secondDone.inserted, 0);
   assert.equal(secondDone.skippedDuplicates, 2);
 });
@@ -333,7 +365,7 @@ test('xlsx monthly export round-trips through the maintained spreadsheet package
   assert.equal(r.status, 200);
   assert.equal(
     r.headers.get('content-type'),
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   );
   const wb = XLSX.read(Buffer.from(await r.arrayBuffer()), { type: 'buffer' });
   assert.equal(wb.SheetNames[0], 'Transactions');
@@ -347,9 +379,11 @@ test('xlsx monthly export round-trips through the maintained spreadsheet package
 test('yearly report includes per-category monthly spending', async () => {
   const report = await api('/reports/yearly/2026', 'GET', null, cookies);
   assert.ok(Array.isArray(report.byCategoryMonthly));
-  assert.ok(report.byCategoryMonthly.some((row) => (
-    row.month === '2026-05' && row.name === 'Uncategorized' && row.spent < 0
-  )));
+  assert.ok(
+    report.byCategoryMonthly.some(
+      (row) => row.month === '2026-05' && row.name === 'Uncategorized' && row.spent < 0,
+    ),
+  );
 });
 
 async function api(path, method, body, cookie) {

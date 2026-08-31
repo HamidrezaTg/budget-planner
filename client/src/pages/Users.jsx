@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
@@ -8,7 +8,11 @@ export default function Users({ admin, me }) {
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
 
-  const load = () => api.get('/auth/users').then(setUsers).catch(() => setUsers(null));
+  const load = () =>
+    api
+      .get('/auth/users')
+      .then(setUsers)
+      .catch(() => setUsers(null));
   useEffect(() => {
     if (admin) load();
   }, [admin]);
@@ -52,7 +56,9 @@ export default function Users({ admin, me }) {
       await api.patch(`/auth/users/${u.username}`, { username });
       toast(`"${u.username}" renamed to "${username.trim().toLowerCase()}".`);
       load();
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+      toast(e.message, 'error');
+    }
   };
 
   const remove = async (u) => {
@@ -86,9 +92,9 @@ export default function Users({ admin, me }) {
     <div className="users-page">
       <h1>Users</h1>
       <p className="muted">
-        Every user has their own private database, starting from a clean, generic
-        setup — they name their own accounts and categories. The admin can add users,
-        reset passwords and delete accounts.
+        Every user has their own private database, starting from a clean, generic setup — they name
+        their own accounts and categories. The admin can add users, reset passwords and delete
+        accounts.
       </p>
 
       <div className="card users-card">
@@ -115,14 +121,16 @@ export default function Users({ admin, me }) {
           </div>
         </div>
         <form onSubmit={add} className="add-user-form">
-          <label title="2-32 characters, letters/numbers/_ only">Username
+          <label title="2-32 characters, letters/numbers/_ only">
+            Username
             <input
               placeholder="Username (letters, numbers, _)"
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
             />
           </label>
-          <label title="At least 8 characters">Password
+          <label title="At least 8 characters">
+            Password
             <input
               type="password"
               placeholder="Password (min 8 chars)"
@@ -131,7 +139,11 @@ export default function Users({ admin, me }) {
             />
           </label>
           <div className="btn-row" style={{ alignItems: 'center' }}>
-            <button className="btn primary" title="Create the user and their own private database" disabled={!form.username || !form.password}>
+            <button
+              className="btn primary"
+              title="Create the user and their own private database"
+              disabled={!form.username || !form.password}
+            >
               Add user
             </button>
             {error && <span className="error">{error}</span>}
@@ -143,12 +155,19 @@ export default function Users({ admin, me }) {
         <div className="panel-head">
           <div>
             <p className="eyebrow">All users</p>
-            <h2 style={{ fontSize: 18, margin: 0 }}>{(users ?? []).length} user{(users ?? []).length === 1 ? '' : 's'}</h2>
+            <h2 style={{ fontSize: 18, margin: 0 }}>
+              {(users ?? []).length} user{(users ?? []).length === 1 ? '' : 's'}
+            </h2>
           </div>
         </div>
         <table>
           <thead>
-            <tr><th>User</th><th>Role</th><th>Created</th><th></th></tr>
+            <tr>
+              <th>User</th>
+              <th>Role</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
           </thead>
           <tbody>
             {(users ?? []).map((u) => (
@@ -166,20 +185,30 @@ export default function Users({ admin, me }) {
                       className="btn small"
                       title={`Reset "${u.username}"'s password — they'll be signed out everywhere`}
                       onClick={() => resetPassword(u)}
-                    >Reset password</button>
-                    <button className="btn small" onClick={() => rename(u)}>Rename</button>
+                    >
+                      Reset password
+                    </button>
+                    <button className="btn small" onClick={() => rename(u)}>
+                      Rename
+                    </button>
                     <button
                       className="btn danger small"
                       title={`Delete the "${u.username}" user and their entire database — cannot be undone`}
                       disabled={u.username === me}
                       onClick={() => remove(u)}
-                    >Delete</button>
+                    >
+                      Delete
+                    </button>
                   </div>
                 </td>
               </tr>
             ))}
             {users !== null && users.length === 0 && (
-              <tr><td colSpan="4" className="muted">No users found.</td></tr>
+              <tr>
+                <td colSpan="4" className="muted">
+                  No users found.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

@@ -27,9 +27,7 @@ function detectFormat(filePath) {
   const buf = Buffer.alloc(4);
   fs.readSync(fd, buf, 0, 4, 0);
   fs.closeSync(fd);
-  return buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04
-    ? 'xlsx'
-    : 'csv';
+  return buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04 ? 'xlsx' : 'csv';
 }
 
 function parseSheetRows(rows) {
@@ -40,8 +38,7 @@ function parseSheetRows(rows) {
   const headers = Object.keys(rows[0]);
   if (headers.length > MAX_IMPORT_COLUMNS)
     throw new Error(`Import has too many columns (maximum ${MAX_IMPORT_COLUMNS})`);
-  const findCol = (candidates) =>
-    candidates.find((c) => headers.some((h) => h.trim() === c));
+  const findCol = (candidates) => candidates.find((c) => headers.some((h) => h.trim() === c));
 
   const mapping = {};
   for (const [field, candidates] of Object.entries(REVOLUT_COLUMNS)) {
@@ -50,9 +47,7 @@ function parseSheetRows(rows) {
   }
   // generic fallbacks for non-Revolut files
   if (!mapping.date) {
-    mapping.date =
-      headers.find((h) => /^date/i.test(h)) ||
-      headers.find((h) => /date/i.test(h));
+    mapping.date = headers.find((h) => /^date/i.test(h)) || headers.find((h) => /date/i.test(h));
   }
   if (!mapping.description) {
     mapping.description =
@@ -71,8 +66,7 @@ const EXCEL_EPOCH = Date.UTC(1899, 11, 30);
 
 function readWorkbook(filePath) {
   const buffer = fs.readFileSync(filePath);
-  if (buffer.length > MAX_IMPORT_FILE_BYTES)
-    throw new Error(`Import file exceeds the 64 MB limit`);
+  if (buffer.length > MAX_IMPORT_FILE_BYTES) throw new Error(`Import file exceeds the 64 MB limit`);
   const wb = XLSX.read(buffer, {
     type: 'buffer',
     // Avoid materializing unbounded row counts before the range checks below.
@@ -132,7 +126,8 @@ function validISODate(y, m, d) {
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
-export function toISODate(value, mode) {  if (value instanceof Date && !isNaN(value)) {
+export function toISODate(value, _mode) {
+  if (value instanceof Date && !isNaN(value)) {
     const y = value.getFullYear();
     const m = String(value.getMonth() + 1).padStart(2, '0');
     const d = String(value.getDate()).padStart(2, '0');
@@ -178,7 +173,9 @@ export function toISODate(value, mode) {  if (value instanceof Date && !isNaN(va
 // parenthesised negatives "(12,50)".
 export function parseAmountValue(v) {
   if (v === '' || v == null) return NaN;
-  let s = String(v).trim().replace(/[€$£\s]/g, '');
+  let s = String(v)
+    .trim()
+    .replace(/[€$£\s]/g, '');
   const negative = s.startsWith('-') || (s.startsWith('(') && s.endsWith(')'));
   s = s.replace(/[()]/g, '');
   if (/^-?\d{1,3}(\.\d{3})+(,\d+)$/.test(s)) {
@@ -220,7 +217,7 @@ function finalize({ mapping, raw }, mode) {
   if (!mapping || !mapping.date || !mapping.amount) {
     throw new Error(
       'Could not detect required columns (date / amount). Headers found: ' +
-        (raw[0] ? Object.keys(raw[0]).join(', ') : '(empty file)')
+        (raw[0] ? Object.keys(raw[0]).join(', ') : '(empty file)'),
     );
   }
 
@@ -242,7 +239,9 @@ function finalize({ mapping, raw }, mode) {
   for (const row of raw) {
     dataRow++;
     stats.total++;
-    const state = String(row[mapping.state] ?? '').trim().toLowerCase();
+    const state = String(row[mapping.state] ?? '')
+      .trim()
+      .toLowerCase();
     if (state === 'reverted') {
       stats.skippedReverted++;
       continue;
@@ -289,7 +288,8 @@ export function rawGrid(filePath, maxRows = 25) {
   if (format === 'xlsx') {
     const wb = readWorkbook(filePath);
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    return XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' })
+    return XLSX.utils
+      .sheet_to_json(sheet, { header: 1, raw: true, defval: '' })
       .slice(0, Math.min(maxRows, MAX_IMPORT_ROWS + 1));
   }
   const text = fs.readFileSync(filePath, 'utf8');
@@ -308,13 +308,17 @@ export function transactionsFromGrid(grid, spec) {
 
   const colDate = Number(spec.col_date);
   const colDesc = Number(spec.col_description);
-  const colAmount = spec.col_amount != null && spec.col_amount !== '' ? Number(spec.col_amount) : null;
+  const colAmount =
+    spec.col_amount != null && spec.col_amount !== '' ? Number(spec.col_amount) : null;
   const colIn = spec.col_in != null && spec.col_in !== '' ? Number(spec.col_in) : null;
   const colOut = spec.col_out != null && spec.col_out !== '' ? Number(spec.col_out) : null;
   const colState = spec.col_state != null && spec.col_state !== '' ? Number(spec.col_state) : null;
   const colType = spec.col_type != null && spec.col_type !== '' ? Number(spec.col_type) : null;
-  const colCurrency = spec.col_currency != null && spec.col_currency !== '' ? Number(spec.col_currency) : null;
-  const ignoreStates = Array.isArray(spec.ignore_states) ? spec.ignore_states.map((s) => String(s).toLowerCase()) : [];
+  const colCurrency =
+    spec.col_currency != null && spec.col_currency !== '' ? Number(spec.col_currency) : null;
+  const ignoreStates = Array.isArray(spec.ignore_states)
+    ? spec.ignore_states.map((s) => String(s).toLowerCase())
+    : [];
   const headerRow = Number(spec.header_row_index ?? 0);
   const decimal = spec.decimal_point === ',' ? ',' : '.';
   const dateFormat = String(spec.date_format || 'auto');
@@ -339,24 +343,33 @@ export function transactionsFromGrid(grid, spec) {
     }
     const s = String(v).trim();
     let m;
-    if (dateFormat === 'DD.MM.YYYY' || (dateFormat === 'auto' && (m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/)))) {
+    if (
+      dateFormat === 'DD.MM.YYYY' ||
+      (dateFormat === 'auto' && (m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/)))
+    ) {
       m = m || s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
       if (m) {
-        if (validISODate(Number(m[3]), Number(m[2]), Number(m[1]))) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        if (validISODate(Number(m[3]), Number(m[2]), Number(m[1])))
+          return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
         return null;
       }
     }
-    if (dateFormat === 'DD/MM/YYYY' || (dateFormat === 'auto' && (m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)))) {
+    if (
+      dateFormat === 'DD/MM/YYYY' ||
+      (dateFormat === 'auto' && (m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)))
+    ) {
       m = m || s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
       if (m) {
-        if (validISODate(Number(m[3]), Number(m[2]), Number(m[1]))) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        if (validISODate(Number(m[3]), Number(m[2]), Number(m[1])))
+          return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
         return null;
       }
     }
     if (dateFormat === 'MM/DD/YYYY') {
       m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
       if (m) {
-        if (validISODate(Number(m[3]), Number(m[1]), Number(m[2]))) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+        if (validISODate(Number(m[3]), Number(m[1]), Number(m[2])))
+          return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
         return null;
       }
     }
@@ -374,12 +387,23 @@ export function transactionsFromGrid(grid, spec) {
   const transactions = [];
   const errors = [];
   const MAX_PARSE_ERRORS = 50;
-  const stats = { total: 0, imported: 0, skippedReverted: 0, skippedPendingCurrentMonth: 0, invalid: 0 };
+  const stats = {
+    total: 0,
+    imported: 0,
+    skippedReverted: 0,
+    skippedPendingCurrentMonth: 0,
+    invalid: 0,
+  };
 
   for (let i = headerRow + 1; i < grid.length; i++) {
     const row = grid[i] ?? [];
     stats.total++;
-    const state = colState != null ? String(row[colState] ?? '').trim().toLowerCase() : '';
+    const state =
+      colState != null
+        ? String(row[colState] ?? '')
+            .trim()
+            .toLowerCase()
+        : '';
     if (state && ignoreStates.includes(state)) {
       stats.skippedReverted++;
       continue;

@@ -9,7 +9,9 @@ import { freshDataDir, cleanup, startServer } from './helpers.js';
 
 const dir = freshDataDir();
 const srv = await startServer(dir);
-after(() => { srv.stop().then(() => cleanup(dir)); });
+after(() => {
+  srv.stop().then(() => cleanup(dir));
+});
 
 let cookie = '';
 async function call(method, path, body) {
@@ -64,7 +66,10 @@ test('import preview annotates transfer pairs and counts them in the summary', a
   assert.equal(transferRows.length, 2, 'both sides of the transfer should be annotated');
   assert.equal(transferRows[0].transfer_pair_id, transferRows[1].transfer_pair_id);
   const aIdx = transferRows[0].description === 'TOP-UP TO CARD' ? 0 : 1;
-  assert.equal(transferRows[aIdx].transfer_pair_other, transferRows[1 - aIdx].transfer_pair_other === 0 ? 1 : 0);
+  assert.equal(
+    transferRows[aIdx].transfer_pair_other,
+    transferRows[1 - aIdx].transfer_pair_other === 0 ? 1 : 0,
+  );
 
   // Summary exposes a transferPairs count so the UI can show "review N".
   assert.ok(upload.summary, 'preview must include a summary');
@@ -92,7 +97,11 @@ test('confirming the candidate marks both rows as a transfer_group', async () =>
   form.append('file', new Blob([csv], { type: 'text/csv' }), 'transfer2.csv');
   form.append('account_id', String(bank.id));
 
-  const upRes = await fetch(`${srv.url}/api/import/upload`, { method: 'POST', body: form, headers: { cookie } });
+  const upRes = await fetch(`${srv.url}/api/import/upload`, {
+    method: 'POST',
+    body: form,
+    headers: { cookie },
+  });
   const upText = await upRes.text();
   assert.equal(upRes.status, 200, upText);
   const upload = JSON.parse(upText);

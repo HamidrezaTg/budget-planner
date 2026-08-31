@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, eur } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
@@ -6,15 +6,31 @@ export default function Recurring() {
   const [data, setData] = useState(null);
   const [meta, setMeta] = useState({ accounts: [], groups: [] });
   const [cats, setCats] = useState([]);
-  const [form, setForm] = useState({ name: '', amount: '', day_of_month: '1', account_id: '', category_id: '', auto_post: false });
+  const [form, setForm] = useState({
+    name: '',
+    amount: '',
+    day_of_month: '1',
+    account_id: '',
+    category_id: '',
+    auto_post: false,
+  });
   const { toast, confirm } = useDialogs();
 
   const load = () =>
-    api.get('/recurrences').then(setData).catch((e) => toast(e.message, 'error'));
+    api
+      .get('/recurrences')
+      .then(setData)
+      .catch((e) => toast(e.message, 'error'));
   useEffect(() => {
     load();
-    api.get('/categories/meta/all').then(setMeta).catch(() => {});
-    api.get('/categories').then(setCats).catch(() => {});
+    api
+      .get('/categories/meta/all')
+      .then(setMeta)
+      .catch(() => {});
+    api
+      .get('/categories')
+      .then(setCats)
+      .catch(() => {});
   }, []);
   if (!data) return <div className="loading">Loading…</div>;
 
@@ -28,7 +44,14 @@ export default function Recurring() {
         account_id: form.account_id || null,
         category_id: form.category_id || null,
       });
-      setForm({ name: '', amount: '', day_of_month: '1', account_id: '', category_id: '', auto_post: false });
+      setForm({
+        name: '',
+        amount: '',
+        day_of_month: '1',
+        account_id: '',
+        category_id: '',
+        auto_post: false,
+      });
       load();
     } catch (err) {
       toast(err.message, 'error');
@@ -56,7 +79,9 @@ export default function Recurring() {
     try {
       await api.del(`/recurrences/${r.id}`);
       load();
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+      toast(e.message, 'error');
+    }
   };
 
   const expected = data.upcoming.reduce((s, u) => s + u.amount, 0);
@@ -65,9 +90,9 @@ export default function Recurring() {
     <div>
       <h1>Recurring</h1>
       <p className="muted">
-        Expected monthly transactions — rent, subscriptions, salary. They appear in
-        the Upcoming panel on the Dashboard and can post themselves automatically on
-        their day, or wait for you to confirm.
+        Expected monthly transactions — rent, subscriptions, salary. They appear in the Upcoming
+        panel on the Dashboard and can post themselves automatically on their day, or wait for you
+        to confirm.
       </p>
 
       <div className="panel">
@@ -76,12 +101,17 @@ export default function Recurring() {
             <p className="eyebrow">Upcoming</p>
             <h2>Next occurrences</h2>
           </div>
-          <span className="count-pill">{data.upcoming.length} items · {eur(expected)}</span>
+          <span className="count-pill">
+            {data.upcoming.length} items · {eur(expected)}
+          </span>
         </div>
         {data.upcoming.length === 0 && <div className="muted">Nothing upcoming.</div>}
         {data.upcoming.map((u, i) => (
           <div key={i} className="bill-row">
-            <div className="bill-date"><strong>{String(u.day).padStart(2, '0')}</strong><span>{u.month}</span></div>
+            <div className="bill-date">
+              <strong>{String(u.day).padStart(2, '0')}</strong>
+              <span>{u.month}</span>
+            </div>
             <div className="transaction-main">
               <strong>{u.name}</strong>
               <small>{u.auto_post ? 'auto-posts' : 'manual'}</small>
@@ -90,7 +120,9 @@ export default function Recurring() {
               className="btn small"
               title={`Create the "${u.name}" transaction now for ${u.month}`}
               onClick={() => post(u)}
-            >Post now</button>
+            >
+              Post now
+            </button>
             <b className={u.amount >= 0 ? 'income' : ''}>{eur(u.amount)}</b>
           </div>
         ))}
@@ -99,7 +131,16 @@ export default function Recurring() {
       <div className="card table-card">
         <table>
           <thead>
-            <tr><th>Name</th><th>Day</th><th className="num">Amount</th><th>Account</th><th>Category</th><th>Auto</th><th>Active</th><th></th></tr>
+            <tr>
+              <th>Name</th>
+              <th>Day</th>
+              <th className="num">Amount</th>
+              <th>Account</th>
+              <th>Category</th>
+              <th>Auto</th>
+              <th>Active</th>
+              <th></th>
+            </tr>
           </thead>
           <tbody>
             {data.recurrences.map((r) => (
@@ -112,7 +153,11 @@ export default function Recurring() {
                 <td>
                   <button
                     className={`btn ghost small ${r.auto_post ? 'active' : ''}`}
-                    title={r.auto_post ? 'Currently auto-posts on its day. Click to require manual confirmation.' : 'Currently manual. Click to auto-post on its day.'}
+                    title={
+                      r.auto_post
+                        ? 'Currently auto-posts on its day. Click to require manual confirmation.'
+                        : 'Currently manual. Click to auto-post on its day.'
+                    }
                     onClick={() => toggle(r, 'auto_post')}
                   >
                     {r.auto_post ? 'auto' : 'manual'}
@@ -121,48 +166,110 @@ export default function Recurring() {
                 <td>
                   <button
                     className="btn ghost small"
-                    title={r.active ? 'Pause — the recurrence stops appearing until you resume' : 'Resume — the recurrence will appear again'}
+                    title={
+                      r.active
+                        ? 'Pause — the recurrence stops appearing until you resume'
+                        : 'Resume — the recurrence will appear again'
+                    }
                     onClick={() => toggle(r, 'active')}
                   >
                     {r.active ? 'pause' : 'resume'}
                   </button>
                 </td>
                 <td>
-                  <button className="btn danger small" title={`Delete the "${r.name}" recurrence`} onClick={() => remove(r)}>Delete</button>
+                  <button
+                    className="btn danger small"
+                    title={`Delete the "${r.name}" recurrence`}
+                    onClick={() => remove(r)}
+                  >
+                    Delete
+                  </button>
                 </td>
               </tr>
             ))}
             {data.recurrences.length === 0 && (
-              <tr><td colSpan="8" className="muted">No recurring transactions yet — add your first below.</td></tr>
+              <tr>
+                <td colSpan="8" className="muted">
+                  No recurring transactions yet — add your first below.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
 
       <form onSubmit={add} className="card inline-form">
-        <input title="Name (e.g. Rent)" placeholder="Name (e.g. Rent)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input
+          title="Name (e.g. Rent)"
+          placeholder="Name (e.g. Rent)"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
         <input
           title="Amount — negative for spend, positive for income"
-          placeholder="€ (− expense, + income)" type="number" step="0.01"
-          value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}
+          placeholder="€ (− expense, + income)"
+          type="number"
+          step="0.01"
+          value={form.amount}
+          onChange={(e) => setForm({ ...form, amount: e.target.value })}
         />
-        <label title="Day of the month the transaction is due (1–28)">Day
-          <input type="number" min="1" max="28" value={form.day_of_month}
-            onChange={(e) => setForm({ ...form, day_of_month: e.target.value })} />
+        <label title="Day of the month the transaction is due (1–28)">
+          Day
+          <input
+            type="number"
+            min="1"
+            max="28"
+            value={form.day_of_month}
+            onChange={(e) => setForm({ ...form, day_of_month: e.target.value })}
+          />
         </label>
-        <select title="Account this transaction will be booked against" value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
+        <select
+          title="Account this transaction will be booked against"
+          value={form.account_id}
+          onChange={(e) => setForm({ ...form, account_id: e.target.value })}
+        >
           <option value="">Account…</option>
-          {meta.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          {meta.accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
         </select>
-        <select title="Category to use when the transaction is posted" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
+        <select
+          title="Category to use when the transaction is posted"
+          value={form.category_id}
+          onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+        >
           <option value="">Category…</option>
-          {cats.filter((c) => c.is_active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {cats
+            .filter((c) => c.is_active)
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
         </select>
-        <label className="muted" style={{ flexDirection: 'row', alignItems: 'center', textTransform: 'none', letterSpacing: 0 }}>
-          <input type="checkbox" style={{ width: 'auto' }} title="Auto-post creates the real transaction on its day without confirmation" checked={form.auto_post}
-            onChange={(e) => setForm({ ...form, auto_post: e.target.checked })} /> auto-post
+        <label
+          className="muted"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            textTransform: 'none',
+            letterSpacing: 0,
+          }}
+        >
+          <input
+            type="checkbox"
+            style={{ width: 'auto' }}
+            title="Auto-post creates the real transaction on its day without confirmation"
+            checked={form.auto_post}
+            onChange={(e) => setForm({ ...form, auto_post: e.target.checked })}
+          />{' '}
+          auto-post
         </label>
-        <button className="btn primary" title="Add this recurring transaction">Add</button>
+        <button className="btn primary" title="Add this recurring transaction">
+          Add
+        </button>
       </form>
     </div>
   );

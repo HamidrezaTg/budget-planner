@@ -22,15 +22,23 @@ router.get('/', (_req, res) => {
        FROM commitments cm
        LEFT JOIN accounts a ON a.id = cm.account_id
        LEFT JOIN funds f ON f.id = cm.fund_id
-       ORDER BY cm.start_month, cm.name`
+       ORDER BY cm.start_month, cm.name`,
     )
     .all();
   res.json(rows);
 });
 
 router.post('/', (req, res) => {
-  const { name, monthly_amount = 0, start_month, end_month = null, account_id = null, fund_id = null, category_id = null, note = null } =
-    req.body ?? {};
+  const {
+    name,
+    monthly_amount = 0,
+    start_month,
+    end_month = null,
+    account_id = null,
+    fund_id = null,
+    category_id = null,
+    note = null,
+  } = req.body ?? {};
   try {
     if (!name?.trim() || !start_month)
       return res.status(400).json({ error: 'name and start_month required' });
@@ -42,7 +50,7 @@ router.post('/', (req, res) => {
     const r = db
       .prepare(
         `INSERT INTO commitments (name, monthly_amount, start_month, end_month, account_id, fund_id, category_id, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(name.trim(), amount, start_month, end_month, account_id, fund_id, category_id, note);
     res.json(db.prepare('SELECT * FROM commitments WHERE id = ?').get(r.lastInsertRowid));
@@ -57,8 +65,12 @@ router.patch('/:id', (req, res) => {
   const b = req.body ?? {};
   if (b.start_month !== undefined && !MONTH_RE.test(String(b.start_month)))
     return res.status(400).json({ error: 'start_month must be YYYY-MM' });
-  if (b.end_month !== undefined && b.end_month !== null && b.end_month !== ''
-      && !MONTH_RE.test(String(b.end_month)))
+  if (
+    b.end_month !== undefined &&
+    b.end_month !== null &&
+    b.end_month !== '' &&
+    !MONTH_RE.test(String(b.end_month))
+  )
     return res.status(400).json({ error: 'end_month must be YYYY-MM or null' });
   let amount = row.monthly_amount;
   if (b.monthly_amount !== undefined) {
@@ -71,9 +83,9 @@ router.patch('/:id', (req, res) => {
   // null (or '') clears the end month; `?? row.end_month` made clearing
   // impossible (null ?? old → old). The same trap applies to every nullable
   // column below, so clearing account/fund/category/note uses !== undefined.
-  const endMonth = b.end_month !== undefined ? (b.end_month || null) : row.end_month;
+  const endMonth = b.end_month !== undefined ? b.end_month || null : row.end_month;
   db.prepare(
-    `UPDATE commitments SET name=?, monthly_amount=?, start_month=?, end_month=?, account_id=?, fund_id=?, category_id=?, note=? WHERE id=?`
+    `UPDATE commitments SET name=?, monthly_amount=?, start_month=?, end_month=?, account_id=?, fund_id=?, category_id=?, note=? WHERE id=?`,
   ).run(
     b.name ?? row.name,
     amount,
@@ -83,7 +95,7 @@ router.patch('/:id', (req, res) => {
     b.fund_id !== undefined ? b.fund_id : row.fund_id,
     b.category_id !== undefined ? b.category_id : row.category_id,
     b.note !== undefined ? b.note : row.note,
-    req.params.id
+    req.params.id,
   );
   res.json(db.prepare('SELECT * FROM commitments WHERE id = ?').get(row.id));
 });

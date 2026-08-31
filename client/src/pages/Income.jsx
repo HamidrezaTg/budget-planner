@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, eur, currentMonth, monthLabel } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
@@ -9,9 +9,19 @@ export default function Income() {
   const [error, setError] = useState('');
   const { prompt, confirm } = useDialogs();
 
-  const load = () => api.get(`/income?month=${month}`).then((d) => { setData(d); setEdits({}); }).catch((e) => setError(e.message));
-  useEffect(() => { load(); }, [month]);
-  if (!data) return <div className="loading">{error ? `Failed to load: ${error}` : 'Loading…'}</div>;
+  const load = () =>
+    api
+      .get(`/income?month=${month}`)
+      .then((d) => {
+        setData(d);
+        setEdits({});
+      })
+      .catch((e) => setError(e.message));
+  useEffect(() => {
+    load();
+  }, [month]);
+  if (!data)
+    return <div className="loading">{error ? `Failed to load: ${error}` : 'Loading…'}</div>;
 
   const save = async (s) => {
     const e = edits[s.id];
@@ -24,7 +34,9 @@ export default function Income() {
       });
       setError('');
       load();
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
@@ -48,12 +60,21 @@ export default function Income() {
       <div className="card table-card" style={{ marginTop: 12 }}>
         <table>
           <thead>
-            <tr><th>Source</th><th>Person</th><th className="num">Usual</th><th className="num">Actual for {monthLabel(month)}</th><th></th></tr>
+            <tr>
+              <th>Source</th>
+              <th>Person</th>
+              <th className="num">Usual</th>
+              <th className="num">Actual for {monthLabel(month)}</th>
+              <th></th>
+            </tr>
           </thead>
           <tbody>
             {data.sources.map((s) => (
               <tr key={s.id}>
-                <td>{s.name}{!s.recurring && <span className="muted tiny"> one-off</span>}</td>
+                <td>
+                  {s.name}
+                  {!s.recurring && <span className="muted tiny"> one-off</span>}
+                </td>
                 <td className="muted">{s.person_name ?? '—'}</td>
                 <td className="num">
                   {eur(s.current_amount)}
@@ -76,25 +97,35 @@ export default function Income() {
                       });
                       load();
                     }}
-                  >✎</button>
+                  >
+                    ✎
+                  </button>
                 </td>
                 <td className="num">
                   <input
                     className="budget-input"
-                    type="number" step="0.01"
+                    type="number"
+                    step="0.01"
                     title="Actual income for this month — leave blank to use the usual amount"
                     placeholder={String(s.current_amount)}
                     defaultValue={s.entry_amount ?? ''}
                     key={`${month}-${s.id}-${String(s.entry_amount)}`}
                     onChange={(e) =>
-                      setEdits((p) => ({ ...p, [s.id]: { ...(p[s.id] ?? {}), entry: e.target.value } }))
+                      setEdits((p) => ({
+                        ...p,
+                        [s.id]: { ...(p[s.id] ?? {}), entry: e.target.value },
+                      }))
                     }
                   />
                 </td>
                 <td>
                   <button
                     className={`btn small ${edits[s.id] ? 'primary' : 'ghost'}`}
-                    title={s.entry_amount != null ? 'Replace the actual for this month' : 'Save the actual amount you typed'}
+                    title={
+                      s.entry_amount != null
+                        ? 'Replace the actual for this month'
+                        : 'Save the actual amount you typed'
+                    }
                     onClick={() => save(s)}
                     disabled={!edits[s.id]}
                   >
@@ -115,7 +146,9 @@ export default function Income() {
                         await api.put(`/income/${month}/${s.id}`, { amount: null });
                         load();
                       }}
-                    >Clear</button>
+                    >
+                      Clear
+                    </button>
                   )}
                 </td>
               </tr>

@@ -21,7 +21,9 @@ fs.mkdirSync(path.join(DATA_DIR, 'uploads'), { recursive: true });
 // readable by other local users. systemd ships UMask=0077 too; this covers
 // manual/`npm start` runs where no unit file is involved.
 for (const dir of [DATA_DIR, USERS_DIR, path.join(DATA_DIR, 'uploads')]) {
-  try { fs.chmodSync(dir, 0o700); } catch {}
+  try {
+    fs.chmodSync(dir, 0o700);
+  } catch {}
 }
 
 // Master DB: user accounts + sessions only.
@@ -57,7 +59,10 @@ if (firstUser) {
 const dbCache = new Map();
 
 export function listUsernames() {
-  return master.prepare('SELECT username FROM users ORDER BY id').all().map((r) => r.username);
+  return master
+    .prepare('SELECT username FROM users ORDER BY id')
+    .all()
+    .map((r) => r.username);
 }
 
 export function hasAnyUser() {
@@ -70,9 +75,7 @@ export function isAdmin(username) {
 }
 
 export function listUsers() {
-  return master
-    .prepare('SELECT username, role, created_at FROM users ORDER BY id')
-    .all();
+  return master.prepare('SELECT username, role, created_at FROM users ORDER BY id').all();
 }
 
 export function deleteUser(username) {
@@ -86,7 +89,10 @@ export function deleteUser(username) {
 // collided.) Everything outside that safe set now becomes %XX, making the
 // mapping reversible and collision-free.
 export function safeDbFilename(username) {
-  return String(username).replace(/[^a-zA-Z0-9_\-]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+  return String(username).replace(
+    /[^a-zA-Z0-9_\-]/g,
+    (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'),
+  );
 }
 
 export function getUserDb(username, opts = {}) {
@@ -102,7 +108,9 @@ export function getUserDb(username, opts = {}) {
       try {
         fs.renameSync(legacy, target);
         for (const suffix of ['-wal', '-shm']) {
-          try { fs.renameSync(legacy + suffix, target + suffix); } catch {}
+          try {
+            fs.renameSync(legacy + suffix, target + suffix);
+          } catch {}
         }
       } catch {}
     }
@@ -133,7 +141,7 @@ function reportFkViolations(username, inst) {
       .join(', ');
     console.error(
       `[fk-check] ${username}: ${violations.length} orphaned row(s) ` +
-      `(first: ${detail}). Run "PRAGMA foreign_key_check" on the database and back up before repairing.`
+        `(first: ${detail}). Run "PRAGMA foreign_key_check" on the database and back up before repairing.`,
     );
   } catch {}
 }
@@ -143,12 +151,14 @@ function reportFkViolations(username, inst) {
 export function closeUserDb(username) {
   const inst = dbCache.get(username);
   if (inst) {
-    try { inst.close(); } catch {}
+    try {
+      inst.close();
+    } catch {}
     dbCache.delete(username);
   }
 }
 
-export function initUserSchema(db, { generic = false } = {}) {
+export function initUserSchema(db, { generic: _generic = false } = {}) {
   db.exec(`
 CREATE TABLE IF NOT EXISTS categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -361,38 +371,49 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
 );
 `);
 
-// migrations for databases created before the v3 money-engine features
-for (const col of ['split_group TEXT', 'split_of INTEGER REFERENCES transactions(id) ON DELETE CASCADE']) {
+  // migrations for databases created before the v3 money-engine features
+  for (const col of [
+    'split_group TEXT',
+    'split_of INTEGER REFERENCES transactions(id) ON DELETE CASCADE',
+  ]) {
+    try {
+      db.exec(`ALTER TABLE transactions ADD COLUMN ${col}`);
+    } catch {}
+  }
   try {
-    db.exec(`ALTER TABLE transactions ADD COLUMN ${col}`);
+    db.exec('ALTER TABLE categories ADD COLUMN roll_overs INTEGER NOT NULL DEFAULT 0');
   } catch {}
-}
-try {
-  db.exec('ALTER TABLE categories ADD COLUMN roll_overs INTEGER NOT NULL DEFAULT 0');
-} catch {}
-try {
-  db.exec('ALTER TABLE funds ADD COLUMN target_amount REAL');
-} catch {}
-try {
-  db.exec('ALTER TABLE funds ADD COLUMN target_date TEXT');
-} catch {}
-try {
-  db.exec("ALTER TABLE transactions ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'");
-} catch {}
-// v3.11 — fund link, transfer group, per-account opening balance
-try { db.exec('ALTER TABLE accounts ADD COLUMN opening_balance REAL NOT NULL DEFAULT 0'); } catch {}
-try { db.exec('ALTER TABLE transactions ADD COLUMN fund_id INTEGER REFERENCES funds(id) ON DELETE SET NULL'); } catch {}
-try { db.exec('ALTER TABLE transactions ADD COLUMN transfer_group TEXT'); } catch {}
+  try {
+    db.exec('ALTER TABLE funds ADD COLUMN target_amount REAL');
+  } catch {}
+  try {
+    db.exec('ALTER TABLE funds ADD COLUMN target_date TEXT');
+  } catch {}
+  try {
+    db.exec("ALTER TABLE transactions ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'");
+  } catch {}
+  // v3.11 — fund link, transfer group, per-account opening balance
+  try {
+    db.exec('ALTER TABLE accounts ADD COLUMN opening_balance REAL NOT NULL DEFAULT 0');
+  } catch {}
+  try {
+    db.exec(
+      'ALTER TABLE transactions ADD COLUMN fund_id INTEGER REFERENCES funds(id) ON DELETE SET NULL',
+    );
+  } catch {}
+  try {
+    db.exec('ALTER TABLE transactions ADD COLUMN transfer_group TEXT');
+  } catch {}
 
-// Deduplication fingerprint now includes the transaction currency. Recompute
-// existing keys once (guarded by PRAGMA user_version) so re-imports of old
-// statements still deduplicate against stored rows, and same-date/same-amount/
-// same-description rows in different currencies no longer collide.
-const v = db.prepare('PRAGMA user_version').get().user_version;
-if (v < 1) {
-  migrateDedupKeys(db);
-  db.exec('PRAGMA user_version = 1');
-}
+  // Deduplication fingerprint now includes the transaction currency. Recompute
+  // existing keys once (guarded by PRAGMA user_version) so re-imports of old
+  // statements still deduplicate against stored rows, and same-date/same-amount/
+  // same-description rows in different currencies no longer collide.
+  const v = db.prepare('PRAGMA user_version').get().user_version;
+  if (v < 1) {
+    migrateDedupKeys(db);
+    db.exec('PRAGMA user_version = 1');
+  }
 
   const seed = db.prepare('SELECT COUNT(*) AS c FROM categories').get().c;
   if (seed === 0) seedGeneric(db);
@@ -401,7 +422,9 @@ if (v < 1) {
 function migrateDedupKeys(inst) {
   const seen = new Map();
   const rows = inst
-    .prepare('SELECT id, date, amount, currency, description, dedup_key FROM transactions ORDER BY id')
+    .prepare(
+      'SELECT id, date, amount, currency, description, dedup_key FROM transactions ORDER BY id',
+    )
     .all();
   const updates = [];
   for (const tx of rows) {
@@ -435,8 +458,12 @@ function seedGeneric(db) {
   const q = (sql, ...args) => db.prepare(sql).run(...args);
   const one = (sql, ...args) => db.prepare(sql).run(...args);
 
-  const accBank = one(`INSERT INTO accounts (name, kind) VALUES ('Bank account', 'sparkasse')`).lastInsertRowid;
-  const accCard = one(`INSERT INTO accounts (name, kind, is_spending_pot) VALUES ('Card', 'revolut', 1)`).lastInsertRowid;
+  const accBank = one(
+    `INSERT INTO accounts (name, kind) VALUES ('Bank account', 'sparkasse')`,
+  ).lastInsertRowid;
+  const accCard = one(
+    `INSERT INTO accounts (name, kind, is_spending_pot) VALUES ('Card', 'revolut', 1)`,
+  ).lastInsertRowid;
 
   const groups = ['Housing', 'Food', 'Transport', 'Lifestyle', 'Other'];
   const gid = {};
@@ -461,8 +488,12 @@ function seedGeneric(db) {
     ['Other', 'Other', accCard],
   ];
   for (const [name, grp, acc] of CATS) {
-    q(`INSERT INTO categories (name, group_id, account_id, monthly_budget) VALUES (?, ?, ?, 0)`,
-      name, gid[grp], acc);
+    q(
+      `INSERT INTO categories (name, group_id, account_id, monthly_budget) VALUES (?, ?, ?, 0)`,
+      name,
+      gid[grp],
+      acc,
+    );
   }
 }
 
@@ -479,7 +510,7 @@ export const db = new Proxy(
       const v = inst[prop];
       return typeof v === 'function' ? v.bind(inst) : v;
     },
-  }
+  },
 );
 
 export function getSetting(key) {
@@ -489,6 +520,6 @@ export function getSetting(key) {
 
 export function setSetting(key, value) {
   db.prepare(
-    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
   ).run(key, String(value));
 }

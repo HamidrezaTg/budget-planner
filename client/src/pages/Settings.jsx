@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, setCurrency } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
@@ -25,19 +25,26 @@ export default function Settings({ me }) {
   const [renameMsg, setRenameMsg] = useState(null);
 
   useEffect(() => {
-    if (me?.username) setRename((previous) => ({ ...previous, username: previous.username || me.username }));
+    if (me?.username)
+      setRename((previous) => ({ ...previous, username: previous.username || me.username }));
   }, [me?.username]);
 
   useEffect(() => {
-    api.get('/settings').then((s) => {
-      setCfg(s);
-      setProvider(s.provider || '');
-      setModel(s.model || '');
-      setCustomUrl(s.base_url || '');
-      setCurrencyState(s.currency || 'EUR');
-      if (s.provider && s.model) setModels([s.model]);
-    }).catch((e) => setMsg({ ok: false, text: e.message }));
-    api.get('/settings/fx').then(setFx).catch(() => {});
+    api
+      .get('/settings')
+      .then((s) => {
+        setCfg(s);
+        setProvider(s.provider || '');
+        setModel(s.model || '');
+        setCustomUrl(s.base_url || '');
+        setCurrencyState(s.currency || 'EUR');
+        if (s.provider && s.model) setModels([s.model]);
+      })
+      .catch((e) => setMsg({ ok: false, text: e.message }));
+    api
+      .get('/settings/fx')
+      .then(setFx)
+      .catch(() => {});
   }, []);
 
   const providerDef = cfg?.providers?.find((p) => p.id === provider);
@@ -76,7 +83,10 @@ export default function Settings({ me }) {
       setCurrency(currency);
       setApiKey('');
       // rates were stored relative to the old base currency
-      api.get('/settings/fx').then(setFx).catch(() => {});
+      api
+        .get('/settings/fx')
+        .then(setFx)
+        .catch(() => {});
       setMsg({
         ok: true,
         text: updated.rates_cleared
@@ -104,7 +114,11 @@ export default function Settings({ me }) {
     localStorage.setItem('bp-theme', t);
   };
 
-  const loadFx = () => api.get('/settings/fx').then(setFx).catch(() => {});
+  const loadFx = () =>
+    api
+      .get('/settings/fx')
+      .then(setFx)
+      .catch(() => {});
 
   const saveFxRate = async (month, cur) => {
     const key = `${month}|${cur}`;
@@ -115,7 +129,9 @@ export default function Settings({ me }) {
       setFxEdits((p) => ({ ...p, [key]: undefined }));
       loadFx();
       toast(`Saved ${cur} rate for ${month}.`, 'ok');
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+      toast(e.message, 'error');
+    }
   };
 
   const deleteFxRate = async (month, cur) => {
@@ -129,7 +145,9 @@ export default function Settings({ me }) {
     try {
       await api.del('/settings/fx', { month, currency: cur });
       loadFx();
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+      toast(e.message, 'error');
+    }
   };
 
   const fetchFx = async (overwrite) => {
@@ -140,14 +158,20 @@ export default function Settings({ me }) {
       if (r.filled > 0 && r.failed.length === 0) {
         toast(`Imported ${r.filled} monthly rate(s) from the ECB.`, 'ok');
       } else if (r.filled > 0) {
-        toast(`${r.filled} imported, ${r.failed.length} failed — see failed months below.`, 'error');
+        toast(
+          `${r.filled} imported, ${r.failed.length} failed — see failed months below.`,
+          'error',
+        );
       } else if (r.attempted === 0) {
         toast('Nothing to fetch — all rates present.', 'ok');
       } else {
         toast(r.failed[0]?.error || 'Could not reach the rate service.', 'error');
       }
-    } catch (e) { toast(e.message, 'error'); }
-    finally { setFxBusy(false); }
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setFxBusy(false);
+    }
   };
 
   const changePassword = async (e) => {
@@ -204,8 +228,7 @@ export default function Settings({ me }) {
     if (!file) return;
     const ok = await confirm({
       title: 'Restore this backup?',
-      message:
-        `"${file.name}" will REPLACE your current database. A copy of the current data is kept as .pre-restore. You will need to reload the page afterwards.`,
+      message: `"${file.name}" will REPLACE your current database. A copy of the current data is kept as .pre-restore. You will need to reload the page afterwards.`,
       danger: true,
       confirmLabel: 'Restore',
     });
@@ -236,24 +259,32 @@ export default function Settings({ me }) {
           </div>
         </div>
         <div className="settings-section">
-          <p className="muted tiny">Theme — Light or dark mode. Applies to the web client and the Android app.</p>
+          <p className="muted tiny">
+            Theme — Light or dark mode. Applies to the web client and the Android app.
+          </p>
           <div className="pill-row" role="group" aria-label="Theme">
             <button
               className={`btn ${theme === 'light' ? 'primary' : 'ghost'}`}
               onClick={() => pickTheme('light')}
               aria-pressed={theme === 'light'}
               title="Use the light theme"
-            >Light</button>
+            >
+              Light
+            </button>
             <button
               className={`btn ${theme === 'dark' ? 'primary' : 'ghost'}`}
               onClick={() => pickTheme('dark')}
               aria-pressed={theme === 'dark'}
               title="Use the dark theme"
-            >Dark</button>
+            >
+              Dark
+            </button>
           </div>
         </div>
         <div className="settings-section">
-          <label className="muted tiny" htmlFor="settings-currency">Display currency</label>
+          <label className="muted tiny" htmlFor="settings-currency">
+            Display currency
+          </label>
           <select
             id="settings-currency"
             value={currency}
@@ -265,10 +296,15 @@ export default function Settings({ me }) {
             style={{ width: 120 }}
           >
             {['EUR', 'USD', 'GBP', 'CHF'].map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>
+                {c}
+              </option>
             ))}
           </select>
-          <p className="muted tiny">Changes the display format only. Exchange rates for foreign transactions are managed below.</p>
+          <p className="muted tiny">
+            Changes the display format only. Exchange rates for foreign transactions are managed
+            below.
+          </p>
         </div>
       </div>
 
@@ -279,16 +315,38 @@ export default function Settings({ me }) {
             <h2 style={{ fontSize: 18, margin: 0 }}>Change username</h2>
           </div>
         </div>
-        <p className="muted tiny">Use 2–32 lowercase letters, numbers, or underscores. Your data stays with the account.</p>
+        <p className="muted tiny">
+          Use 2–32 lowercase letters, numbers, or underscores. Your data stays with the account.
+        </p>
         <form className="settings-section" onSubmit={renameAccount}>
-          <label className="muted tiny">New username
-            <input value={rename.username} maxLength={32} onChange={(e) => setRename({ ...rename, username: e.target.value })} autoComplete="username" required />
+          <label className="muted tiny">
+            New username
+            <input
+              value={rename.username}
+              maxLength={32}
+              onChange={(e) => setRename({ ...rename, username: e.target.value })}
+              autoComplete="username"
+              required
+            />
           </label>
-          <label className="muted tiny">Current password
-            <input type="password" value={rename.current_password} onChange={(e) => setRename({ ...rename, current_password: e.target.value })} autoComplete="current-password" required />
+          <label className="muted tiny">
+            Current password
+            <input
+              type="password"
+              value={rename.current_password}
+              onChange={(e) => setRename({ ...rename, current_password: e.target.value })}
+              autoComplete="current-password"
+              required
+            />
           </label>
           <div className="btn-row" style={{ alignItems: 'center' }}>
-            <button className="btn primary" type="submit" disabled={!rename.username.trim() || !rename.current_password}>Change username</button>
+            <button
+              className="btn primary"
+              type="submit"
+              disabled={!rename.username.trim() || !rename.current_password}
+            >
+              Change username
+            </button>
             {renameMsg && <span className={renameMsg.ok ? 'good' : 'error'}>{renameMsg.text}</span>}
           </div>
         </form>
@@ -304,21 +362,45 @@ export default function Settings({ me }) {
         </div>
         <form onSubmit={changePassword}>
           <div className="settings-section">
-            <p className="muted tiny">Change your password. You'll stay logged in on this device but be signed out elsewhere.</p>
+            <p className="muted tiny">
+              Change your password. You'll stay logged in on this device but be signed out
+              elsewhere.
+            </p>
           </div>
           <div className="form-grid">
-            <label>Current password
-              <input type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+            <label>
+              Current password
+              <input
+                type="password"
+                value={pw.current}
+                onChange={(e) => setPw({ ...pw, current: e.target.value })}
+              />
             </label>
-            <label>New password
-              <input type="password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+            <label>
+              New password
+              <input
+                type="password"
+                value={pw.next}
+                onChange={(e) => setPw({ ...pw, next: e.target.value })}
+              />
             </label>
-            <label>Repeat new password
-              <input type="password" value={pw.repeat} onChange={(e) => setPw({ ...pw, repeat: e.target.value })} />
+            <label>
+              Repeat new password
+              <input
+                type="password"
+                value={pw.repeat}
+                onChange={(e) => setPw({ ...pw, repeat: e.target.value })}
+              />
             </label>
           </div>
           <div className="btn-row" style={{ marginTop: 10 }}>
-            <button className="btn primary" disabled={!pw.current || !pw.next} title="Update your password">Change password</button>
+            <button
+              className="btn primary"
+              disabled={!pw.current || !pw.next}
+              title="Update your password"
+            >
+              Change password
+            </button>
             {pwMsg && <span className={pwMsg.ok ? 'good' : 'error'}>{pwMsg.text}</span>}
           </div>
         </form>
@@ -334,17 +416,32 @@ export default function Settings({ me }) {
         </div>
         <div className="settings-section">
           <div className="btn-row" style={{ flexWrap: 'wrap' }}>
-            <a className="btn" href="/api/settings/backup" title="Download your database file — store it somewhere safe">Download full backup (.db)</a>
-            <label className="btn file-btn" title="Replace your data with a backup file (a .pre-restore copy is kept)">
+            <a
+              className="btn"
+              href="/api/settings/backup"
+              title="Download your database file — store it somewhere safe"
+            >
+              Download full backup (.db)
+            </a>
+            <label
+              className="btn file-btn"
+              title="Replace your data with a backup file (a .pre-restore copy is kept)"
+            >
               Restore backup (.db)
               <input type="file" accept=".db" onChange={restoreBackup} hidden />
             </label>
-            <button className="btn danger" title="Delete every transaction. Keeps budgets, rules, funds, income sources and commitments." onClick={deleteSpending}>Delete all spending data</button>
+            <button
+              className="btn danger"
+              title="Delete every transaction. Keeps budgets, rules, funds, income sources and commitments."
+              onClick={deleteSpending}
+            >
+              Delete all spending data
+            </button>
           </div>
           <p className="muted tiny">
-            Backup downloads your complete database file. Restore replaces your current data with a backup file (a
-            .pre-restore copy is kept). To migrate to a new server: install there, create an account, then restore
-            your backup file.
+            Backup downloads your complete database file. Restore replaces your current data with a
+            backup file (a .pre-restore copy is kept). To migrate to a new server: install there,
+            create an account, then restore your backup file.
           </p>
           {dataMsg && <div className={dataMsg.ok ? 'good' : 'error'}>{dataMsg.text}</div>}
         </div>
@@ -365,17 +462,28 @@ export default function Settings({ me }) {
           </p>
           <form onSubmit={save}>
             <div className="form-grid">
-              <label title="AI provider — built-in options talk to the listed service; Custom lets you paste any OpenAI-compatible URL">Provider
-                <select value={provider} onChange={(e) => { setProvider(e.target.value); setModels([]); setModel(''); }}>
+              <label title="AI provider — built-in options talk to the listed service; Custom lets you paste any OpenAI-compatible URL">
+                Provider
+                <select
+                  value={provider}
+                  onChange={(e) => {
+                    setProvider(e.target.value);
+                    setModels([]);
+                    setModel('');
+                  }}
+                >
                   <option value="">Choose a provider…</option>
                   {cfg.providers.map((p) => (
-                    <option key={p.id} value={p.id}>{p.label}</option>
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
                   ))}
                 </select>
               </label>
 
               {provider === 'custom' && (
-                <label title="Full URL of any OpenAI-compatible endpoint. Must start with http:// or https://">Base URL
+                <label title="Full URL of any OpenAI-compatible endpoint. Must start with http:// or https://">
+                  Base URL
                   <input
                     placeholder="https://…/v1"
                     value={customUrl}
@@ -385,45 +493,93 @@ export default function Settings({ me }) {
               )}
 
               {provider && needsKey && (
-                <label title="Your API key. Leave empty when editing to keep the saved key.">API key {cfg.has_key && cfg.provider === provider && <span className="muted">({cfg.key_hint} saved)</span>}
+                <label title="Your API key. Leave empty when editing to keep the saved key.">
+                  API key{' '}
+                  {cfg.has_key && cfg.provider === provider && (
+                    <span className="muted">({cfg.key_hint} saved)</span>
+                  )}
                   <input
                     type="password"
-                    placeholder={cfg.has_key && cfg.provider === provider ? 'Leave empty to keep saved key' : 'sk-…'}
+                    placeholder={
+                      cfg.has_key && cfg.provider === provider
+                        ? 'Leave empty to keep saved key'
+                        : 'sk-…'
+                    }
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                   />
                 </label>
               )}
               {provider && !needsKey && (
-                <div className="good" style={{ marginTop: 4 }}>Runs locally — no API key needed.</div>
+                <div className="good" style={{ marginTop: 4 }}>
+                  Runs locally — no API key needed.
+                </div>
               )}
 
               {provider && (
-                <label title="The model to use for AI requests">Model
+                <label title="The model to use for AI requests">
+                  Model
                   <div className="btn-row" style={{ marginTop: 4 }}>
-                    <select value={model} onChange={(e) => setModel(e.target.value)} disabled={!models.length} style={{ flex: 1 }}>
-                      <option value="">{models.length ? 'Choose a model…' : 'Load models first'}</option>
-                      {models.map((m) => <option key={m} value={m}>{m}</option>)}
+                    <select
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      disabled={!models.length}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">
+                        {models.length ? 'Choose a model…' : 'Load models first'}
+                      </option>
+                      {models.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
                     </select>
                     <button
                       className="btn ghost"
                       type="button"
                       onClick={loadModels}
-                      disabled={loadingModels || (needsKey && !apiKey && !(cfg.has_key && cfg.provider === provider))}
+                      disabled={
+                        loadingModels ||
+                        (needsKey && !apiKey && !(cfg.has_key && cfg.provider === provider))
+                      }
                       title="Fetch the list of models your key can use"
                     >
                       {loadingModels ? 'Loading…' : 'Load models'}
                     </button>
                   </div>
-                  {models.length > 0 && <span className="muted tiny" style={{ display: 'block', marginTop: 4 }}>{models.length} models available for your key</span>}
+                  {models.length > 0 && (
+                    <span className="muted tiny" style={{ display: 'block', marginTop: 4 }}>
+                      {models.length} models available for your key
+                    </span>
+                  )}
                 </label>
               )}
             </div>
             <div className="btn-row" style={{ marginTop: 10 }}>
-              <button className="btn primary" type="submit" disabled={!provider || !model} title="Save the AI settings">Save</button>
-              <button className="btn ghost" type="button" onClick={test} disabled={!cfg.has_key} title="Send a tiny test prompt to verify the connection">Test connection</button>
+              <button
+                className="btn primary"
+                type="submit"
+                disabled={!provider || !model}
+                title="Save the AI settings"
+              >
+                Save
+              </button>
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={test}
+                disabled={!cfg.has_key}
+                title="Send a tiny test prompt to verify the connection"
+              >
+                Test connection
+              </button>
             </div>
-            {msg && <div className={msg.ok ? 'good' : 'error'} style={{ marginTop: 6 }}>{msg.text}</div>}
+            {msg && (
+              <div className={msg.ok ? 'good' : 'error'} style={{ marginTop: 6 }}>
+                {msg.text}
+              </div>
+            )}
           </form>
         </div>
       </div>
@@ -445,12 +601,25 @@ export default function Settings({ me }) {
               warning card appears on the Dashboard.
             </p>
             <div className="btn-row" style={{ marginBottom: 10 }}>
-              <button className="btn small" disabled={fxBusy} onClick={() => fetchFx(false)} title="Fill missing rates from frankfurter.dev (ECB reference rates)">
+              <button
+                className="btn small"
+                disabled={fxBusy}
+                onClick={() => fetchFx(false)}
+                title="Fill missing rates from frankfurter.dev (ECB reference rates)"
+              >
                 {fxBusy ? 'Fetching…' : 'Fetch missing from ECB'}
               </button>
             </div>
             <table>
-              <thead><tr><th>Month</th><th>Currency</th><th>Rate</th><th>Source</th><th></th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Currency</th>
+                  <th>Rate</th>
+                  <th>Source</th>
+                  <th></th>
+                </tr>
+              </thead>
               <tbody>
                 {fx.rates.map((r) => {
                   const key = `${r.month}|${r.currency}`;
@@ -461,7 +630,9 @@ export default function Settings({ me }) {
                       <td className="num">
                         <input
                           className="budget-input"
-                          type="number" step="0.0001" min="0.000001"
+                          type="number"
+                          step="0.0001"
+                          min="0.000001"
                           style={{ width: 110 }}
                           value={fxEdits[key] ?? r.rate}
                           onChange={(e) => setFxEdits((p) => ({ ...p, [key]: e.target.value }))}
@@ -475,12 +646,16 @@ export default function Settings({ me }) {
                             disabled={fxEdits[key] === undefined}
                             onClick={() => saveFxRate(r.month, r.currency)}
                             title="Save the new rate"
-                          >Save</button>
+                          >
+                            Save
+                          </button>
                           <button
                             className="btn danger small"
                             onClick={() => deleteFxRate(r.month, r.currency)}
                             title="Delete this rate — transactions in that month will count 1:1"
-                          >✕</button>
+                          >
+                            ✕
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -495,7 +670,9 @@ export default function Settings({ me }) {
                       <td className="num">
                         <input
                           className="budget-input"
-                          type="number" step="0.0001" min="0.000001"
+                          type="number"
+                          step="0.0001"
+                          min="0.000001"
                           style={{ width: 110 }}
                           placeholder={`in ${fx.base}`}
                           value={fxEdits[key] ?? ''}
@@ -508,7 +685,9 @@ export default function Settings({ me }) {
                           disabled={fxEdits[key] === undefined || fxEdits[key] === ''}
                           onClick={() => saveFxRate(m.month, m.currency)}
                           title="Save the new rate"
-                        >Save</button>
+                        >
+                          Save
+                        </button>
                       </td>
                     </tr>
                   );

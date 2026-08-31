@@ -26,9 +26,7 @@ router.post('/', (req, res) => {
   const b = req.body ?? {};
   const err = validatePerson(b);
   if (err) return res.status(400).json({ error: err });
-  const r = db
-    .prepare('INSERT INTO persons (name) VALUES (?)')
-    .run(String(b.name).trim());
+  const r = db.prepare('INSERT INTO persons (name) VALUES (?)').run(String(b.name).trim());
   res.json(db.prepare('SELECT * FROM persons WHERE id = ?').get(r.lastInsertRowid));
 });
 
@@ -39,10 +37,7 @@ router.patch('/:id', (req, res) => {
   const err = validatePerson(b, row.id, { partial: true });
   if (err) return res.status(400).json({ error: err });
   if (b.name === undefined) return res.status(400).json({ error: 'No editable fields provided' });
-  db.prepare('UPDATE persons SET name = ? WHERE id = ?').run(
-    String(b.name).trim(),
-    req.params.id
-  );
+  db.prepare('UPDATE persons SET name = ? WHERE id = ?').run(String(b.name).trim(), req.params.id);
   res.json(db.prepare('SELECT * FROM persons WHERE id = ?').get(req.params.id));
 });
 

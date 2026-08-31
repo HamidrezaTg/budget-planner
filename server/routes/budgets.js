@@ -20,10 +20,9 @@ router.get('/:month', (req, res) => {
     // The client's rollover toggle reads this — omitting it made the toggle
     // always display "off" and always re-enable rollover.
     roll_overs: !!c.roll_overs,
-    has_override:
-      !!db
-        .prepare('SELECT 1 FROM budget_lines WHERE category_id = ? AND month = ?')
-        .get(c.id, month),
+    has_override: !!db
+      .prepare('SELECT 1 FROM budget_lines WHERE category_id = ? AND month = ?')
+      .get(c.id, month),
   }));
   res.json({ month, lines });
 });
@@ -37,13 +36,16 @@ router.put('/:month/:categoryId', (req, res) => {
 
   const amount = req.body?.amount;
   if (amount === null || amount === undefined || amount === '') {
-    db.prepare('DELETE FROM budget_lines WHERE category_id = ? AND month = ?').run(categoryId, month);
+    db.prepare('DELETE FROM budget_lines WHERE category_id = ? AND month = ?').run(
+      categoryId,
+      month,
+    );
   } else {
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt < 0) return res.status(400).json({ error: 'Invalid amount' });
     db.prepare(
       `INSERT INTO budget_lines (category_id, month, planned_amount) VALUES (?, ?, ?)
-       ON CONFLICT(category_id, month) DO UPDATE SET planned_amount = excluded.planned_amount`
+       ON CONFLICT(category_id, month) DO UPDATE SET planned_amount = excluded.planned_amount`,
     ).run(categoryId, month, amt);
   }
   // also allow editing the standing plan in one call

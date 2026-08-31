@@ -58,7 +58,7 @@ app.use((_req, res, next) => {
       "script-src 'self' 'sha256-rBN/v916LrsvlEADLbAag4oxTka3H2ltz3J6Mjfhif8='; " +
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; " +
-      "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'"
+      "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'",
   );
   next();
 });
@@ -74,7 +74,7 @@ app.get('/healthz', (_req, res) => {
 // planner server. Replies with the API base path, the build version, and
 // the documented feature set so the client can adapt.
 const PKG_VERSION = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
+  fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'),
 ).version;
 app.get('/.well-known/budget-planner', (_req, res) => {
   // The Android shell is a separate origin and needs to inspect this small,
@@ -126,7 +126,7 @@ if (fs.existsSync(dist)) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         }
       },
-    })
+    }),
   );
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -140,7 +140,6 @@ app.use('/api', (_req, res) => {
 });
 
 // Centralized error handler: no stack traces or internal paths leak to clients.
-// eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, next) => {
   const status = err.status || err.statusCode || (err.type === 'entity.parse.failed' ? 400 : 500);
   if (status >= 500) console.error(`[error] [req:${_req.id ?? '-'}]`, err);
@@ -160,5 +159,7 @@ setInterval(sweepExpiredSessions, 3600 * 1000).unref();
 
 app.listen(PORT, BIND_IP || undefined, () => {
   const shown = BIND_IP || '0.0.0.0';
-  console.log(`Budget planner running at http://${shown === '0.0.0.0' ? '<this-machine>' : shown}:${PORT}`);
+  console.log(
+    `Budget planner running at http://${shown === '0.0.0.0' ? '<this-machine>' : shown}:${PORT}`,
+  );
 });

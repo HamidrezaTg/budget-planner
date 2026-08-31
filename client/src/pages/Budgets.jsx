@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { api, eur, currentMonth, monthLabel } from '../api.js';
+import { useEffect, useState } from 'react';
+import { api, currentMonth, monthLabel } from '../api.js';
 
 // Budgets: per-month plan per category. Editing saves an override for the
 // selected month; the standing monthly plan is editable too.
@@ -17,8 +17,15 @@ export default function Budgets() {
       setLines(d.lines);
       if (!keepEdits) setEdits({});
     });
-  useEffect(() => { api.get('/categories/meta/all').then(setMeta).catch(() => {}); }, []);
-  useEffect(() => { load(); }, [month]);
+  useEffect(() => {
+    api
+      .get('/categories/meta/all')
+      .then(setMeta)
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    load();
+  }, [month]);
 
   const grouped = lines.reduce((acc, l) => {
     (acc[l.group ?? 'Ungrouped'] ??= []).push(l);
@@ -41,7 +48,9 @@ export default function Budgets() {
       clearEdit(l.category_id);
       setError('');
       load(true);
-    } catch (e) { setError(e.message); }
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   const saveStanding = async (l) => {
@@ -52,15 +61,21 @@ export default function Budgets() {
       clearEdit('s' + l.category_id);
       setError('');
       load(true);
-    } catch (e) { setError(e.message); }
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   const assignAccount = async (l, accountId) => {
     try {
-      await api.patch(`/categories/${l.category_id}`, { account_id: accountId ? Number(accountId) : null });
+      await api.patch(`/categories/${l.category_id}`, {
+        account_id: accountId ? Number(accountId) : null,
+      });
       setError('');
       load(true);
-    } catch (e) { setError(e.message); }
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   const toggleRollover = async (l) => {
@@ -69,7 +84,9 @@ export default function Budgets() {
       await api.patch(`/categories/${l.category_id}`, { roll_overs: !cur });
       setError('');
       load(true);
-    } catch (e) { setError(e.message); }
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   const input = (key, value) => (
@@ -93,8 +110,8 @@ export default function Budgets() {
         </div>
       </div>
       <p className="muted">
-        “Plan for {monthLabel(month)}” overrides the standing plan for that month only.
-        Every category should have an account — untagged spending disappears from account totals.
+        “Plan for {monthLabel(month)}” overrides the standing plan for that month only. Every
+        category should have an account — untagged spending disappears from account totals.
       </p>
       {error && <div className="error">{error}</div>}
 
@@ -105,9 +122,12 @@ export default function Budgets() {
             <table>
               <thead>
                 <tr>
-                  <th>Category</th><th>Account</th>
+                  <th>Category</th>
+                  <th>Account</th>
                   <th className="num">Standing plan</th>
-                  <th className="num">Plan for {monthLabel(month)}</th><th>Rollover</th><th></th>
+                  <th className="num">Plan for {monthLabel(month)}</th>
+                  <th>Rollover</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -119,7 +139,12 @@ export default function Budgets() {
                         <button
                           className="btn ghost tiny-btn"
                           title="Remove this month's override"
-                          onClick={() => api.put(`/budgets/${month}/${l.category_id}`, { amount: null }).then(() => load(true)).catch((e) => setError(e.message))}
+                          onClick={() =>
+                            api
+                              .put(`/budgets/${month}/${l.category_id}`, { amount: null })
+                              .then(() => load(true))
+                              .catch((e) => setError(e.message))
+                          }
                         >
                           ↺
                         </button>
@@ -133,7 +158,9 @@ export default function Budgets() {
                       >
                         <option value="">{l.account ?? '— untagged —'}</option>
                         {meta.accounts.map((a) => (
-                          <option key={a.id} value={a.id}>{a.name}</option>
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
                         ))}
                       </select>
                     </td>
@@ -143,7 +170,9 @@ export default function Budgets() {
                         className={`btn small ${edits['s' + l.category_id] !== undefined ? 'primary' : 'ghost'}`}
                         onClick={() => saveStanding(l)}
                         disabled={edits['s' + l.category_id] === undefined}
-                      >✓</button>
+                      >
+                        ✓
+                      </button>
                     </td>
                     <td className="num">{input(l.category_id, l.planned)}</td>
                     <td>
@@ -160,7 +189,9 @@ export default function Budgets() {
                         className={`btn small ${edits[l.category_id] !== undefined ? 'primary' : 'ghost'}`}
                         onClick={() => saveOverride(l)}
                         disabled={edits[l.category_id] === undefined}
-                      >Set</button>
+                      >
+                        Set
+                      </button>
                     </td>
                   </tr>
                 ))}

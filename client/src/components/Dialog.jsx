@@ -1,11 +1,19 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 const DialogContext = createContext(null);
 
 let idCounter = 0;
 
 export function DialogProvider({ children }) {
-  const [dialog, setDialog] = useState(null);   // { kind, title, message, label, initial, danger, confirmLabel, placeholder, password }
+  const [dialog, setDialog] = useState(null); // { kind, title, message, label, initial, danger, confirmLabel, placeholder, password }
   const [input, setInput] = useState('');
   const [toasts, setToasts] = useState([]);
   const resolver = useRef(null);
@@ -22,8 +30,12 @@ export function DialogProvider({ children }) {
   };
 
   const confirm = useCallback((opts) => {
-    const { title = 'Are you sure?', message = '', danger = false, confirmLabel = 'Confirm' } =
-      typeof opts === 'string' ? { message: opts } : opts;
+    const {
+      title = 'Are you sure?',
+      message = '',
+      danger = false,
+      confirmLabel = 'Confirm',
+    } = typeof opts === 'string' ? { message: opts } : opts;
     return new Promise((resolve) => {
       resolver.current = resolve;
       setInput('');
@@ -32,8 +44,13 @@ export function DialogProvider({ children }) {
   }, []);
 
   const prompt = useCallback((opts) => {
-    const { title, label = '', initial = '', placeholder = '', password = false } =
-      typeof opts === 'string' ? { title: opts } : opts;
+    const {
+      title,
+      label = '',
+      initial = '',
+      placeholder = '',
+      password = false,
+    } = typeof opts === 'string' ? { title: opts } : opts;
     return new Promise((resolve) => {
       resolver.current = resolve;
       setInput(initial ?? '');
@@ -53,7 +70,7 @@ export function DialogProvider({ children }) {
       lastFocus.current = document.activeElement;
       const focusable = panelRef.current?.querySelector(
         'input:not([type="hidden"]):not([hidden]):not(:disabled), ' +
-        'select:enabled, textarea:enabled, button:enabled, a[href]'
+          'select:enabled, textarea:enabled, button:enabled, a[href]',
       );
       (focusable || panelRef.current)?.focus();
     }
@@ -77,7 +94,7 @@ export function DialogProvider({ children }) {
     if (e.key === 'Tab' && panelRef.current) {
       const focusables = panelRef.current.querySelectorAll(
         'input:not([type="hidden"]):not([hidden]):not(:disabled), ' +
-        'select:enabled, textarea:enabled, button:enabled, a[href]'
+          'select:enabled, textarea:enabled, button:enabled, a[href]',
       );
       if (!focusables.length) return;
       const first = focusables[0];
@@ -116,12 +133,22 @@ export function DialogProvider({ children }) {
             aria-describedby={dialog.message ? bodyId.current : undefined}
             onKeyDown={trapFocus}
           >
-            <h3 className="modal-title" id={titleId.current}>{dialog.title}</h3>
-            {dialog.message && <p className="modal-message" id={bodyId.current}>{dialog.message}</p>}
+            <h3 className="modal-title" id={titleId.current}>
+              {dialog.title}
+            </h3>
+            {dialog.message && (
+              <p className="modal-message" id={bodyId.current}>
+                {dialog.message}
+              </p>
+            )}
 
             {dialog.kind === 'prompt' && (
               <>
-                {dialog.label && <label className="modal-label" htmlFor={inputId.current}>{dialog.label}</label>}
+                {dialog.label && (
+                  <label className="modal-label" htmlFor={inputId.current}>
+                    {dialog.label}
+                  </label>
+                )}
                 <input
                   id={inputId.current}
                   autoFocus
@@ -139,7 +166,9 @@ export function DialogProvider({ children }) {
             )}
 
             <div className="modal-actions">
-              <button type="button" className="btn ghost" onClick={() => close(null)}>Cancel</button>
+              <button type="button" className="btn ghost" onClick={() => close(null)}>
+                Cancel
+              </button>
               <button
                 type="button"
                 className={`btn ${dialog.danger ? 'danger' : 'primary'}`}
@@ -154,7 +183,9 @@ export function DialogProvider({ children }) {
 
       <div className="toast-stack" aria-live="polite" aria-atomic="false">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast ${t.type}`} role="status">{t.message}</div>
+          <div key={t.id} className={`toast ${t.type}`} role="status">
+            {t.message}
+          </div>
         ))}
       </div>
     </DialogContext.Provider>
@@ -179,7 +210,7 @@ export function Modal({ title, onClose, children, width }) {
     lastFocus.current = document.activeElement;
     const focusable = panelRef.current?.querySelector(
       'input:not([type="hidden"]):not([hidden]):not(:disabled), ' +
-      'select:enabled, textarea:enabled, button:enabled, a[href]'
+        'select:enabled, textarea:enabled, button:enabled, a[href]',
     );
     (focusable || panelRef.current)?.focus();
     return () => {
@@ -197,7 +228,7 @@ export function Modal({ title, onClose, children, width }) {
     if (e.key === 'Tab' && panelRef.current) {
       const focusables = panelRef.current.querySelectorAll(
         'input:not([type="hidden"]):not([hidden]):not(:disabled), ' +
-      'select:enabled, textarea:enabled, button:enabled, a[href]'
+          'select:enabled, textarea:enabled, button:enabled, a[href]',
       );
       if (!focusables.length) return;
       const first = focusables[0];
@@ -213,10 +244,7 @@ export function Modal({ title, onClose, children, width }) {
   };
 
   return (
-    <div
-      className="overlay"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={panelRef}
         className="modal-card"
@@ -227,7 +255,9 @@ export function Modal({ title, onClose, children, width }) {
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
-        <h3 className="modal-title" id={titleId.current}>{title}</h3>
+        <h3 className="modal-title" id={titleId.current}>
+          {title}
+        </h3>
         {children}
       </div>
     </div>

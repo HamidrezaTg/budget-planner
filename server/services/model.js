@@ -44,12 +44,11 @@ export function plannedForCategory(cat, month, depth = 24) {
   if (!cat.roll_overs) return base;
 
   const prev = addMonths(month, -1);
-  const hadActivity =
-    db
-      .prepare(
-        `SELECT 1 FROM transactions WHERE category_id = ? AND substr(date,1,7) = ? AND ${NOT_PARENT('transactions')} LIMIT 1`
-      )
-      .get(cat.id, prev);
+  const hadActivity = db
+    .prepare(
+      `SELECT 1 FROM transactions WHERE category_id = ? AND substr(date,1,7) = ? AND ${NOT_PARENT('transactions')} LIMIT 1`,
+    )
+    .get(cat.id, prev);
   if (!hadActivity || depth <= 0) return base;
 
   // Previous month's EFFECTIVE plan (base + its own carry), not its base —
@@ -66,7 +65,7 @@ function actualForCategoryMonth(categoryId, month) {
       .prepare(
         `SELECT COALESCE(SUM(${FX_MULT} * t.amount),0) AS s
          FROM transactions t ${FX_JOIN}
-         WHERE t.category_id = ? AND substr(t.date,1,7) = ? AND ${NOT_COUNTED()}`
+         WHERE t.category_id = ? AND substr(t.date,1,7) = ? AND ${NOT_COUNTED()}`,
       )
       .get(categoryId, month).s * -1
   );
@@ -79,7 +78,7 @@ export function getAllCategories() {
        FROM categories c
        LEFT JOIN category_groups g ON g.id = c.group_id
        LEFT JOIN accounts a ON a.id = c.account_id
-       ORDER BY g.sort, c.name`
+       ORDER BY g.sort, c.name`,
     )
     .all();
 }
@@ -117,7 +116,7 @@ export function actualByCategory(month) {
       `SELECT t.category_id, SUM(${FX_MULT} * t.amount) AS net
        FROM transactions t ${FX_JOIN}
        WHERE substr(t.date,1,7) = ? AND t.category_id IS NOT NULL AND ${NOT_COUNTED()}
-       GROUP BY t.category_id`
+       GROUP BY t.category_id`,
     )
     .all(month);
   const map = {};
@@ -144,7 +143,7 @@ export function transferToRevolut(month) {
   const cats = db
     .prepare(
       `SELECT c.* FROM categories c JOIN accounts a ON a.id = c.account_id
-       WHERE a.kind = 'revolut'`
+       WHERE a.kind = 'revolut'`,
     )
     .all();
   return cats.reduce((sum, c) => sum + plannedForCategory(c, month), 0);
@@ -171,7 +170,7 @@ function totalPredictedAt(month) {
       .prepare(
         `SELECT COALESCE(SUM(amount),0) AS s FROM transactions
          WHERE account_id = ? AND substr(date,1,7) <= ?
-           AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
+           AND NOT (split_of IS NULL AND split_group IS NOT NULL)`,
       )
       .get(a.id, month).s;
     bank += a.opening_balance + tx;
@@ -187,14 +186,14 @@ export function fundBalanceAt(fund, month) {
   }
   const moved = db
     .prepare(
-      'SELECT COALESCE(SUM(amount),0) AS s FROM fund_movements WHERE fund_id = ? AND month <= ?'
+      'SELECT COALESCE(SUM(amount),0) AS s FROM fund_movements WHERE fund_id = ? AND month <= ?',
     )
     .get(fund.id, month).s;
   const txLinked = db
     .prepare(
       `SELECT COALESCE(SUM(${FX_MULT} * t.amount),0) AS s
        FROM transactions t ${FX_JOIN}
-       WHERE t.fund_id = ? AND substr(t.date,1,7) <= ? AND ${NOT_TRANSFER()} AND ${NOT_PARENT()}`
+       WHERE t.fund_id = ? AND substr(t.date,1,7) <= ? AND ${NOT_TRANSFER()} AND ${NOT_PARENT()}`,
     )
     .get(fund.id, month).s;
   return bal + moved + txLinked;
@@ -210,9 +209,7 @@ export function committedSavingsAt(month) {
 function latestAnchor(from) {
   // most recent month with at least one observation
   const row = db
-    .prepare(
-      `SELECT MAX(month) AS m FROM balance_observations WHERE month <= ?`
-    )
+    .prepare(`SELECT MAX(month) AS m FROM balance_observations WHERE month <= ?`)
     .get(from);
   return row?.m || null;
 }
@@ -236,7 +233,13 @@ function monthNet(m, cats, coveredCats, commitments) {
     if (p) variableTotal += p;
   }
   outgoings += variableTotal;
-  return { income: inc.total, outgoings, variable: variableTotal, net: inc.total - outgoings, lines };
+  return {
+    income: inc.total,
+    outgoings,
+    variable: variableTotal,
+    net: inc.total - outgoings,
+    lines,
+  };
 }
 
 // Projection: income minus outgoings rolled forward, commitments dropping out
@@ -251,7 +254,7 @@ export function project(numMonths = 96, from = currentMonth()) {
     db
       .prepare('SELECT DISTINCT category_id FROM commitments WHERE category_id IS NOT NULL')
       .all()
-      .map((r) => r.category_id)
+      .map((r) => r.category_id),
   );
 
   const commitments = db.prepare('SELECT * FROM commitments ORDER BY name').all();
@@ -266,8 +269,8 @@ export function project(numMonths = 96, from = currentMonth()) {
   const anchorMonth = latestAnchor(from);
 
   const months = [];
-  let free = 0;   // net liquid wealth ABOVE the opening balances; the anchor
-                  // branch sets this to (observed - opening - committed).
+  let free = 0; // net liquid wealth ABOVE the opening balances; the anchor
+  // branch sets this to (observed - opening - committed).
   let varianceAtAnchor = null;
 
   // If the latest observation predates the forecast start, start from the
@@ -296,7 +299,13 @@ export function project(numMonths = 96, from = currentMonth()) {
 
   for (let i = 0; i < numMonths; i++) {
     const m = addMonths(from, i);
-    const { income: incTotal, outgoings, variable: variableTotal, net, lines } = monthNet(m, cats, coveredCats, commitments);
+    const {
+      income: incTotal,
+      outgoings,
+      variable: variableTotal,
+      net,
+      lines,
+    } = monthNet(m, cats, coveredCats, commitments);
 
     // re-anchor: once we pass an observed month, shift so totals match reality
     if (anchorMonth && m === anchorMonth) {
@@ -327,7 +336,13 @@ export function project(numMonths = 96, from = currentMonth()) {
     });
   }
 
-  return { from, horizon: numMonths, anchored_at: anchorMonth, variance_at_anchor: varianceAtAnchor, months };
+  return {
+    from,
+    horizon: numMonths,
+    anchored_at: anchorMonth,
+    variance_at_anchor: varianceAtAnchor,
+    months,
+  };
 }
 
 function round2(n) {
@@ -372,7 +387,7 @@ function insightsForMonth(month, view) {
 
   view.rows
     .filter((r) => r.planned > 0 && r.actual > r.planned)
-    .sort((a, b) => (b.actual - b.planned) - (a.actual - a.planned))
+    .sort((a, b) => b.actual - b.planned - (a.actual - a.planned))
     .slice(0, 4)
     .forEach((r) => {
       insights.push({
@@ -403,7 +418,9 @@ function insightsForMonth(month, view) {
     }
   }
 
-  db.prepare('SELECT * FROM funds WHERE target_amount IS NOT NULL AND target_amount > 0 AND target_date IS NOT NULL')
+  db.prepare(
+    'SELECT * FROM funds WHERE target_amount IS NOT NULL AND target_amount > 0 AND target_date IS NOT NULL',
+  )
     .all()
     .forEach((fund) => {
       const balance = fundBalanceAt(fund, month);
@@ -455,15 +472,13 @@ function insightsForMonth(month, view) {
   // for one account by more than 5% of the prediction, surface it so the
   // user knows to re-anchor. The amount is the difference; the user can hit
   // Balances to see the detail.
-  const accounts = db
-    .prepare('SELECT id, name, opening_balance FROM accounts')
-    .all();
+  const accounts = db.prepare('SELECT id, name, opening_balance FROM accounts').all();
   for (const a of accounts) {
     const tx = db
       .prepare(
         `SELECT COALESCE(SUM(amount),0) AS s FROM transactions
          WHERE account_id = ? AND substr(date,1,7) <= ?
-           AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
+           AND NOT (split_of IS NULL AND split_group IS NOT NULL)`,
       )
       .get(a.id, month).s;
     const predicted = a.opening_balance + tx;
@@ -479,9 +494,10 @@ function insightsForMonth(month, view) {
       kind: 'account-variance',
       severity: variance > 0 ? 'warning' : 'danger',
       title: `${a.name} balance is off by ${variance.toFixed(2)}`,
-      message: variance > 0
-        ? `The model predicts ${predicted.toFixed(2)} but the bank says ${obs.balance.toFixed(2)}. Possible unrecorded income, transfer, or fee.`
-        : `The model predicts ${predicted.toFixed(2)} but the bank says ${obs.balance.toFixed(2)}. Possible unrecorded spend.`,
+      message:
+        variance > 0
+          ? `The model predicts ${predicted.toFixed(2)} but the bank says ${obs.balance.toFixed(2)}. Possible unrecorded income, transfer, or fee.`
+          : `The model predicts ${predicted.toFixed(2)} but the bank says ${obs.balance.toFixed(2)}. Possible unrecorded spend.`,
       link: '/balances',
       action: 'Open balances',
       fields: { account_id: a.id, predicted: round2(predicted), observed: obs.balance, variance },
@@ -526,7 +542,14 @@ export function monthView(month) {
   const groupsMap = {};
   for (const r of rows) {
     const g = r.group ?? 'Ungrouped';
-    groupsMap[g] ??= { name: g, sort: r.group_sort, planned: 0, actual: 0, difference: 0, rows: [] };
+    groupsMap[g] ??= {
+      name: g,
+      sort: r.group_sort,
+      planned: 0,
+      actual: 0,
+      difference: 0,
+      rows: [],
+    };
     groupsMap[g].planned += r.planned;
     groupsMap[g].actual += r.actual;
     groupsMap[g].difference += r.difference;
@@ -541,7 +564,9 @@ export function monthView(month) {
   const untagged = cats.filter((c) => !c.account_id && c.is_active).map((c) => c.name);
   // Month-scoped count for the month being viewed, plus the global queue size.
   const needsReview = db
-    .prepare('SELECT COUNT(*) AS c FROM transactions WHERE needs_review = 1 AND substr(date,1,7) = ?')
+    .prepare(
+      'SELECT COUNT(*) AS c FROM transactions WHERE needs_review = 1 AND substr(date,1,7) = ?',
+    )
     .get(month).c;
   const needsReviewTotal = db
     .prepare('SELECT COUNT(*) AS c FROM transactions WHERE needs_review = 1')
@@ -549,7 +574,7 @@ export function monthView(month) {
   const unconvertedFx = db
     .prepare(
       `SELECT COUNT(*) AS c FROM transactions t ${FX_JOIN}
-       WHERE substr(t.date,1,7) = ? AND t.currency != ? AND f.rate IS NULL AND ${NOT_COUNTED()}`
+       WHERE substr(t.date,1,7) = ? AND t.currency != ? AND f.rate IS NULL AND ${NOT_COUNTED()}`,
     )
     .get(month, baseCurrency()).c;
 
@@ -597,7 +622,7 @@ export function ensureMonthlyReports() {
       `SELECT DISTINCT substr(date,1,7) AS m FROM transactions t
        WHERE substr(date,1,7) < ? AND NOT EXISTS (
          SELECT 1 FROM monthly_reports r WHERE r.month = substr(t.date,1,7))
-       ORDER BY m LIMIT ?`
+       ORDER BY m LIMIT ?`,
     )
     .all(cur, MAX_CAPTURE_PER_RUN)
     .map((r) => r.m);
@@ -606,12 +631,14 @@ export function ensureMonthlyReports() {
   const insert = db.prepare(
     `INSERT OR IGNORE INTO monthly_reports
        (month, income, expenses, planned, result, transfer_to_revolut, transaction_count, by_category)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   let captured = 0;
   for (const m of missing) {
     const v = monthView(m);
-    const n = db.prepare('SELECT COUNT(*) AS c FROM transactions WHERE substr(date,1,7) = ?').get(m).c;
+    const n = db
+      .prepare('SELECT COUNT(*) AS c FROM transactions WHERE substr(date,1,7) = ?')
+      .get(m).c;
     const byCategory = v.rows
       .filter((r) => r.actual > 0 || r.planned > 0)
       .map((r) => ({ name: r.name, planned: r.planned, actual: r.actual }));
@@ -623,7 +650,7 @@ export function ensureMonthlyReports() {
       v.month_result,
       v.transfer_to_revolut,
       n,
-      JSON.stringify(byCategory)
+      JSON.stringify(byCategory),
     );
     captured++;
   }

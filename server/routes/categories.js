@@ -38,11 +38,12 @@ router.post('/', (req, res) => {
   const err = validateCategory(b);
   if (err) return res.status(400).json({ error: err });
   const budget = validatePlanAmount(b.monthly_budget);
-  if (budget === null) return res.status(400).json({ error: 'monthly_budget must be a non-negative number' });
+  if (budget === null)
+    return res.status(400).json({ error: 'monthly_budget must be a non-negative number' });
   const r = db
     .prepare(
       `INSERT INTO categories (name, group_id, account_id, monthly_budget, active_from, active_to, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       b.name.trim(),
@@ -51,7 +52,7 @@ router.post('/', (req, res) => {
       budget,
       b.active_from ?? null,
       b.active_to ?? null,
-      b.is_active === false ? 0 : 1
+      b.is_active === false ? 0 : 1,
     );
   res.json(db.prepare('SELECT * FROM categories WHERE id = ?').get(r.lastInsertRowid));
 });
@@ -79,12 +80,12 @@ router.patch('/:id', (req, res) => {
       db.prepare('DELETE FROM category_rules WHERE category_id = ?').run(row.id);
       db.prepare('DELETE FROM category_automation_rules WHERE category_id = ?').run(row.id);
       db.prepare(
-        'UPDATE commitments SET monthly_amount = 0 WHERE category_id = ? AND end_month IS NULL'
+        'UPDATE commitments SET monthly_amount = 0 WHERE category_id = ? AND end_month IS NULL',
       ).run(row.id);
     }
     db.prepare(
       `UPDATE categories SET name=?, group_id=?, account_id=?, monthly_budget=?, active_from=?, active_to=?, is_active=?, roll_overs=?
-       WHERE id=?`
+       WHERE id=?`,
     ).run(
       b.name ?? row.name,
       // `?? row.group_id` made clearing the group impossible (null ?? old → old)
@@ -95,7 +96,7 @@ router.patch('/:id', (req, res) => {
       b.active_to !== undefined ? b.active_to : row.active_to,
       b.is_active !== undefined ? (b.is_active ? 1 : 0) : row.is_active,
       b.roll_overs !== undefined ? (b.roll_overs ? 1 : 0) : row.roll_overs,
-      req.params.id
+      req.params.id,
     );
     db.exec('COMMIT');
   } catch (e) {
@@ -169,7 +170,7 @@ router.patch('/groups/:id', (req, res) => {
   db.prepare('UPDATE category_groups SET name = ?, sort = ? WHERE id = ?').run(
     String(b.name).trim(),
     Number.isFinite(Number(b.sort)) ? Number(b.sort) : row.sort,
-    req.params.id
+    req.params.id,
   );
   res.json(db.prepare('SELECT * FROM category_groups WHERE id = ?').get(req.params.id));
 });

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
@@ -32,7 +31,8 @@ export default function App() {
 
   useEffect(() => {
     setOffline(false);
-    api.get('/auth/status')
+    api
+      .get('/auth/status')
       .then(setStatus)
       .catch(() => {
         // Server unreachable (stopped, restarting, or offline). Never show the
@@ -45,7 +45,8 @@ export default function App() {
 
   useEffect(() => {
     if (status?.passwordSet) {
-      api.get('/auth/me')
+      api
+        .get('/auth/me')
         .then((info) => {
           setMe(info);
           localStorage.setItem('bp-currency', info.currency || 'EUR');
@@ -60,8 +61,8 @@ export default function App() {
         <div className="card login-card">
           <h1>Budget Planner</h1>
           <p className="muted">
-            The planner server is not reachable. The page you see was served from the
-            offline cache — your data is untouched.
+            The planner server is not reachable. The page you see was served from the offline cache
+            — your data is untouched.
           </p>
           <p className="muted tiny">
             Start it from the project folder with <code>npm start</code>, then retry.

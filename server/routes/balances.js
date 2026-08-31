@@ -1,19 +1,17 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { project, currentMonth, addMonths, monthsBetween } from '../services/model.js';
+import { project, currentMonth } from '../services/model.js';
 
 const router = Router();
 
 // Observations + reconciliation view. Account CRUD moved to routes/accounts.js
 // in v3.12.
 router.get('/', (_req, res) => {
-  const accounts = db
-    .prepare('SELECT * FROM accounts ORDER BY id')
-    .all();
+  const accounts = db.prepare('SELECT * FROM accounts ORDER BY id').all();
   const observations = db
     .prepare(
       `SELECT o.*, a.name AS account_name FROM balance_observations o
-       JOIN accounts a ON a.id = o.account_id ORDER BY o.month DESC`
+       JOIN accounts a ON a.id = o.account_id ORDER BY o.month DESC`,
     )
     .all();
 
@@ -23,9 +21,12 @@ router.get('/', (_req, res) => {
   const reconciled = observations
     .filter((o) => byMonth[o.month])
     .map((o) => {
-      const p = byMonth[o.month];
       const perAccountPredicted = accountBalanceAt(accounts, o.account_id, o.month);
-      return { ...o, predicted: perAccountPredicted, variance: Math.round((perAccountPredicted - o.balance) * 100) / 100 };
+      return {
+        ...o,
+        predicted: perAccountPredicted,
+        variance: Math.round((perAccountPredicted - o.balance) * 100) / 100,
+      };
     });
 
   // Per-account summary: each account's running balance (opening + txns) at
@@ -34,11 +35,11 @@ router.get('/', (_req, res) => {
   const perAccount = accounts.map((a) => {
     const predicted = accountBalanceAt(accounts, a.id, month);
     const latestObs = db
-      .prepare('SELECT balance, month FROM balance_observations WHERE account_id = ? ORDER BY month DESC LIMIT 1')
+      .prepare(
+        'SELECT balance, month FROM balance_observations WHERE account_id = ? ORDER BY month DESC LIMIT 1',
+      )
       .get(a.id);
-    const variance = latestObs
-      ? Math.round((latestObs.balance - predicted) * 100) / 100
-      : null;
+    const variance = latestObs ? Math.round((latestObs.balance - predicted) * 100) / 100 : null;
     return {
       id: a.id,
       name: a.name,
@@ -68,7 +69,7 @@ function accountBalanceAt(allAccounts, accountId, month) {
     .prepare(
       `SELECT COALESCE(SUM(amount),0) AS s FROM transactions
        WHERE account_id = ? AND substr(date,1,7) <= ?
-         AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
+         AND NOT (split_of IS NULL AND split_group IS NOT NULL)`,
     )
     .get(accountId, month).s;
   return a.opening_balance + txSum;
@@ -83,7 +84,7 @@ router.post('/', (req, res) => {
   if (!acc) return res.status(404).json({ error: 'Account not found' });
   db.prepare(
     `INSERT INTO balance_observations (account_id, month, balance) VALUES (?, ?, ?)
-     ON CONFLICT(account_id, month) DO UPDATE SET balance = excluded.balance`
+     ON CONFLICT(account_id, month) DO UPDATE SET balance = excluded.balance`,
   ).run(account_id, month, Number(balance));
   res.json({ ok: true });
 });

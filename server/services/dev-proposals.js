@@ -20,14 +20,20 @@ const month = (v, optional = false) => {
 };
 
 function findCategoryByName(name) {
-  return db.prepare('SELECT * FROM categories WHERE name = ? COLLATE NOCASE').get(String(name ?? '').trim());
+  return db
+    .prepare('SELECT * FROM categories WHERE name = ? COLLATE NOCASE')
+    .get(String(name ?? '').trim());
 }
 function findAccountByName(name) {
   if (!name) return null;
-  return db.prepare('SELECT * FROM accounts WHERE name = ? COLLATE NOCASE').get(String(name).trim());
+  return db
+    .prepare('SELECT * FROM accounts WHERE name = ? COLLATE NOCASE')
+    .get(String(name).trim());
 }
 function findFundByName(name) {
-  return db.prepare('SELECT * FROM funds WHERE name = ? COLLATE NOCASE').get(String(name ?? '').trim());
+  return db
+    .prepare('SELECT * FROM funds WHERE name = ? COLLATE NOCASE')
+    .get(String(name ?? '').trim());
 }
 
 // Each builder returns { type, summary, detail, apply() }
@@ -47,7 +53,7 @@ const BUILDERS = {
         if (m) {
           db.prepare(
             `INSERT INTO budget_lines (category_id, month, planned_amount) VALUES (?, ?, ?)
-             ON CONFLICT(category_id, month) DO UPDATE SET planned_amount = excluded.planned_amount`
+             ON CONFLICT(category_id, month) DO UPDATE SET planned_amount = excluded.planned_amount`,
           ).run(cat.id, m, amount);
         } else {
           db.prepare('UPDATE categories SET monthly_budget = ? WHERE id = ?').run(amount, cat.id);
@@ -60,7 +66,9 @@ const BUILDERS = {
     const name = String(args.name ?? '').trim();
     if (!name) throw new Error('Category name required');
     if (findCategoryByName(name)) throw new Error(`Category "${name}" already exists`);
-    const grp = db.prepare('SELECT * FROM category_groups WHERE name = ? COLLATE NOCASE').get(String(args.group_name ?? '').trim());
+    const grp = db
+      .prepare('SELECT * FROM category_groups WHERE name = ? COLLATE NOCASE')
+      .get(String(args.group_name ?? '').trim());
     const acc = findAccountByName(args.account_name);
     const amount = num(args.monthly_amount ?? 0);
     return {
@@ -69,7 +77,7 @@ const BUILDERS = {
       detail: { name, group_id: grp?.id ?? null, account_id: acc?.id ?? null, amount },
       apply() {
         db.prepare(
-          'INSERT INTO categories (name, group_id, account_id, monthly_budget) VALUES (?, ?, ?, ?)'
+          'INSERT INTO categories (name, group_id, account_id, monthly_budget) VALUES (?, ?, ?, ?)',
         ).run(name, grp?.id ?? null, acc?.id ?? null, amount);
       },
     };
@@ -85,7 +93,9 @@ const BUILDERS = {
       apply() {
         db.prepare('DELETE FROM budget_lines WHERE category_id = ?').run(cat.id);
         db.prepare('DELETE FROM category_rules WHERE category_id = ?').run(cat.id);
-        db.prepare('UPDATE categories SET is_active = 0, monthly_budget = 0 WHERE id = ?').run(cat.id);
+        db.prepare('UPDATE categories SET is_active = 0, monthly_budget = 0 WHERE id = ?').run(
+          cat.id,
+        );
       },
     };
   },
@@ -93,7 +103,9 @@ const BUILDERS = {
   add_keyword_rule(args) {
     const cat = findCategoryByName(args.category_name);
     if (!cat) throw new Error(`Unknown category "${args.category_name}"`);
-    const keyword = String(args.keyword ?? '').toLowerCase().trim();
+    const keyword = String(args.keyword ?? '')
+      .toLowerCase()
+      .trim();
     if (!keyword) throw new Error('Keyword required');
     return {
       type: 'add_keyword_rule',
@@ -101,7 +113,7 @@ const BUILDERS = {
       detail: { keyword, category_id: cat.id },
       apply() {
         db.prepare(
-          'INSERT INTO category_rules (keyword, category_id) VALUES (?, ?) ON CONFLICT(keyword) DO UPDATE SET category_id = excluded.category_id'
+          'INSERT INTO category_rules (keyword, category_id) VALUES (?, ?) ON CONFLICT(keyword) DO UPDATE SET category_id = excluded.category_id',
         ).run(keyword, cat.id);
         retroApplyKeyword(keyword, cat.id);
       },
@@ -109,7 +121,9 @@ const BUILDERS = {
   },
 
   remove_keyword_rule(args) {
-    const keyword = String(args.keyword ?? '').toLowerCase().trim();
+    const keyword = String(args.keyword ?? '')
+      .toLowerCase()
+      .trim();
     return {
       type: 'remove_keyword_rule',
       summary: `Delete rule "${keyword}"`,
@@ -130,17 +144,25 @@ const BUILDERS = {
     return {
       type: 'add_commitment',
       summary: `Add commitment "${name}": €${amount}/mo from ${start}${end ? ` to ${end}` : ' (open-ended)'}`,
-      detail: { name, monthly_amount: amount, start_month: start, end_month: end, account_id: acc?.id ?? null },
+      detail: {
+        name,
+        monthly_amount: amount,
+        start_month: start,
+        end_month: end,
+        account_id: acc?.id ?? null,
+      },
       apply() {
         db.prepare(
-          'INSERT INTO commitments (name, monthly_amount, start_month, end_month, account_id) VALUES (?, ?, ?, ?, ?)'
+          'INSERT INTO commitments (name, monthly_amount, start_month, end_month, account_id) VALUES (?, ?, ?, ?, ?)',
         ).run(name, amount, start, end, acc?.id ?? null);
       },
     };
   },
 
   end_commitment(args) {
-    const row = db.prepare('SELECT * FROM commitments WHERE name = ? COLLATE NOCASE').get(String(args.name ?? '').trim());
+    const row = db
+      .prepare('SELECT * FROM commitments WHERE name = ? COLLATE NOCASE')
+      .get(String(args.name ?? '').trim());
     if (!row) throw new Error(`Unknown commitment "${args.name}"`);
     const end = month(args.end_month);
     return {
@@ -177,11 +199,16 @@ const BUILDERS = {
     return {
       type: 'fund_movement',
       summary: `${kind === 'contribution' ? 'Add' : 'Withdraw'} €${amount} ${kind === 'contribution' ? 'into' : 'from'} ${fund.name} (${m})`,
-      detail: { fund_id: fund.id, month: m, amount: kind === 'contribution' ? amount : -amount, kind },
+      detail: {
+        fund_id: fund.id,
+        month: m,
+        amount: kind === 'contribution' ? amount : -amount,
+        kind,
+      },
       apply() {
-        db.prepare('INSERT INTO fund_movements (fund_id, month, amount, kind, note) VALUES (?, ?, ?, ?, ?)').run(
-          fund.id, m, kind === 'contribution' ? amount : -amount, kind, 'via AI dev-mode'
-        );
+        db.prepare(
+          'INSERT INTO fund_movements (fund_id, month, amount, kind, note) VALUES (?, ?, ?, ?, ?)',
+        ).run(fund.id, m, kind === 'contribution' ? amount : -amount, kind, 'via AI dev-mode');
       },
     };
   },
@@ -190,10 +217,13 @@ const BUILDERS = {
     const src = db
       .prepare(
         `SELECT s.* FROM income_sources s LEFT JOIN persons p ON p.id = s.person_id
-         WHERE s.name = ? COLLATE NOCASE AND (? IS NULL OR p.name = ? COLLATE NOCASE)`
+         WHERE s.name = ? COLLATE NOCASE AND (? IS NULL OR p.name = ? COLLATE NOCASE)`,
       )
       .get(String(args.source_name ?? '').trim(), args.person ?? null, args.person ?? null);
-    if (!src) throw new Error(`Unknown income source "${args.source_name}"${args.person ? ` for ${args.person}` : ''}`);
+    if (!src)
+      throw new Error(
+        `Unknown income source "${args.source_name}"${args.person ? ` for ${args.person}` : ''}`,
+      );
     const amount = num(args.current_amount);
     return {
       type: 'set_income',
@@ -209,7 +239,7 @@ const BUILDERS = {
     const src = db
       .prepare(
         `SELECT s.* FROM income_sources s LEFT JOIN persons p ON p.id = s.person_id
-         WHERE s.name = ? COLLATE NOCASE AND (? IS NULL OR p.name = ? COLLATE NOCASE)`
+         WHERE s.name = ? COLLATE NOCASE AND (? IS NULL OR p.name = ? COLLATE NOCASE)`,
       )
       .get(String(args.source_name ?? '').trim(), args.person ?? null, args.person ?? null);
     if (!src) throw new Error(`Unknown income source "${args.source_name}"`);
@@ -222,7 +252,7 @@ const BUILDERS = {
       apply() {
         db.prepare(
           `INSERT INTO income_entries (source_id, month, amount) VALUES (?, ?, ?)
-           ON CONFLICT(source_id, month) DO UPDATE SET amount = excluded.amount`
+           ON CONFLICT(source_id, month) DO UPDATE SET amount = excluded.amount`,
         ).run(src.id, m, amount);
       },
     };
@@ -240,7 +270,7 @@ const BUILDERS = {
       apply() {
         db.prepare(
           `INSERT INTO balance_observations (account_id, month, balance) VALUES (?, ?, ?)
-           ON CONFLICT(account_id, month) DO UPDATE SET balance = excluded.balance`
+           ON CONFLICT(account_id, month) DO UPDATE SET balance = excluded.balance`,
         ).run(acc.id, m, balance);
       },
     };

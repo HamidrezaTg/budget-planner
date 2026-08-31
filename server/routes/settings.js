@@ -1,5 +1,15 @@
 import { Router } from 'express';
-import { getSetting, setSetting, db, als, getUserDb, closeUserDb, DATA_DIR, initUserSchema, safeDbFilename } from '../db.js';
+import {
+  getSetting,
+  setSetting,
+  db,
+  als,
+  getUserDb,
+  closeUserDb,
+  DATA_DIR,
+  initUserSchema,
+  safeDbFilename,
+} from '../db.js';
 import { getAiConfig, chatComplete, isTrustedBaseUrl } from '../services/ai.js';
 import { requireAuth } from '../auth.js';
 import { pauseRequests, resumeRequests } from '../request-gate.js';
@@ -19,8 +29,14 @@ const restoreUpload = multer({
 });
 
 const REQUIRED_TABLES = [
-  'categories', 'transactions', 'accounts', 'category_groups',
-  'funds', 'commitments', 'income_sources', 'settings',
+  'categories',
+  'transactions',
+  'accounts',
+  'category_groups',
+  'funds',
+  'commitments',
+  'income_sources',
+  'settings',
 ];
 
 // Known OpenAI-compatible providers. All expose GET /models for listing.
@@ -137,22 +153,20 @@ const MONTH_RE = /^\d{4}-\d{2}$/;
 router.get('/fx', (_req, res) => {
   const base = getSetting('currency') || 'EUR';
   const used = db
-    .prepare(
-      'SELECT DISTINCT currency FROM transactions WHERE currency != ? ORDER BY currency'
-    )
+    .prepare('SELECT DISTINCT currency FROM transactions WHERE currency != ? ORDER BY currency')
     .all(base)
     .map((r) => r.currency);
   const rates = db
     .prepare(
       `SELECT month, currency, rate, source, updated_at FROM fx_rates
-       WHERE currency != ? ORDER BY month DESC, currency LIMIT 240`
+       WHERE currency != ? ORDER BY month DESC, currency LIMIT 240`,
     )
     .all(base);
   const missingRows = db
     .prepare(
       `SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t
        LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
-       WHERE t.currency != ? AND f.month IS NULL`
+       WHERE t.currency != ? AND f.month IS NULL`,
     )
     .all(base);
   res.json({ base, used, rates, missing: missingRows });
@@ -169,7 +183,7 @@ router.put('/fx', (req, res) => {
     return res.status(400).json({ error: 'rate must be a positive number' });
   db.prepare(
     `INSERT INTO fx_rates (month, currency, rate, source) VALUES (?, ?, ?, 'manual')
-     ON CONFLICT(month, currency) DO UPDATE SET rate = excluded.rate, source = 'manual', updated_at = datetime('now')`
+     ON CONFLICT(month, currency) DO UPDATE SET rate = excluded.rate, source = 'manual', updated_at = datetime('now')`,
   ).run(month, String(currency).toUpperCase(), r);
   res.json({ ok: true });
 });
@@ -188,12 +202,16 @@ router.post('/fx/fetch', async (req, res) => {
   const base = getSetting('currency') || 'EUR';
   const overwrite = req.body?.overwrite === true;
   let rows = overwrite
-    ? db.prepare('SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t WHERE t.currency != ?').all(base)
+    ? db
+        .prepare(
+          'SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t WHERE t.currency != ?',
+        )
+        .all(base)
     : db
         .prepare(
           `SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t
            LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
-           WHERE t.currency != ? AND f.month IS NULL`
+           WHERE t.currency != ? AND f.month IS NULL`,
         )
         .all(base);
   // Cap the work per call: years of foreign-currency data would otherwise
@@ -212,7 +230,7 @@ router.post('/fx/fetch', async (req, res) => {
   const failed = [];
   const upsert = db.prepare(
     `INSERT INTO fx_rates (month, currency, rate, source) VALUES (?, ?, ?, 'ecb')
-     ON CONFLICT(month, currency) DO UPDATE SET rate = excluded.rate, source = 'ecb', updated_at = datetime('now')`
+     ON CONFLICT(month, currency) DO UPDATE SET rate = excluded.rate, source = 'ecb', updated_at = datetime('now')`,
   );
   for (const row of rows) {
     try {
@@ -221,7 +239,8 @@ router.post('/fx/fetch', async (req, res) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       const rate = data?.rates?.[base];
-      if (!Number.isFinite(rate)) throw new Error(`no ${base} rate for ${row.currency} in response`);
+      if (!Number.isFinite(rate))
+        throw new Error(`no ${base} rate for ${row.currency} in response`);
       upsert.run(row.month, row.currency, rate);
       filled++;
     } catch (e) {
@@ -240,7 +259,7 @@ router.get('/backup', (req, res) => {
   res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader(
     'Content-Disposition',
-    `attachment; filename="budget-backup-${new Date().toISOString().slice(0, 10)}.db"`
+    `attachment; filename="budget-backup-${new Date().toISOString().slice(0, 10)}.db"`,
   );
   fs.createReadStream(row.file).pipe(res);
 });
@@ -266,7 +285,9 @@ router.delete('/spending', (req, res) => {
     for (const f of files) {
       const resolved = path.resolve(dir, f.filename);
       if (resolved.startsWith(path.resolve(dir) + path.sep)) {
-        try { fs.unlinkSync(resolved); } catch {}
+        try {
+          fs.unlinkSync(resolved);
+        } catch {}
       }
     }
   }
@@ -284,23 +305,32 @@ router.post('/restore', restoreUpload.single('file'), async (req, res) => {
 
   const dataDir = DATA_DIR;
   fs.mkdirSync(dataDir, { recursive: true });
-  const tmp = path.join(dataDir, `restore-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`);
+  const tmp = path.join(
+    dataDir,
+    `restore-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`,
+  );
   fs.writeFileSync(tmp, req.file.buffer);
 
   let check;
   try {
     check = new DatabaseSync(tmp, { readOnly: true });
     const tables = new Set(
-      check.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name)
+      check
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .all()
+        .map((r) => r.name),
     );
     const missing = REQUIRED_TABLES.filter((t) => !tables.has(t));
-    if (missing.length) throw new Error(`Not a valid budget backup — missing: ${missing.join(', ')}`);
+    if (missing.length)
+      throw new Error(`Not a valid budget backup — missing: ${missing.join(', ')}`);
     const integrity = check.prepare('PRAGMA integrity_check').get();
     if (integrity?.integrity_check !== 'ok')
       throw new Error('Backup failed the SQLite integrity check — refusing to restore');
     const fkViolations = check.prepare('PRAGMA foreign_key_check').all();
     if (fkViolations.length)
-      throw new Error(`Backup has ${fkViolations.length} broken reference(s) — refusing to restore`);
+      throw new Error(
+        `Backup has ${fkViolations.length} broken reference(s) — refusing to restore`,
+      );
     const txCount = check.prepare('SELECT COUNT(*) AS c FROM transactions').get().c;
     const catCount = check.prepare('SELECT COUNT(*) AS c FROM categories').get().c;
     check.close();
@@ -334,24 +364,36 @@ router.post('/restore', restoreUpload.single('file'), async (req, res) => {
       const pre = `${target}.pre-restore-${stamp}`;
       fs.copyFileSync(target, pre);
       for (const suffix of ['-wal', '-shm']) {
-        try { fs.unlinkSync(target + suffix); } catch {}
+        try {
+          fs.unlinkSync(target + suffix);
+        } catch {}
       }
 
       // Atomic swap on the same filesystem.
       fs.renameSync(staged, target);
-      try { fs.unlinkSync(tmp); } catch {}
+      try {
+        fs.unlinkSync(tmp);
+      } catch {}
 
       try {
         getUserDb(username); // reopen + cache
-      } catch (e) {
+      } catch {
         // Roll back using renames so a failed restore never leaves a partial
         // database or a target WAL sidecar in place.
         const failed = `${target}.failed-restore-${stamp}`;
-        try { fs.renameSync(target, failed); } catch {}
+        try {
+          fs.renameSync(target, failed);
+        } catch {}
         fs.renameSync(pre, target);
-        try { getUserDb(username); } catch {}
-        try { fs.unlinkSync(failed); } catch {}
-        throw new Error('Restore failed while reopening the database — previous data was rolled back');
+        try {
+          getUserDb(username);
+        } catch {}
+        try {
+          fs.unlinkSync(failed);
+        } catch {}
+        throw new Error(
+          'Restore failed while reopening the database — previous data was rolled back',
+        );
       }
     } finally {
       resumeRequests();
@@ -359,9 +401,15 @@ router.post('/restore', restoreUpload.single('file'), async (req, res) => {
     }
     res.json({ ok: true, transactions: txCount, categories: catCount });
   } catch (e) {
-    try { fs.unlinkSync(tmp); } catch {}
-    try { fs.unlinkSync(tmp + '.staged'); } catch {}
-    try { check?.close(); } catch {}
+    try {
+      fs.unlinkSync(tmp);
+    } catch {}
+    try {
+      fs.unlinkSync(tmp + '.staged');
+    } catch {}
+    try {
+      check?.close();
+    } catch {}
     restoreBusy = false;
     res.status(e.status || 400).json({ error: e.message });
   }
@@ -373,7 +421,7 @@ router.post('/models', async (req, res) => {
     const { provider, api_key, base_url } = req.body ?? {};
     const url = baseUrlFor(
       provider || getSetting('ai_provider') || 'openai',
-      base_url ?? getSetting('ai_base_url')
+      base_url ?? getSetting('ai_base_url'),
     );
     const key = api_key || getSetting('ai_api_key') || '';
     const needsKey = !(PROVIDERS[provider] ?? {}).no_key;
@@ -404,9 +452,7 @@ router.post('/models', async (req, res) => {
 router.post('/test', async (_req, res) => {
   try {
     const cfg = getAiConfig();
-    const msg = await chatComplete(cfg, [
-      { role: 'user', content: 'Reply with exactly: OK' },
-    ]);
+    const msg = await chatComplete(cfg, [{ role: 'user', content: 'Reply with exactly: OK' }]);
     res.json({ ok: true, reply: (msg.content || '').slice(0, 100) });
   } catch (e) {
     res.status(e.status || 500).json({ ok: false, error: e.message });

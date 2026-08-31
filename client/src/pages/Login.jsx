@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { api } from '../api.js';
 
 export default function Login({ setup = false }) {

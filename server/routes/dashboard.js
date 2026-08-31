@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { db } from '../db.js';
 import { monthView, ensureMonthlyReports } from '../services/model.js';
 
 const router = Router();
@@ -14,7 +13,9 @@ router.get('/:month', (req, res) => {
   const month = req.params.month;
   if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'month must be YYYY-MM' });
   setImmediate(() => {
-    try { ensureMonthlyReports(); } catch (e) {
+    try {
+      ensureMonthlyReports();
+    } catch (e) {
       console.error('[monthly-reports] snapshot capture failed:', e.message);
     }
   });
