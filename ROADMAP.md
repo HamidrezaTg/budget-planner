@@ -88,10 +88,10 @@ git push --follow-tags
       LAN).
 - [x] v3.14.2 Native menu (File / Edit / View / Help), Cmd+Q quit,
       single-instance dock.
-- [ ] v3.14.3 `scripts/build-dmg.sh` on a macOS GitHub runner is green.
+- [x] v3.14.3 `scripts/build-dmg.sh` on a macOS GitHub runner is green.
 - [x] v3.14.4 `docs/INSTALL_MAC.md` (drag-to-Applications + Gatekeeper
       "Open anyway").
-- [ ] v3.14.5 Tag `v3.14.0`, push `--follow-tags`.
+- [x] v3.14.5 Tag `v3.14.0`, push `--follow-tags`.
 
 ### v3.15 — Linux polish (AppImage + AUR)
 
