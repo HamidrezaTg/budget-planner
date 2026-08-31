@@ -148,7 +148,20 @@ router.get('/yearly/:year', (req, res) => {
     )
     .get(String(Number(year) - 1));
 
-  res.json({ year, months, byCategory, totals, prevYearExpenses: prev.expenses });
+  const byCategoryMonthly = db
+    .prepare(
+      `SELECT substr(t.date,1,7) AS month,
+              COALESCE(c.name, 'Uncategorized') AS name,
+              SUM(CASE WHEN (COALESCE(f.rate, 1)) * t.amount < 0
+                       THEN (COALESCE(f.rate, 1)) * t.amount ELSE 0 END) AS spent
+       FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+       LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
+       WHERE substr(t.date,1,4) = ? AND NOT (t.split_of IS NULL AND t.split_group IS NOT NULL)
+       GROUP BY substr(t.date,1,7), c.id ORDER BY month, name`
+    )
+    .all(year);
+
+  res.json({ year, months, byCategory, byCategoryMonthly, totals, prevYearExpenses: prev.expenses });
 });
 
 // CSV exports keep the ORIGINAL stored amounts and currency codes —

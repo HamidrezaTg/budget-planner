@@ -93,6 +93,8 @@ const PAGES = [
     title: 'Reports',
     items: [
       ['Exports', 'Download any month or year as CSV or Excel (.xlsx). Excel workbooks include a transactions sheet plus summaries. Exports always show original statement amounts and currencies.'],
+      ['Category trend / MoM', 'Reports show spending history for a selected category and compare each category with the previous month. Negative MoM means spending decreased.'],
+      ['Print / PDF', 'Use Print / PDF on the Reports page, then choose Save as PDF in the browser or system print dialog.'],
       ['Month-end history', 'When a month closes, it is snapshotted automatically — frozen forever, even if you later edit or delete its transactions. The chart tracks how your plan versus reality looked at each month\u2019s end.'],
     ],
   },
@@ -150,6 +152,16 @@ export default function Help() {
         Short guide to every page and button. The full manual and the math behind the
         numbers live in <code>README.md</code> and <code>docs/</code> in the project folder.
       </p>
+      <div className="card shortcut-card">
+        <h2>Keyboard shortcuts</h2>
+        <div className="shortcut-list">
+          <span><kbd>g</kbd> then <kbd>d</kbd> Dashboard</span>
+          <span><kbd>g</kbd> then <kbd>t</kbd> Transactions</span>
+          <span><kbd>g</kbd> then <kbd>r</kbd> Reports</span>
+          <span><kbd>?</kbd> Help</span>
+        </div>
+        <p className="muted tiny">Shortcuts are inactive while typing in a form field.</p>
+      </div>
       {PAGES.map((p) => (
         <div key={p.title} className="help-section card" style={{ marginBottom: 14 }}>
           <h2>{p.title}</h2>

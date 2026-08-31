@@ -9,17 +9,26 @@ const fmtEur = (v) => eur(v);
 const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const PALETTE = ['#6366f1','#22d3ee','#fbbf24','#f472b6','#a78bfa','#2dd4bf','#f87171','#818cf8','#34d399','#94a3b8'];
 
+function previousMonth(month) {
+  const [year, value] = month.split('-').map(Number);
+  const date = new Date(year, value - 2, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export default function Reports() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
   const [monthly, setMonthly] = useState(null);
+  const [previousMonthly, setPreviousMonthly] = useState(null);
   const [yearly, setYearly] = useState(null);
   const [history, setHistory] = useState(null);
+  const [trendCategory, setTrendCategory] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
     api.get(`/reports/monthly/${month}`).then(setMonthly).catch((e) => setError(e.message));
+    api.get(`/reports/monthly/${previousMonth(month)}`).then(setPreviousMonthly).catch(() => setPreviousMonthly(null));
   }, [month]);
   useEffect(() => {
     api.get(`/reports/yearly/${year}`).then(setYearly).catch((e) => setError(e.message));
@@ -30,6 +39,17 @@ export default function Reports() {
   }, []);
 
   const histAsc = history ? [...history].reverse() : [];
+  const previousByCategory = new Map((previousMonthly?.byCategory || []).map((row) => [row.name, row]));
+  const trendCategories = [...new Set((yearly?.byCategoryMonthly || []).map((row) => row.name))];
+  const selectedTrendCategory = trendCategories.includes(trendCategory)
+    ? trendCategory
+    : trendCategories[0] || '';
+  const trendData = Array.from({ length: 12 }, (_, index) => {
+    const key = `${year}-${String(index + 1).padStart(2, '0')}`;
+    const row = yearly?.byCategoryMonthly?.find((item) => item.month === key && item.name === selectedTrendCategory);
+    return { name: monthNames[index], spent: row ? Math.abs(row.spent) : 0 };
+  });
+  const printReport = () => window.print();
 
   return (
     <div>
@@ -52,6 +72,7 @@ export default function Reports() {
         </label>
         <a className="btn ghost" href={`/api/reports/export/yearly/${year}`}>⬇ Export yearly CSV</a>
         <a className="btn ghost" href={`/api/reports/export/yearly/${year}.xlsx`}>⬇ Excel</a>
+        <button className="btn ghost print-report" onClick={printReport}>Print / PDF</button>
       </div>
 
       {monthly && (
@@ -65,7 +86,7 @@ export default function Reports() {
           <div className="card table-card">
             <table>
               <thead>
-                <tr><th>Category</th><th>Spent</th><th>Budget</th><th>Variance</th></tr>
+                 <tr><th>Category</th><th>Spent</th><th>Budget</th><th>Variance</th><th>MoM</th></tr>
               </thead>
               <tbody>
                 {monthly.byCategory.map((r) => (
@@ -81,6 +102,12 @@ export default function Reports() {
                             : `${eur(-r.variance)} over`}
                         </span>
                       )}
+                    </td>
+                    <td>
+                      {previousByCategory.has(r.name) ? (() => {
+                        const delta = Math.abs(r.spent) - Math.abs(previousByCategory.get(r.name).spent);
+                        return <span className={delta <= 0 ? 'good' : 'bad'}>{delta > 0 ? '+' : ''}{eur(delta)}</span>;
+                      })() : '—'}
                     </td>
                   </tr>
                 ))}
@@ -166,6 +193,30 @@ export default function Reports() {
               </table>
             </div>
           </div>
+          {trendCategories.length > 0 && (
+            <>
+              <div className="section-kicker report-trend-head">
+                <h2>Category trend</h2>
+                <label className="muted tiny">
+                  Category{' '}
+                  <select value={selectedTrendCategory} onChange={(e) => setTrendCategory(e.target.value)}>
+                    {trendCategories.map((name) => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="card chart-card">
+                <ResponsiveContainer width="100%" height={280}>
+                  <ComposedChart data={trendData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2a3040" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={fmtEur} />
+                    <Bar dataKey="spent" name="Spent" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
         </>
       )}
 

@@ -199,6 +199,7 @@ body { overflow-x: clip; }
   transition: background 0.12s, color 0.12s;
 }
 .icon-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.icon-btn[aria-pressed='true'] { color: var(--lime); background: rgba(201, 237, 82, 0.12); }
 
 .profile {
   display: grid;
@@ -409,6 +410,38 @@ body { overflow-x: clip; }
 .stat.highlight .stat-label { color: var(--navy-text); }
 .review-link { text-decoration: none; color: inherit; display: block; }
 
+/* Privacy mode keeps labels and navigation useful while obscuring financial values. */
+body.privacy-mode .stat-value,
+body.privacy-mode .income,
+body.privacy-mode .expense,
+body.privacy-mode .good,
+body.privacy-mode .bad,
+body.privacy-mode .category-name strong,
+body.privacy-mode .category-meta,
+body.privacy-mode .count-pill,
+body.privacy-mode .chart-card {
+  filter: blur(7px);
+  user-select: none;
+}
+
+.shortcut-card { margin: 14px 0; }
+.shortcut-card h2 { margin-bottom: 12px; }
+.shortcut-list { display: flex; flex-wrap: wrap; gap: 9px 18px; }
+.shortcut-list span { color: var(--muted); font-size: 13px; }
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--card-2);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: center;
+}
+
 /* ---------- dashboard ---------- */
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
 .page-head h1 { margin: 0 0 4px; }
@@ -449,6 +482,20 @@ body { overflow-x: clip; }
   font-size: 11.5px; font-weight: 600;
   background: var(--card-2); color: var(--muted);
   border-radius: 999px; padding: 4px 10px;
+}
+
+.upload-dropzone { border-style: dashed; }
+.drop-hint { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.upload-dropzone:focus-within, .upload-dropzone:hover { border-color: var(--blue); }
+.report-trend-head { margin-top: 22px; }
+.report-trend-head select { margin-left: 4px; }
+
+@media print {
+  .sidebar, .filters, .print-report, .btn, .notification-pill { display: none !important; }
+  .shell { display: block; }
+  .content { padding: 0; }
+  .card { break-inside: avoid; box-shadow: none; }
+  body { background: #fff; color: #000; }
 }
 
 /* category rows (dashboard groups) */

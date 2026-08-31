@@ -24,7 +24,9 @@ export default function ImportPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);
-  const [accountId, setAccountId] = useState('');
+  const [accountId, setAccountId] = useState(
+    () => localStorage.getItem('bp-last-import-account') || ''
+  );
   const [accounts, setAccounts] = useState([]);
   const [selectedTransfers, setSelectedTransfers] = useState([]);
 
@@ -32,8 +34,7 @@ export default function ImportPage() {
     api.get('/categories/meta/all').then((m) => setAccounts(m.accounts)).catch((e) => setError(e.message));
   }, []);
 
-  const onFile = async (e) => {
-    const file = e.target.files?.[0];
+  const processFile = async (file, endpoint) => {
     if (!file) return;
     setError('');
     setDone(null);
@@ -41,33 +42,45 @@ export default function ImportPage() {
     setSelectedTransfers([]);
     setBusy(true);
     try {
-      const data = await api.upload('/import/upload', file);
-      setResult(data);
+      const data = await api.upload(endpoint, file);
+      if (accountId && data.token) {
+        try {
+          const preview = await api.post('/import/preview', {
+            token: data.token,
+            account_id: accountId,
+          });
+          setResult({ ...data, ...preview });
+        } catch (err) {
+          // Account ids are local to each server/user. A remembered id may no
+          // longer exist, so do not make it prevent the user from importing.
+          setAccountId('');
+          localStorage.removeItem('bp-last-import-account');
+          setResult(data);
+          setError(`The remembered account is unavailable. Please choose an account before confirming. ${err.message}`);
+        }
+      } else {
+        setResult(data);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
       setBusy(false);
-      e.target.value = '';
     }
   };
 
+  const onFile = async (e) => {
+    await processFile(e.target.files?.[0], '/import/upload');
+    e.target.value = '';
+  };
+
+  const onDrop = async (e) => {
+    e.preventDefault();
+    await processFile(e.dataTransfer.files?.[0], '/import/upload');
+  };
+
   const smartAnalyze = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setError('');
-    setDone(null);
-    setResult(null);
-    setSelectedTransfers([]);
-    setBusy(true);
-    try {
-      const data = await api.upload('/import/smart', file);
-      setResult(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-      e.target.value = '';
-    }
+    await processFile(e.target.files?.[0], '/import/smart');
+    e.target.value = '';
   };
 
   const confirm = async () => {
@@ -92,6 +105,8 @@ export default function ImportPage() {
   const pickAccount = async (e) => {
     const value = e.target.value;
     setAccountId(value);
+    if (value) localStorage.setItem('bp-last-import-account', value);
+    else localStorage.removeItem('bp-last-import-account');
     if (!result?.token) return;
     setBusy(true);
     setError('');
@@ -114,7 +129,12 @@ export default function ImportPage() {
         completed; duplicates are skipped.
       </p>
 
-      <div className="card upload-card">
+      <div
+        className="card upload-card upload-dropzone"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={onDrop}
+      >
+        <p className="drop-hint">Drop a CSV or XLSX file here</p>
         <label className="btn primary file-btn">
           {busy ? 'Processing…' : 'Choose CSV / XLSX file'}
           <input type="file" accept=".csv,.xlsx,.xls" onChange={onFile} disabled={busy} hidden />

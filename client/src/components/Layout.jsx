@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 
 const groups = [
@@ -42,6 +42,7 @@ const groups = [
 ];
 
 export default function Layout({ me }) {
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('bp-collapsed') === '1'
   );
@@ -49,12 +50,57 @@ export default function Layout({ me }) {
   const [theme, setTheme] = useState(
     () => document.documentElement.dataset.theme || 'light'
   );
+  const [privacy, setPrivacy] = useState(
+    () => localStorage.getItem('bp-privacy') === '1'
+  );
   const [nativeShell, setNativeShell] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('bp-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.body.classList.toggle('privacy-mode', privacy);
+    localStorage.setItem('bp-privacy', privacy ? '1' : '0');
+    return () => document.body.classList.remove('privacy-mode');
+  }, [privacy]);
+
+  useEffect(() => {
+    let waitingForRoute = false;
+    let timeout;
+    const routes = { d: '/', t: '/transactions', r: '/reports' };
+    const onKeyDown = (event) => {
+      const target = event.target;
+      const typing = target instanceof HTMLElement && (
+        target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)
+      );
+      if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === '?') {
+        event.preventDefault();
+        navigate('/help');
+        waitingForRoute = false;
+        return;
+      }
+      if (event.key.toLowerCase() === 'g') {
+        waitingForRoute = true;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => { waitingForRoute = false; }, 1000);
+        return;
+      }
+      if (waitingForRoute && routes[event.key.toLowerCase()]) {
+        event.preventDefault();
+        navigate(routes[event.key.toLowerCase()]);
+      }
+      waitingForRoute = false;
+      clearTimeout(timeout);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [navigate]);
 
   useEffect(() => {
     setNativeShell(Boolean(window.Capacitor?.isNativePlatform?.()));
@@ -152,6 +198,15 @@ export default function Layout({ me }) {
 
           <div className="side-actions">
             {nativeShell && <button className="icon-btn" title="Switch server" onClick={switchServer}>⌘</button>}
+            <button
+              className="icon-btn"
+              title={privacy ? 'Show financial values' : 'Hide financial values'}
+              aria-label={privacy ? 'Show financial values' : 'Hide financial values'}
+              aria-pressed={privacy}
+              onClick={() => setPrivacy((value) => !value)}
+            >
+              {privacy ? '◉' : '◌'}
+            </button>
             <button
               className="icon-btn"
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}

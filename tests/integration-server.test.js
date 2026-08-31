@@ -344,6 +344,14 @@ test('xlsx monthly export round-trips through the maintained spreadsheet package
   assert.equal(coffee[0].Currency, 'EUR');
 });
 
+test('yearly report includes per-category monthly spending', async () => {
+  const report = await api('/reports/yearly/2026', 'GET', null, cookies);
+  assert.ok(Array.isArray(report.byCategoryMonthly));
+  assert.ok(report.byCategoryMonthly.some((row) => (
+    row.month === '2026-05' && row.name === 'Uncategorized' && row.spent < 0
+  )));
+});
+
 async function api(path, method, body, cookie) {
   const r = await fetch(`${srv.url}/api${path}`, {
     method,
