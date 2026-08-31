@@ -6,7 +6,9 @@ data/
 
 # build output
 client/dist/
+client/coverage/
 dist/
+coverage/
 
 # android build outputs (mobile/)
 mobile/node_modules/
