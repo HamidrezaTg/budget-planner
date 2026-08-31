@@ -172,7 +172,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
   kind TEXT NOT NULL DEFAULT 'sparkasse',
-  is_spending_pot INTEGER NOT NULL DEFAULT 0
+  is_spending_pot INTEGER NOT NULL DEFAULT 0,
+  opening_balance REAL NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS persons (
@@ -261,7 +262,9 @@ CREATE TABLE IF NOT EXISTS transactions (
   source_file TEXT,
   dedup_key TEXT NOT NULL UNIQUE,
   split_group TEXT,                          -- set on all parts of a split
-  split_of INTEGER REFERENCES transactions(id) ON DELETE CASCADE
+  split_of INTEGER REFERENCES transactions(id) ON DELETE CASCADE,
+  fund_id INTEGER REFERENCES funds(id) ON DELETE SET NULL,   -- a transaction can be paid from a fund
+  transfer_group TEXT                        -- non-NULL: this row is part of a bank↔card transfer; excluded from spend/income sums
 );
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_tx_cat ON transactions(category_id);
@@ -269,6 +272,11 @@ CREATE INDEX IF NOT EXISTS idx_tx_cat ON transactions(category_id);
 -- index in SQLite: without these, a page of transactions scans attachments
 -- and split children once per row.
 CREATE INDEX IF NOT EXISTS idx_tx_split_of ON transactions(split_of);
+-- A transfer_group identifies a pair of rows that should be treated as one
+-- movement. The index keeps the per-row exclusion in dashboard/report
+-- queries fast even when a year of statements is loaded.
+CREATE INDEX IF NOT EXISTS idx_tx_transfer_group ON transactions(transfer_group);
+CREATE INDEX IF NOT EXISTS idx_tx_fund ON transactions(fund_id);
 
 CREATE TABLE IF NOT EXISTS category_rules (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -371,6 +379,10 @@ try {
 try {
   db.exec("ALTER TABLE transactions ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'");
 } catch {}
+// v3.11 — fund link, transfer group, per-account opening balance
+try { db.exec('ALTER TABLE accounts ADD COLUMN opening_balance REAL NOT NULL DEFAULT 0'); } catch {}
+try { db.exec('ALTER TABLE transactions ADD COLUMN fund_id INTEGER REFERENCES funds(id) ON DELETE SET NULL'); } catch {}
+try { db.exec('ALTER TABLE transactions ADD COLUMN transfer_group TEXT'); } catch {}
 
 // Deduplication fingerprint now includes the transaction currency. Recompute
 // existing keys once (guarded by PRAGMA user_version) so re-imports of old

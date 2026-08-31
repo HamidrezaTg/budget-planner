@@ -22,11 +22,13 @@ router.get('/', (req, res) => {
   }
 
   const sql = `
-    SELECT t.*, c.name AS category_name,
+    SELECT t.*, c.name AS category_name, f.name AS fund_name,
       (SELECT COUNT(*) FROM transactions x WHERE x.split_of = t.id) AS split_parts,
       (SELECT description FROM transactions p WHERE p.id = t.split_of) AS split_parent_desc,
       (SELECT COUNT(*) FROM attachments a WHERE a.transaction_id = t.id) AS attachment_count
-    FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+    FROM transactions t
+    LEFT JOIN categories c ON c.id = t.category_id
+    LEFT JOIN funds f ON f.id = t.fund_id
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     ORDER BY t.date DESC, t.id DESC
     LIMIT ? OFFSET ?`;
@@ -42,19 +44,71 @@ router.patch('/:id', (req, res) => {
   const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
   if (!tx) return res.status(404).json({ error: 'Transaction not found' });
 
-  const { category_id, remember = false, keyword } = req.body ?? {};
-  if (category_id !== undefined && category_id !== null) {
-    const cat = db.prepare('SELECT id FROM categories WHERE id = ?').get(category_id);
-    if (!cat) return res.status(400).json({ error: 'Unknown category' });
-  }
-  db.prepare(
-    'UPDATE transactions SET category_id = ?, needs_review = 0 WHERE id = ?'
-  ).run(category_id ?? null, req.params.id);
+  const b = req.body ?? {};
+  const sets = [];
+  const args = [];
 
-  if (remember && category_id) {
-    learnRule(keyword || tx.description, category_id);
+  if (b.category_id !== undefined) {
+    if (b.category_id !== null) {
+      const cat = db.prepare('SELECT id FROM categories WHERE id = ?').get(Number(b.category_id));
+      if (!cat) return res.status(400).json({ error: 'Unknown category' });
+    }
+    sets.push('category_id = ?');
+    args.push(b.category_id);
+    // Assigning a category clears the review flag; clearing it leaves review
+    // as it was so the row isn't accidentally hidden.
+    sets.push('needs_review = 0');
   }
-  res.json(db.prepare('SELECT * FROM transactions WHERE id = ?').get(tx.id));
+
+  if (b.fund_id !== undefined) {
+    if (b.fund_id !== null) {
+      const f = db.prepare('SELECT id FROM funds WHERE id = ?').get(Number(b.fund_id));
+      if (!f) return res.status(400).json({ error: 'Unknown fund' });
+    }
+    sets.push('fund_id = ?');
+    args.push(b.fund_id);
+  }
+
+  if (b.transfer_group !== undefined) {
+    // Allow setting a token to mark this row as part of a transfer pair, or
+    // clearing it (null) to make the row count as normal spend/income again.
+    sets.push('transfer_group = ?');
+    args.push(b.transfer_group === null || b.transfer_group === '' ? null : String(b.transfer_group).slice(0, 80));
+  }
+
+  if (b.description !== undefined) {
+    const d = String(b.description).trim();
+    if (!d) return res.status(400).json({ error: 'description cannot be empty' });
+    sets.push('description = ?');
+    args.push(d);
+  }
+
+  if (b.date !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    sets.push('date = ?');
+    args.push(b.date);
+  }
+
+  if (sets.length === 0) return res.status(400).json({ error: 'No editable fields provided' });
+
+  args.push(req.params.id);
+  db.prepare(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+
+  if (b.remember && b.category_id) {
+    learnRule(b.keyword || tx.description, b.category_id);
+  }
+
+  res.json(
+    db
+      .prepare(
+        `SELECT t.*, c.name AS category_name, f.name AS fund_name
+         FROM transactions t
+         LEFT JOIN categories c ON c.id = t.category_id
+         LEFT JOIN funds f ON f.id = t.fund_id
+         WHERE t.id = ?`
+      )
+      .get(req.params.id)
+  );
 });
 
 router.delete('/:id', (req, res) => {
@@ -116,8 +170,8 @@ function buildInsertStatement() {
   // does not collide.
   return db.prepare(
     `INSERT INTO transactions
-       (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)`
+       (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key, fund_id, transfer_group)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 }
 
@@ -140,6 +194,10 @@ function validateManualEntry(t, index) {
       const cat = db.prepare('SELECT id FROM categories WHERE id = ?').get(Number(t.category_id));
       if (!cat) errors.push(`row ${index + 1}: category not found`);
     }
+    if (t.fund_id != null && t.fund_id !== '') {
+      const f = db.prepare('SELECT id FROM funds WHERE id = ?').get(Number(t.fund_id));
+      if (!f) errors.push(`row ${index + 1}: fund not found`);
+    }
   }
   return errors;
 }
@@ -149,7 +207,9 @@ function insertOne(t) {
   const currency = String(t.currency ?? 'EUR').toUpperCase();
   const accountId = t.account_id != null && t.account_id !== '' ? Number(t.account_id) : null;
   const categoryId = t.category_id != null && t.category_id !== '' ? Number(t.category_id) : null;
+  const fundId = t.fund_id != null && t.fund_id !== '' ? Number(t.fund_id) : null;
   const txType = t.tx_type ? String(t.tx_type).slice(0, 40) : null;
+  const transferGroup = t.transfer_group ? String(t.transfer_group).slice(0, 80) : null;
   const dedupKey = computeDedupKey(t.date, amt, currency, t.description);
   const result = buildInsertStatement().run(
     t.date,
@@ -160,7 +220,10 @@ function insertOne(t) {
     accountId,
     categoryId,
     categoryId ? 0 : 1,
-    dedupKey
+    'manual',
+    dedupKey,
+    fundId,
+    transferGroup
   );
   return result.lastInsertRowid;
 }

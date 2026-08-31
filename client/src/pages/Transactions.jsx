@@ -19,11 +19,13 @@ export default function Transactions() {
   const [attTx, setAttTx] = useState(null);
   const [attList, setAttList] = useState(null);
   const [attError, setAttError] = useState('');
-  // Per-row "edit category" mode: { [tx.id]: { categoryId, remember } }
+  // Per-row "edit category" mode: { [tx.id]: { categoryId, fundId, transferGroup, remember } }
   const [editingCategory, setEditingCategory] = useState({});
+  const [editFunds, setEditFunds] = useState([]);
   const [addOpen, setAddOpen] = useState(false);
-  const [addForm, setAddForm] = useState({ date: '', description: '', amount: '', currency: 'EUR', account_id: '', category_id: '', tx_type: '' });
+  const [addForm, setAddForm] = useState({ date: '', description: '', amount: '', currency: 'EUR', account_id: '', category_id: '', fund_id: '', tx_type: '', transfer_group: '' });
   const [addAccounts, setAddAccounts] = useState([]);
+  const [addFunds, setAddFunds] = useState([]);
   const [addError, setAddError] = useState('');
   const [addBusy, setAddBusy] = useState(false);
   const { confirm } = useDialogs();
@@ -59,7 +61,7 @@ export default function Transactions() {
 
   const openAdd = async () => {
     const today = new Date().toISOString().slice(0, 10);
-    setAddForm({ date: today, description: '', amount: '', currency: 'EUR', account_id: '', category_id: '', tx_type: '' });
+    setAddForm({ date: today, description: '', amount: '', currency: 'EUR', account_id: '', category_id: '', fund_id: '', tx_type: '', transfer_group: '' });
     setAddError('');
     setAddOpen(true);
     if (addAccounts.length === 0) {
@@ -67,6 +69,12 @@ export default function Transactions() {
         const meta = await api.get('/categories/meta/all');
         setAddAccounts(meta.accounts ?? []);
       } catch (e) { /* leave the select empty; user can retry */ }
+    }
+    if (addFunds.length === 0) {
+      try {
+        const f = await api.get('/funds');
+        setAddFunds(f.funds ?? []);
+      } catch (e) { /* no funds */ }
     }
   };
 
@@ -88,7 +96,9 @@ export default function Transactions() {
         currency: addForm.currency,
         account_id: addForm.account_id || null,
         category_id: addForm.category_id || null,
+        fund_id: addForm.fund_id || null,
         tx_type: addForm.tx_type || null,
+        transfer_group: addForm.transfer_group || null,
       });
       setAddOpen(false);
       load();
@@ -111,8 +121,16 @@ export default function Transactions() {
   const startEditCategory = (tx) => {
     setEditingCategory((p) => ({
       ...p,
-      [tx.id]: { categoryId: tx.category_id || '', remember: true },
+      [tx.id]: {
+        categoryId: tx.category_id || '',
+        fundId: tx.fund_id || '',
+        transferGroup: tx.transfer_group || '',
+        remember: true,
+      },
     }));
+    if (editFunds.length === 0) {
+      api.get('/funds').then((d) => setEditFunds(d.funds ?? [])).catch(() => {});
+    }
   };
   const cancelEditCategory = (tx) => {
     setEditingCategory((p) => {
@@ -123,12 +141,15 @@ export default function Transactions() {
   };
   const saveEditCategory = async (tx) => {
     const edit = editingCategory[tx.id];
-    if (!edit || !edit.categoryId) return;
+    if (!edit) return;
     try {
-      await api.patch(`/transactions/${tx.id}`, {
-        category_id: Number(edit.categoryId),
+      const body = {
+        category_id: edit.categoryId ? Number(edit.categoryId) : null,
+        fund_id: edit.fundId ? Number(edit.fundId) : null,
+        transfer_group: edit.transferGroup ? String(edit.transferGroup).trim() : null,
         remember: !!edit.remember,
-      });
+      };
+      await api.patch(`/transactions/${tx.id}`, body);
       setError('');
       cancelEditCategory(tx);
       load();
@@ -289,25 +310,26 @@ export default function Transactions() {
         >
           + Add transaction
         </button>
-        {review && (
+        <button
+          className="btn"
+          onClick={suggestWithAi}
+          disabled={aiBusy}
+          title="Ask the AI to suggest a category for every needs-review transaction in the current view"
+        >
+          {aiBusy ? 'Asking AI…' : 'Suggest categories with AI'}
+        </button>
+        {suggestions?.length > 0 && (
           <>
-            <button className="btn" onClick={suggestWithAi} disabled={aiBusy} title="Ask the AI to suggest a category for each row in the review queue">
-              {aiBusy ? 'Asking AI…' : 'Suggest categories with AI'}
+            <button className="btn primary" title="Apply every AI suggestion" onClick={() => applyMany(0)}>
+              Apply all ({suggestions.length})
             </button>
-            {suggestions?.length > 0 && (
-              <>
-                <button className="btn primary" onClick={() => applyMany(0)}>
-                  Apply all ({suggestions.length})
-                </button>
-                <button
-                  className="btn"
-                  title="Only apply suggestions with 80% confidence or higher"
-                  onClick={() => applyMany(0.8)}
-                >
-                  Apply ≥80% ({suggestions.filter((s) => s.confidence >= 0.8).length})
-                </button>
-              </>
-            )}
+            <button
+              className="btn"
+              title="Only apply suggestions with 80% confidence or higher"
+              onClick={() => applyMany(0.8)}
+            >
+              Apply ≥80% ({suggestions.filter((s) => s.confidence >= 0.8).length})
+            </button>
           </>
         )}
       </div>
@@ -355,10 +377,20 @@ export default function Transactions() {
                   )}
                 </td>
                 <td>
+                  {tx.transfer_group ? (
+                    <span className="pill-badge accent-badge" title={`Bank↔card transfer (group: ${tx.transfer_group}) — not counted as spend or income`}>
+                      transfer
+                    </span>
+                  ) : ''}
+                  {tx.fund_name ? (
+                    <span className="pill-badge" style={{ background: 'var(--blue)', marginLeft: 4 }} title="Drawn from this sinking fund">
+                      → {tx.fund_name}
+                    </span>
+                  ) : ''}
                   {editingCategory[tx.id] ? (
                     <div className="assign assign-edit">
                       <select
-                        aria-label={`Change category for ${tx.description}`}
+                        title="Category for this transaction"
                         value={editingCategory[tx.id].categoryId}
                         onChange={(e) =>
                           setEditingCategory((p) => ({
@@ -367,11 +399,37 @@ export default function Transactions() {
                           }))
                         }
                       >
-                        <option value="">Pick a category…</option>
+                        <option value="">No category</option>
                         {categories.map((c) => (
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
+                      <select
+                        title="Pay this transaction from a sinking fund (draws the fund balance down)"
+                        value={editingCategory[tx.id].fundId}
+                        onChange={(e) =>
+                          setEditingCategory((p) => ({
+                            ...p,
+                            [tx.id]: { ...p[tx.id], fundId: e.target.value },
+                          }))
+                        }
+                      >
+                        <option value="">No fund</option>
+                        {editFunds.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Transfer id (optional)"
+                        title="If this row is part of a bank↔card transfer, enter a token shared by both sides. Both rows stop counting as spend/income."
+                        style={{ width: 160 }}
+                        value={editingCategory[tx.id].transferGroup}
+                        onChange={(e) =>
+                          setEditingCategory((p) => ({
+                            ...p,
+                            [tx.id]: { ...p[tx.id], transferGroup: e.target.value },
+                          }))
+                        }
+                      />
                       <label className="remember-toggle" title="Save a rule so this merchant auto-categorizes next time">
                         <input
                           type="checkbox"
@@ -387,8 +445,7 @@ export default function Transactions() {
                       </label>
                       <button
                         className="btn small primary"
-                        title="Save the new category"
-                        disabled={!editingCategory[tx.id].categoryId}
+                        title="Save the changes"
                         onClick={() => saveEditCategory(tx)}
                       >Save</button>
                       <button
@@ -617,12 +674,33 @@ export default function Transactions() {
             <label className="modal-label" htmlFor="add-tx-cat">Category</label>
             <select
               id="add-tx-cat"
+              title="Leave empty to put this row in the needs-review queue"
               value={addForm.category_id}
               onChange={(e) => setAddForm({ ...addForm, category_id: e.target.value })}
             >
               <option value="">Needs review (uncategorized)…</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            <label className="modal-label" htmlFor="add-tx-fund">Fund <span className="muted tiny">(optional, draws the fund balance)</span></label>
+            <select
+              id="add-tx-fund"
+              title="Pay this transaction from a sinking fund"
+              value={addForm.fund_id}
+              onChange={(e) => setAddForm({ ...addForm, fund_id: e.target.value })}
+            >
+              <option value="">No fund</option>
+              {addFunds.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+            <label className="modal-label" htmlFor="add-tx-xfer">Transfer group <span className="muted tiny">(optional)</span></label>
+            <input
+              id="add-tx-xfer"
+              type="text"
+              maxLength={80}
+              placeholder="e.g. xfer-2026-08-15"
+              title="If this row is part of a bank↔card transfer, enter the same token used for the other side. Both rows stop counting as spend or income."
+              value={addForm.transfer_group}
+              onChange={(e) => setAddForm({ ...addForm, transfer_group: e.target.value })}
+            />
             {addError && <div className="error" role="alert" style={{ margin: '8px 0' }}>{addError}</div>}
             <div className="modal-actions">
               <button type="button" className="btn ghost" onClick={() => setAddOpen(false)}>Cancel</button>

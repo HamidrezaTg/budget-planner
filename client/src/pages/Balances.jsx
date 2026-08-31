@@ -5,6 +5,7 @@ import { useDialogs } from '../components/Dialog.jsx';
 export default function Balances() {
   const [data, setData] = useState(null);
   const [form, setForm] = useState({ account_id: '', month: '', balance: '' });
+  const [editingAccount, setEditingAccount] = useState({});   // { [id]: { opening_balance, ...saving } }
   const [msg, setMsg] = useState('');
   const { confirm } = useDialogs();
 
@@ -18,6 +19,23 @@ export default function Balances() {
     try {
       await api.post('/balances', form);
       setForm({ account_id: '', month: '', balance: '' });
+      load();
+    } catch (err) { setMsg(err.message); }
+  };
+
+  const startEditAccount = (a) => {
+    setEditingAccount((p) => ({ ...p, [a.id]: { opening_balance: a.opening_balance } }));
+  };
+  const cancelEditAccount = (id) => {
+    setEditingAccount((p) => { const n = { ...p }; delete n[id]; return n; });
+  };
+  const saveEditAccount = async (a) => {
+    const e = editingAccount[a.id];
+    if (!e) return;
+    try {
+      await api.patch(`/balances/${a.id}`, { opening_balance: Number(e.opening_balance) || 0 });
+      setMsg('');
+      cancelEditAccount(a.id);
       load();
     } catch (err) { setMsg(err.message); }
   };
@@ -42,15 +60,72 @@ export default function Balances() {
         </div>
       )}
 
+      <div className="card table-card" style={{ marginBottom: 14 }}>
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Accounts</p>
+            <h2 style={{ fontSize: 18, margin: 0 }}>Starting balance per account</h2>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Account</th><th>Kind</th><th className="num">Opening balance</th><th className="num">Predicted (this month)</th><th className="num">Latest observation</th><th className="num">Variance</th><th></th></tr></thead>
+          <tbody>
+            {data.per_account.map((a) => {
+              const edit = editingAccount[a.id];
+              return (
+                <tr key={a.id}>
+                  <td>{a.name}{a.is_spending_pot ? <span className="pill-badge accent-badge" style={{ marginLeft: 6 }}>spending pot</span> : null}</td>
+                  <td className="muted">{a.kind}</td>
+                  <td className="num">
+                    {edit ? (
+                      <input
+                        type="number" step="0.01" style={{ width: 110 }}
+                        title="Money already in the account when you started using the planner"
+                        value={edit.opening_balance}
+                        onChange={(e) => setEditingAccount((p) => ({ ...p, [a.id]: { ...p[a.id], opening_balance: e.target.value } }))}
+                      />
+                    ) : eur(a.opening_balance)}
+                  </td>
+                  <td className="num muted">{eur(a.predicted_at_month)}</td>
+                  <td className="num muted">
+                    {a.latest_observation
+                      ? `${a.latest_observation.month} · ${eur(a.latest_observation.balance)}`
+                      : <span className="muted tiny">no observation</span>}
+                  </td>
+                  <td className={`num ${a.variance == null ? 'muted' : a.variance >= 0 ? 'good' : 'bad'}`}>
+                    {a.variance == null ? '—' : (a.variance >= 0 ? '+' : '') + eur(a.variance)}
+                  </td>
+                  <td>
+                    {edit ? (
+                      <>
+                        <button className="btn small primary" title="Save the new opening balance" onClick={() => saveEditAccount(a)}>Save</button>
+                        <button className="btn ghost small" title="Cancel without saving" onClick={() => cancelEditAccount(a.id)}>Cancel</button>
+                      </>
+                    ) : (
+                      <button
+                        className="btn ghost small"
+                        title={`Edit the opening balance for ${a.name}`}
+                        onClick={() => startEditAccount(a)}
+                      >✎</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
       <div className="filters card">
         <form onSubmit={submit} className="inline-form">
-          <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
+          <select title="Which account this observation is for" value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
             <option value="">Account…</option>
             {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
-          <input type="month" value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value })} />
+          <input title="The month this balance is for" type="month" value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value })} />
           <input
             type="number" step="0.01" placeholder="Actual balance €"
+            title="The real balance you saw in your bank on that month"
             value={form.balance} onChange={(e) => setForm({ ...form, balance: e.target.value })}
           />
           <button className="btn primary" title="Record the real bank balance for this month and account">Record</button>
@@ -58,7 +133,7 @@ export default function Balances() {
         </form>
       </div>
 
-      <h2>History & reconciliation</h2>
+      <h2>History &amp; reconciliation</h2>
       <div className="card table-card tight">
         <table>
           <thead>

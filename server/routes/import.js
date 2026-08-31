@@ -7,6 +7,7 @@ import { db, als, DATA_DIR } from '../db.js';
 import { parseStatement, rawGrid, transactionsFromGrid } from '../services/parser.js';
 import { applyCategorization } from '../services/categorizer.js';
 import { getAiConfig, chatComplete, parseJsonLoose } from '../services/ai.js';
+import { annotateWithTransferPairs } from '../services/transfer-detect.js';
 
 const router = Router();
 
@@ -85,13 +86,33 @@ function sweepStaleUploads() {
 }
 try { sweepStaleUploads(); } catch {}
 
-function previewParsed(parsed, conn) {
-  const withCats = applyCategorization(parsed.transactions);
+function previewParsed(parsed, conn, accountId = null) {
+  let withCats = applyCategorization(parsed.transactions);
+  withCats = annotateWithTransferPairs(withCats, accountId);
   const existing = new Set(
     conn.prepare('SELECT dedup_key FROM transactions').all().map((r) => r.dedup_key)
   );
   const preview = withCats.map((tx) => ({ ...tx, duplicate: existing.has(tx.dedup_key) }));
   const dupCount = preview.filter((p) => p.duplicate).length;
+  const transferPairs = preview
+    .filter((p) => p.transfer_pair_id)
+    .map((p) => ({
+      id: p.transfer_pair_id,
+      amount: Math.abs(p.amount),
+      date: p.date,
+      description: p.description,
+      account_a: p.account_id,
+      account_b: preview[p.transfer_pair_other]?.account_id ?? null,
+      confidence: p.transfer_pair_confidence,
+    }));
+  // De-duplicate pairs (each pair is represented twice — once per row).
+  const seenPair = new Set();
+  const uniquePairs = transferPairs.filter((p) => {
+    const k = `${p.id}`;
+    if (seenPair.has(k)) return false;
+    seenPair.add(k);
+    return true;
+  });
   return {
     preview,
     summary: {
@@ -100,6 +121,7 @@ function previewParsed(parsed, conn) {
       needsReview: preview.filter((p) => p.needs_review && !p.duplicate).length,
       income: preview.filter((p) => !p.duplicate && p.amount > 0).length,
       expenses: preview.filter((p) => !p.duplicate && p.amount < 0).length,
+      transferPairs: uniquePairs.length,
     },
   };
 }
@@ -118,7 +140,7 @@ router.post('/upload', upload.single('file'), withCtx((req, res) => {
   try {
     const parsed = parseStatement(req.file.path);
     const token = stageFile(req.file, req.username);
-    const { preview, summary } = previewParsed(parsed, req.impDb);
+    const { preview, summary } = previewParsed(parsed, req.impDb, null);
     res.json({ token, stats: parsed.stats, errors: parsed.errors ?? [], summary, preview, ai_spec: null });
   } catch (e) {
     try { fs.unlinkSync(req.file.path); } catch {}
@@ -170,7 +192,7 @@ router.post('/smart', upload.single('file'), withCtx(async (req, res) => {
     const token = stageFile(req.file, req.username);
     staged.get(token).spec = spec;
 
-    const { preview, summary } = previewParsed(parsed, req.impDb);
+    const { preview, summary } = previewParsed(parsed, req.impDb, null);
     auditImport(req.impDb, `AI format fix via ${cfg.model}: ${spec.notes ?? ''}`);
     res.json({
       token,
@@ -201,7 +223,7 @@ router.post('/preview', withCtx((req, res) => {
       ? transactionsFromGrid(rawGrid(stagedEntry.path, 1000000), stagedEntry.spec)
       : parseStatement(stagedEntry.path);
     parsed.transactions.forEach((t) => { t.account_id = accId; });
-    const { preview, summary } = previewParsed(parsed, req.impDb);
+    const { preview, summary } = previewParsed(parsed, req.impDb, accId);
     res.json({ token, stats: parsed.stats, errors: parsed.errors ?? [], summary, preview });
   } catch (e) {
     res.status(400).json({ error: e.message, suggest_ai: true });
@@ -213,7 +235,7 @@ function auditImport(conn, detail) {
 }
 
 router.post('/confirm', withCtx((req, res) => {
-  const { token, account_id = null } = req.body ?? {};
+  const { token, account_id = null, transfer_pairs = [] } = req.body ?? {};
   const stagedEntry = getOwnedStage(req, token);
   if (!stagedEntry) return res.status(400).json({ error: 'Unknown or expired import token' });
   const accId = resolveAccountId(req.impDb, account_id);
@@ -228,9 +250,47 @@ router.post('/confirm', withCtx((req, res) => {
     // so account-scoped automation rules actually match on import.
     parsed.transactions.forEach((t) => { t.account_id = accId; });
     const withCats = applyCategorization(parsed.transactions);
+
+    // Look up active recurrences so an imported row that matches a not-yet-
+    // posted recurrence can be folded into it. The user pays attention to one
+    // statement entry; the recurrence is the same expected transaction; the
+    // books should count it once.
+    const recurrences = req.impDb.prepare(
+      `SELECT id, name, amount, account_id, last_posted_month FROM recurrences WHERE active = 1`
+    ).all();
+    const matchedRecurrenceByIndex = new Array(withCats.length).fill(null);
+    function findRecurrenceMatch(tx) {
+      const desc = String(tx.description).toLowerCase().replace(/\s+/g, ' ').trim();
+      const txMonth = tx.date.slice(0, 7);
+      for (const r of recurrences) {
+        if (Number(r.amount) !== Number(tx.amount)) continue;
+        if (r.account_id != null && tx.account_id != null && r.account_id !== tx.account_id) continue;
+        if (r.account_id != null && tx.account_id == null) continue;
+        if (r.account_id == null && tx.account_id != null) continue;
+        const rname = String(r.name).toLowerCase().replace(/\s+/g, ' ').trim();
+        if (rname !== desc) continue;
+        if (r.last_posted_month && r.last_posted_month >= txMonth) continue;
+        return r;
+      }
+      return null;
+    }
+
+    // Pre-compute the desired dedup_key for each row: the original import
+    // fingerprint, OR a `rec|<id>|<month>` token if this row matches a
+    // recurrence, OR a `xfer|<pair_id>` token if the user confirmed this
+    // transfer. The ON CONFLICT below then folds everything together.
+    const confirmedPairs = new Set(Array.isArray(transfer_pairs) ? transfer_pairs : []);
+    const finalDedupKeys = withCats.map((tx, i) => {
+      const rec = findRecurrenceMatch(tx);
+      matchedRecurrenceByIndex[i] = rec;
+      if (rec) return `rec|${rec.id}|${tx.date.slice(0, 7)}`;
+      if (tx.transfer_pair_id && confirmedPairs.has(tx.transfer_pair_id)) return `xfer|${tx.transfer_pair_id}`;
+      return tx.dedup_key;
+    });
+
     const ins = req.impDb.prepare(`
-      INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key, transfer_group)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(dedup_key) DO NOTHING`);
     // One transaction for the whole file: row-by-row autocommit means a WAL
     // fsync per row (minutes on large statements) and a partially imported
@@ -238,7 +298,10 @@ router.post('/confirm', withCtx((req, res) => {
     req.impDb.exec('BEGIN');
     let inserted = 0;
     try {
-      for (const tx of withCats) {
+      for (let i = 0; i < withCats.length; i++) {
+        const tx = withCats[i];
+        const dedupKey = finalDedupKeys[i];
+        const transferGroup = tx.transfer_pair_id && confirmedPairs.has(tx.transfer_pair_id) ? tx.transfer_pair_id : null;
         const r = ins.run(
           tx.date,
           tx.description,
@@ -249,9 +312,25 @@ router.post('/confirm', withCtx((req, res) => {
           tx.suggested_category_id,
           tx.needs_review,
           path.basename(filePath),
-          tx.dedup_key
+          dedupKey,
+          transferGroup
         );
         inserted += r.changes;
+      }
+      // Advance last_posted_month on every matched recurrence to the latest
+      // month in this file, so the dashboard "Coming up" panel doesn't show
+      // the same item twice.
+      const advance = req.impDb.prepare(
+        `UPDATE recurrences
+         SET last_posted_month = CASE
+           WHEN last_posted_month IS NULL OR ? > last_posted_month THEN ?
+           ELSE last_posted_month END
+         WHERE id = ?`
+      );
+      for (let i = 0; i < matchedRecurrenceByIndex.length; i++) {
+        const r = matchedRecurrenceByIndex[i];
+        if (!r) continue;
+        advance.run(withCats[i].date.slice(0, 7), withCats[i].date.slice(0, 7), r.id);
       }
       req.impDb.exec('COMMIT');
     } catch (e) {
@@ -262,7 +341,14 @@ router.post('/confirm', withCtx((req, res) => {
     const remainingReview = req.impDb
       .prepare('SELECT COUNT(*) AS c FROM transactions WHERE needs_review = 1')
       .get().c;
-    res.json({ inserted, skippedDuplicates: withCats.length - inserted, remainingReview, errors: parsed.errors ?? [] });
+    res.json({
+      inserted,
+      skippedDuplicates: withCats.length - inserted,
+      remainingReview,
+      transferPairs: withCats.filter((tx) => tx.transfer_pair_id).length / 2,
+      recurrenceMatches: matchedRecurrenceByIndex.filter(Boolean).length,
+      errors: parsed.errors ?? [],
+    });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

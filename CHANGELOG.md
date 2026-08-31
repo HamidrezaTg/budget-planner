@@ -3,7 +3,47 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
-## [3.10.0] — unreleased
+## [3.11.0] — unreleased
+
+### Added (data model)
+- `accounts.opening_balance` — per-account starting balance. Reflected in the
+  projection's anchor and total predicted numbers, and in the per-account
+  reconciliation view on Balances.
+- `transactions.fund_id` — a transaction can now be paid from a sinking fund;
+  the fund's running balance includes the linked transaction (negative for
+  spend, positive for top-up).
+- `transactions.transfer_group` — shared token across two rows that form a
+  bank↔card transfer. Such rows are excluded from spend / income / category
+  sums but DO count in per-account balances (a transfer moves money, doesn't
+  change wealth).
+
+### Added (server)
+- `GET /api/balances` now returns `per_account`: each account's predicted
+  balance at the current month, its latest observation, and the variance.
+- `PATCH /api/balances/:id` and `DELETE /api/balances/:id` — set
+  opening_balance / rename / change kind; refuse delete when the account
+  still has transactions or observations.
+- `PATCH /api/transactions/:id` and `POST /api/transactions` accept `fund_id`
+  and `transfer_group`; the response includes `fund_name` and `transfer_group`.
+- The importer detects candidate transfer pairs (same date, same absolute
+  amount, opposite sign, different accounts) and tags both rows with a
+  `transfer_group` once the user confirms. The detector is conservative —
+  pairs with no transfer-like description and no account split are not
+  flagged.
+- The importer also folds imported rows into active recurrences (matching
+  by name, signed amount, and account) so a real bank statement and a
+  planned recurrence count as one expected transaction, not two. The
+  recurrence's `last_posted_month` is advanced to the latest month it
+  matched in this import.
+- A new dashboard insight surfaces per-account variance > 5% so the user
+  can re-anchor before drift compounds.
+
+### Changed
+- The model separates "total" (everything you own, including transfers)
+  from "free" (the liquid portion above opening). The total is the
+  per-account sum so transfers show up in the right place.
+
+## [3.10.0] — 2026-08-30
 
 ### Added (client)
 - **Funds**: "Add fund" form (name, start month, contribution, opening balance),

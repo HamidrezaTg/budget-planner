@@ -66,7 +66,7 @@ function actualForCategoryMonth(categoryId, month) {
       .prepare(
         `SELECT COALESCE(SUM(${FX_MULT} * t.amount),0) AS s
          FROM transactions t ${FX_JOIN}
-         WHERE t.category_id = ? AND substr(t.date,1,7) = ? AND ${NOT_PARENT()}`
+         WHERE t.category_id = ? AND substr(t.date,1,7) = ? AND ${NOT_COUNTED()}`
       )
       .get(categoryId, month).s * -1
   );
@@ -89,6 +89,15 @@ export function getAllCategories() {
 const NOT_PARENT = (alias = 't') =>
   `NOT (${alias}.split_of IS NULL AND ${alias}.split_group IS NOT NULL)`;
 
+// Bank↔card transfer rows (linked by transfer_group) are movements between
+// the user's own accounts. They MUST NOT show up as spend or income on the
+// dashboard, projection, or reports — otherwise a single transfer inflates
+// both "Card" spend and "Bank" income. Every sum below uses NOT_TRANSFER.
+const NOT_TRANSFER = (alias = 't') => `${alias}.transfer_group IS NULL`;
+
+// Combined predicate for sums: skip split parents and transfer rows.
+const NOT_COUNTED = (alias = 't') => `${NOT_PARENT(alias)} AND ${NOT_TRANSFER(alias)}`;
+
 export function baseCurrency() {
   return db.prepare("SELECT value FROM settings WHERE key = 'currency'").get()?.value || 'EUR';
 }
@@ -107,7 +116,7 @@ export function actualByCategory(month) {
     .prepare(
       `SELECT t.category_id, SUM(${FX_MULT} * t.amount) AS net
        FROM transactions t ${FX_JOIN}
-       WHERE substr(t.date,1,7) = ? AND t.category_id IS NOT NULL AND ${NOT_PARENT()}
+       WHERE substr(t.date,1,7) = ? AND t.category_id IS NOT NULL AND ${NOT_COUNTED()}
        GROUP BY t.category_id`
     )
     .all(month);
@@ -142,6 +151,35 @@ export function transferToRevolut(month) {
 }
 
 // Fund running balance at end of `month` (can go negative by design).
+// The balance rolls forward from `opening_balance` with the monthly contribution
+// and any manual `fund_movements`. A transaction linked to this fund (via
+// `transactions.fund_id`) is treated as another way of recording activity on
+// it: signed amount is added (negative = spend, positive = top-up/refund).
+// Transfer rows are excluded — moving money between accounts isn't fund
+// activity.
+// Sum of every account's predicted bank balance (opening + sum of
+// transactions on that account) plus the total committed savings. This is
+// the user's "total money" at month end — what the dashboard and anchor
+// should compare against an observed balance. Note that bank↔card transfers
+// DO appear here, because moving money between your own accounts doesn't
+// change wealth but does change the per-account balance.
+function totalPredictedAt(month) {
+  const accounts = db.prepare('SELECT id, opening_balance FROM accounts').all();
+  let bank = 0;
+  for (const a of accounts) {
+    const tx = db
+      .prepare(
+        `SELECT COALESCE(SUM(amount),0) AS s FROM transactions
+         WHERE account_id = ? AND substr(date,1,7) <= ?
+           AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
+      )
+      .get(a.id, month).s;
+    bank += a.opening_balance + tx;
+  }
+  const committed = committedSavingsAt(month);
+  return bank + committed;
+}
+
 export function fundBalanceAt(fund, month) {
   let bal = fund.opening_balance;
   if (month >= fund.start_month && fund.monthly_contribution) {
@@ -152,7 +190,14 @@ export function fundBalanceAt(fund, month) {
       'SELECT COALESCE(SUM(amount),0) AS s FROM fund_movements WHERE fund_id = ? AND month <= ?'
     )
     .get(fund.id, month).s;
-  return bal + moved;
+  const txLinked = db
+    .prepare(
+      `SELECT COALESCE(SUM(${FX_MULT} * t.amount),0) AS s
+       FROM transactions t ${FX_JOIN}
+       WHERE t.fund_id = ? AND substr(t.date,1,7) <= ? AND ${NOT_TRANSFER()} AND ${NOT_PARENT()}`
+    )
+    .get(fund.id, month).s;
+  return bal + moved + txLinked;
 }
 
 export function committedSavingsAt(month) {
@@ -211,10 +256,18 @@ export function project(numMonths = 96, from = currentMonth()) {
 
   const commitments = db.prepare('SELECT * FROM commitments ORDER BY name').all();
 
+  // Total opening balances across all accounts — the "starting cash" the
+  // user had before any transactions. The model carries this through the
+  // re-anchor math so the projected free savings line up with reality.
+  const totalOpeningBalance = db
+    .prepare('SELECT COALESCE(SUM(opening_balance), 0) AS s FROM accounts')
+    .get().s;
+
   const anchorMonth = latestAnchor(from);
 
   const months = [];
-  let free = 0;
+  let free = 0;   // net liquid wealth ABOVE the opening balances; the anchor
+                  // branch sets this to (observed - opening - committed).
   let varianceAtAnchor = null;
 
   // If the latest observation predates the forecast start, start from the
@@ -224,11 +277,16 @@ export function project(numMonths = 96, from = currentMonth()) {
     const observed = db
       .prepare('SELECT COALESCE(SUM(balance),0) AS s FROM balance_observations WHERE month = ?')
       .get(anchorMonth).s;
+    const predictedAtAnchor = totalPredictedAt(anchorMonth);
+    // free is the liquid portion: total - committed - opening.
     const committedAtAnchor = db
       .prepare('SELECT * FROM funds')
       .all()
       .reduce((s, f) => s + fundBalanceAt(f, anchorMonth), 0);
-    free = observed - committedAtAnchor;
+    free = predictedAtAnchor - committedAtAnchor - totalOpeningBalance;
+    // Reconcile the drift so the anchor matches what the user typed.
+    const drift = predictedAtAnchor - observed;
+    free -= drift;
     let m = addMonths(anchorMonth, 1);
     while (m < from) {
       free += monthNet(m, cats, coveredCats, commitments).net;
@@ -245,11 +303,9 @@ export function project(numMonths = 96, from = currentMonth()) {
       const observed = db
         .prepare('SELECT COALESCE(SUM(balance),0) AS s FROM balance_observations WHERE month = ?')
         .get(anchorMonth).s;
-      const committed = db
-        .prepare('SELECT * FROM funds')
-        .all()
-        .reduce((s, f) => s + fundBalanceAt(f, anchorMonth), 0);
-      const predicted = free + net + committed;
+      // The per-account predicted total (which sees transfers) is the real
+      // number; compare to the user's observation to compute the drift.
+      const predicted = totalPredictedAt(anchorMonth);
       varianceAtAnchor = predicted - observed;
       free += net - varianceAtAnchor; // absorb drift, continue from reality
     } else {
@@ -266,7 +322,7 @@ export function project(numMonths = 96, from = currentMonth()) {
       net: round2(net),
       free_savings: round2(free),
       committed_savings: round2(committed),
-      total_predicted: round2(free + committed),
+      total_predicted: round2(free + committed + totalOpeningBalance),
       active_commitments: lines.map((l) => l.name),
     });
   }
@@ -395,6 +451,43 @@ function insightsForMonth(month, view) {
     });
   }
 
+  // Per-account drift: when the latest observation disagrees with the model
+  // for one account by more than 5% of the prediction, surface it so the
+  // user knows to re-anchor. The amount is the difference; the user can hit
+  // Balances to see the detail.
+  const accounts = db
+    .prepare('SELECT id, name, opening_balance FROM accounts')
+    .all();
+  for (const a of accounts) {
+    const tx = db
+      .prepare(
+        `SELECT COALESCE(SUM(amount),0) AS s FROM transactions
+         WHERE account_id = ? AND substr(date,1,7) <= ?
+           AND NOT (split_of IS NULL AND split_group IS NOT NULL)`
+      )
+      .get(a.id, month).s;
+    const predicted = a.opening_balance + tx;
+    const obs = db
+      .prepare('SELECT balance FROM balance_observations WHERE account_id = ? AND month = ?')
+      .get(a.id, month);
+    if (!obs) continue;
+    const variance = Math.round((predicted - obs.balance) * 100) / 100;
+    if (Math.abs(variance) < 0.01) continue;
+    const threshold = Math.max(50, Math.abs(predicted) * 0.05);
+    if (Math.abs(variance) < threshold) continue;
+    insights.push({
+      kind: 'account-variance',
+      severity: variance > 0 ? 'warning' : 'danger',
+      title: `${a.name} balance is off by ${variance.toFixed(2)}`,
+      message: variance > 0
+        ? `The model predicts ${predicted.toFixed(2)} but the bank says ${obs.balance.toFixed(2)}. Possible unrecorded income, transfer, or fee.`
+        : `The model predicts ${predicted.toFixed(2)} but the bank says ${obs.balance.toFixed(2)}. Possible unrecorded spend.`,
+      link: '/balances',
+      action: 'Open balances',
+      fields: { account_id: a.id, predicted: round2(predicted), observed: obs.balance, variance },
+    });
+  }
+
   const due = month === currentMonth() ? recurringDueWithinDays() : [];
   if (due.length > 0) {
     insights.push({
@@ -456,7 +549,7 @@ export function monthView(month) {
   const unconvertedFx = db
     .prepare(
       `SELECT COUNT(*) AS c FROM transactions t ${FX_JOIN}
-       WHERE substr(t.date,1,7) = ? AND t.currency != ? AND f.rate IS NULL AND ${NOT_PARENT()}`
+       WHERE substr(t.date,1,7) = ? AND t.currency != ? AND f.rate IS NULL AND ${NOT_COUNTED()}`
     )
     .get(month, baseCurrency()).c;
 
