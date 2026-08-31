@@ -128,6 +128,10 @@ const PAGES = [
         'Auto / manual toggle',
         'Auto items post themselves when due. Pause hides an item from upcoming without deleting it.',
       ],
+      [
+        'Split template',
+        'Enable split template when one recurring payment belongs to multiple categories. The part amounts must add up to the signed total; posting creates a split transaction automatically.',
+      ],
     ],
   },
   {

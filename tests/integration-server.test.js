@@ -263,6 +263,73 @@ test('recurrence posting is idempotent and future posts do not suppress the curr
   await api(`/recurrences/${rec.id}`, 'DELETE', null, cookies);
 });
 
+test('multi-category recurrence templates post atomically as transaction splits', async () => {
+  const cats = await api('/categories', 'GET', null, cookies);
+  const categoryIds = cats
+    .filter((c) => c.id)
+    .slice(0, 2)
+    .map((c) => c.id);
+  assert.equal(categoryIds.length, 2);
+
+  const rec = await api(
+    '/recurrences',
+    'POST',
+    {
+      name: 'Integration Household',
+      amount: -30,
+      day_of_month: 15,
+      parts: [
+        { category_id: categoryIds[0], amount: -20 },
+        { category_id: categoryIds[1], amount: -10 },
+      ],
+    },
+    cookies,
+  );
+  assert.equal(rec.category_id, null);
+  assert.equal(rec.parts.length, 2);
+
+  const invalidUpdate = await fetch(`${srv.url}/api/recurrences/${rec.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ amount: -31 }),
+  });
+  assert.equal(invalidUpdate.status, 400);
+
+  const categoryDelete = await fetch(`${srv.url}/api/categories/${categoryIds[0]}`, {
+    method: 'DELETE',
+    headers: { Cookie: cookies },
+  });
+  assert.equal(categoryDelete.status, 409);
+
+  const month = '2099-12';
+  await api(`/recurrences/${rec.id}/post`, 'POST', { month }, cookies);
+  const rows = (await api('/transactions?limit=1000', 'GET', null, cookies)).rows.filter(
+    (t) => t.description === 'Integration Household',
+  );
+  const parent = rows.find((t) => t.split_of === null);
+  const children = rows.filter((t) => t.split_of === parent?.id);
+  assert.ok(parent);
+  assert.equal(parent.amount, -30);
+  assert.equal(parent.category_id, null);
+  assert.equal(children.length, 2);
+  assert.deepEqual(
+    children.map((t) => [t.category_id, t.amount]).sort(([a], [b]) => a - b),
+    [
+      ...[
+        [categoryIds[0], -20],
+        [categoryIds[1], -10],
+      ].sort(([a], [b]) => a - b),
+    ],
+  );
+
+  await api(`/recurrences/${rec.id}/post`, 'POST', { month }, cookies);
+  const again = (await api('/transactions?limit=1000', 'GET', null, cookies)).rows.filter(
+    (t) => t.description === 'Integration Household',
+  );
+  assert.equal(again.length, rows.length);
+  await api(`/recurrences/${rec.id}`, 'DELETE', null, cookies);
+});
+
 test('restore rejects garbage and table-less files without touching live data', async () => {
   const before = (await api('/transactions?limit=1', 'GET', null, cookies)).total;
 

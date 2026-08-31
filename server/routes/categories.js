@@ -120,6 +120,14 @@ router.delete('/:id', (req, res) => {
       error: `Cannot delete: ${txCount} transaction(s) are still tagged "${row.name}". Retire the category instead to keep the history.`,
     });
   }
+  const recurrencePartCount = db
+    .prepare('SELECT COUNT(*) AS c FROM recurrence_parts WHERE category_id = ?')
+    .get(req.params.id).c;
+  if (recurrencePartCount > 0) {
+    return res.status(409).json({
+      error: `Cannot delete: ${recurrencePartCount} recurring template part(s) still use "${row.name}". Retire the category instead.`,
+    });
+  }
   db.exec('BEGIN');
   try {
     db.prepare('DELETE FROM budget_lines WHERE category_id = ?').run(req.params.id);

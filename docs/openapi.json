@@ -1776,6 +1776,14 @@
           "balance": { "type": "number" }
         }
       },
+      "RecurrencePart": {
+        "type": "object",
+        "required": ["category_id", "amount"],
+        "properties": {
+          "category_id": { "type": "integer" },
+          "amount": { "type": "number" }
+        }
+      },
       "Recurrence": {
         "type": "object",
         "required": ["name", "amount", "day_of_month"],
@@ -1785,7 +1793,12 @@
           "day_of_month": { "type": "integer", "minimum": 1, "maximum": 28 },
           "account_id": { "type": ["integer", "null"] },
           "category_id": { "type": ["integer", "null"] },
-          "auto_post": { "type": "boolean" }
+          "auto_post": { "type": "boolean" },
+          "parts": {
+            "type": "array",
+            "minItems": 2,
+            "items": { "$ref": "#/components/schemas/RecurrencePart" }
+          }
         }
       },
       "RecurrencePatch": {
@@ -1798,7 +1811,17 @@
           "account_id": { "type": ["integer", "null"] },
           "category_id": { "type": ["integer", "null"] },
           "auto_post": { "type": "boolean" },
-          "active": { "type": "boolean" }
+          "active": { "type": "boolean" },
+          "parts": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "array",
+                "minItems": 2,
+                "items": { "$ref": "#/components/schemas/RecurrencePart" }
+              }
+            ]
+          }
         }
       },
       "Settings": {

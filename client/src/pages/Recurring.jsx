@@ -6,6 +6,11 @@ export default function Recurring() {
   const [data, setData] = useState(null);
   const [meta, setMeta] = useState({ accounts: [], groups: [] });
   const [cats, setCats] = useState([]);
+  const [template, setTemplate] = useState(false);
+  const [parts, setParts] = useState([
+    { category_id: '', amount: '' },
+    { category_id: '', amount: '' },
+  ]);
   const [form, setForm] = useState({
     name: '',
     amount: '',
@@ -42,7 +47,8 @@ export default function Recurring() {
         amount: Number(form.amount),
         day_of_month: Number(form.day_of_month),
         account_id: form.account_id || null,
-        category_id: form.category_id || null,
+        category_id: template ? null : form.category_id || null,
+        ...(template ? { parts } : {}),
       });
       setForm({
         name: '',
@@ -52,6 +58,11 @@ export default function Recurring() {
         category_id: '',
         auto_post: false,
       });
+      setTemplate(false);
+      setParts([
+        { category_id: '', amount: '' },
+        { category_id: '', amount: '' },
+      ]);
       load();
     } catch (err) {
       toast(err.message, 'error');
@@ -85,6 +96,7 @@ export default function Recurring() {
   };
 
   const expected = data.upcoming.reduce((s, u) => s + u.amount, 0);
+  const activeCats = cats.filter((c) => c.is_active);
 
   return (
     <div>
@@ -149,7 +161,11 @@ export default function Recurring() {
                 <td>{r.day_of_month}</td>
                 <td className={`num ${r.amount >= 0 ? 'income' : ''}`}>{eur(r.amount)}</td>
                 <td className="muted">{r.account_name ?? '—'}</td>
-                <td className="muted">{r.category_name ?? '—'}</td>
+                <td className="muted">
+                  {r.parts?.length
+                    ? r.parts.map((p) => `${p.category_name} ${eur(p.amount)}`).join(' · ')
+                    : (r.category_name ?? '—')}
+                </td>
                 <td>
                   <button
                     className={`btn ghost small ${r.auto_post ? 'active' : ''}`}
@@ -235,20 +251,90 @@ export default function Recurring() {
             </option>
           ))}
         </select>
-        <select
-          title="Category to use when the transaction is posted"
-          value={form.category_id}
-          onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+        <label
+          className="muted"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            textTransform: 'none',
+            letterSpacing: 0,
+          }}
         >
-          <option value="">Category…</option>
-          {cats
-            .filter((c) => c.is_active)
-            .map((c) => (
+          <input
+            type="checkbox"
+            style={{ width: 'auto' }}
+            checked={template}
+            onChange={(e) => setTemplate(e.target.checked)}
+          />{' '}
+          split template
+        </label>
+        {!template && (
+          <select
+            title="Category to use when the transaction is posted"
+            value={form.category_id}
+            onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+          >
+            <option value="">Category…</option>
+            {activeCats.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
-        </select>
+          </select>
+        )}
+        {template && (
+          <div className="recurrence-parts">
+            {parts.map((part, i) => (
+              <div className="recurrence-part" key={i}>
+                <select
+                  title={`Category for template part ${i + 1}`}
+                  value={part.category_id}
+                  onChange={(e) => {
+                    const next = [...parts];
+                    next[i] = { ...part, category_id: e.target.value };
+                    setParts(next);
+                  }}
+                >
+                  <option value="">Part category…</option>
+                  {activeCats.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  title={`Amount for template part ${i + 1}`}
+                  placeholder="Part amount"
+                  type="number"
+                  step="0.01"
+                  value={part.amount}
+                  onChange={(e) => {
+                    const next = [...parts];
+                    next[i] = { ...part, amount: e.target.value };
+                    setParts(next);
+                  }}
+                />
+                {parts.length > 2 && (
+                  <button
+                    type="button"
+                    className="btn danger small"
+                    title="Remove this template part"
+                    onClick={() => setParts(parts.filter((_, j) => j !== i))}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              className="btn ghost small"
+              onClick={() => setParts([...parts, { category_id: '', amount: '' }])}
+            >
+              Add part
+            </button>
+          </div>
+        )}
         <label
           className="muted"
           style={{

@@ -319,6 +319,16 @@ CREATE TABLE IF NOT EXISTS recurrences (
   last_posted_month TEXT                     -- YYYY-MM of last auto/manual post
 );
 
+CREATE TABLE IF NOT EXISTS recurrence_parts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  recurrence_id INTEGER NOT NULL REFERENCES recurrences(id) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  amount REAL NOT NULL,
+  sort INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_recurrence_parts_recurrence
+  ON recurrence_parts(recurrence_id, sort, id);
+
 CREATE TABLE IF NOT EXISTS attachments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,

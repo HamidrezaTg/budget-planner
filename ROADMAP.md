@@ -127,7 +127,7 @@ git push --follow-tags
 
 ### v3.18 — Optional big modules
 
-- [ ] v3.18.1 Recurring templates (multi-category templates).
+- [x] v3.18.1 Recurring templates (multi-category templates).
 - [ ] v3.18.2 Multi-currency per-account display currency.
 - [ ] v3.18.3 Forecast scenarios side by side.
 - [ ] v3.18.4 Sharing budgets via read-only token.

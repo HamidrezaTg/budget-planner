@@ -131,6 +131,9 @@ Upcoming panel on the Dashboard.
   posting the same month twice creates nothing the second time.
 - **auto-post** — posts itself on its day each month.
 - **Pause** (edit) — keep the rule but stop it from posting.
+- **Split template** — divide one recurring payment across two or more categories.
+  The part amounts must add up to the signed recurrence amount; posting creates one
+  split transaction with those category allocations.
 - A future-month post never suppresses the current month's item, and the posting
   pointer never moves backwards.
 

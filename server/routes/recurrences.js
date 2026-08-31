@@ -9,6 +9,45 @@ const daysInMonth = (m) => {
   return new Date(y, mo, 0).getDate();
 };
 
+function partsFor(recurrenceId) {
+  return db
+    .prepare(
+      `SELECT p.id, p.category_id, p.amount, p.sort, c.name AS category_name
+       FROM recurrence_parts p
+       JOIN categories c ON c.id = p.category_id
+       WHERE p.recurrence_id = ?
+       ORDER BY p.sort, p.id`,
+    )
+    .all(recurrenceId);
+}
+
+function validateParts(parts, total) {
+  if (!Array.isArray(parts) || parts.length < 2)
+    return { error: 'Provide at least two recurring category parts' };
+  let sum = 0;
+  const normalized = [];
+  for (const [i, part] of parts.entries()) {
+    const categoryId = Number(part?.category_id);
+    const amount = Number(part?.amount);
+    if (
+      !Number.isInteger(categoryId) ||
+      !db.prepare('SELECT id FROM categories WHERE id = ?').get(categoryId)
+    )
+      return { error: 'Every recurring part needs a valid category' };
+    if (!Number.isFinite(amount) || amount === 0)
+      return { error: 'Recurring part amounts must be non-zero numbers' };
+    sum += amount;
+    normalized.push({ category_id: categoryId, amount, sort: i });
+  }
+  if (Math.abs(sum - total) > 0.01)
+    return { error: `Parts sum to ${sum.toFixed(2)} but the recurrence is ${total.toFixed(2)}` };
+  return { parts: normalized };
+}
+
+function recurrenceWithParts(row) {
+  return { ...row, parts: partsFor(row.id) };
+}
+
 // Which recurrences are due within a window starting at month M, day D?
 // Returns upcoming items (not yet posted for their month).
 function upcoming(fromMonth, fromDay, count) {
@@ -31,6 +70,7 @@ function upcoming(fromMonth, fromDay, count) {
         amount: r.amount,
         account_id: r.account_id,
         category_id: r.category_id,
+        parts: partsFor(r.id),
         auto_post: !!r.auto_post,
       });
       if (items.length >= count) break;
@@ -65,30 +105,61 @@ function post(r, month, day) {
   // Recurring amounts are planning figures — they live in the base currency.
   // Returns true only when a row was actually created; re-attempts hit the
   // dedup key (e.g. a future month was posted early) and must not count.
-  const ins = db
-    .prepare(
-      `INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key)
-     VALUES (?, ?, ?, 'Recurring', ?, ?, ?, 0, 'recurring', ?)
-     ON CONFLICT(dedup_key) DO NOTHING`,
-    )
-    .run(
-      `${month}-${String(day).padStart(2, '0')}`,
-      r.name,
-      r.amount,
-      getSetting('currency') || 'EUR',
-      r.account_id,
-      r.category_id,
-      dedupKey,
-    );
-  // Never let last_posted_month move backwards (e.g. posting a past month).
-  db.prepare(
-    `UPDATE recurrences
-     SET last_posted_month = CASE
-       WHEN last_posted_month IS NULL OR ? > last_posted_month THEN ?
-       ELSE last_posted_month END
-     WHERE id = ?`,
-  ).run(month, month, r.id);
-  return ins.changes > 0;
+  const parts = partsFor(r.id);
+  const date = `${month}-${String(day).padStart(2, '0')}`;
+  const currency = getSetting('currency') || 'EUR';
+  const group = parts.length >= 2 ? `rec-${r.id}-${month}` : null;
+  db.exec('BEGIN');
+  try {
+    const ins = db
+      .prepare(
+        `INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key, split_group)
+         VALUES (?, ?, ?, 'Recurring', ?, ?, ?, 0, 'recurring', ?, ?)
+         ON CONFLICT(dedup_key) DO NOTHING`,
+      )
+      .run(
+        date,
+        r.name,
+        r.amount,
+        currency,
+        r.account_id,
+        parts.length >= 2 ? null : r.category_id,
+        dedupKey,
+        group,
+      );
+    if (ins.changes > 0 && parts.length >= 2) {
+      const child = db.prepare(
+        `INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key, split_group, split_of)
+         VALUES (?, ?, ?, 'Recurring', ?, ?, ?, 0, 'recurring', ?, ?, ?)`,
+      );
+      parts.forEach((part, i) =>
+        child.run(
+          date,
+          r.name,
+          part.amount,
+          currency,
+          r.account_id,
+          part.category_id,
+          `${dedupKey}|part|${i}`,
+          group,
+          ins.lastInsertRowid,
+        ),
+      );
+    }
+    // Never let last_posted_month move backwards (e.g. posting a past month).
+    db.prepare(
+      `UPDATE recurrences
+       SET last_posted_month = CASE
+         WHEN last_posted_month IS NULL OR ? > last_posted_month THEN ?
+         ELSE last_posted_month END
+       WHERE id = ?`,
+    ).run(month, month, r.id);
+    db.exec('COMMIT');
+    return ins.changes > 0;
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 router.get('/', (req, res) => {
@@ -101,7 +172,8 @@ router.get('/', (req, res) => {
        LEFT JOIN categories c ON c.id = r.category_id
        ORDER BY r.day_of_month, r.name`,
     )
-    .all();
+    .all()
+    .map(recurrenceWithParts);
   const up = upcoming(currentMonth(), new Date().getDate(), 12);
   res.json({ recurrences: rows, upcoming: up, autoPosted: posted });
 });
@@ -114,16 +186,51 @@ router.post('/', (req, res) => {
     account_id = null,
     category_id = null,
     auto_post = false,
+    parts,
   } = req.body ?? {};
   const day = Number(day_of_month);
-  if (!name?.trim() || isNaN(Number(amount)) || !(day >= 1 && day <= 28))
+  const total = Number(amount);
+  if (!name?.trim() || !Number.isFinite(total) || !(day >= 1 && day <= 28))
     return res.status(400).json({ error: 'name, signed amount and day_of_month (1-28) required' });
+  if (
+    account_id !== null &&
+    account_id !== undefined &&
+    !db.prepare('SELECT id FROM accounts WHERE id = ?').get(account_id)
+  )
+    return res.status(400).json({ error: 'account_id must reference a valid account' });
+  if (
+    category_id !== null &&
+    category_id !== undefined &&
+    !db.prepare('SELECT id FROM categories WHERE id = ?').get(category_id)
+  )
+    return res.status(400).json({ error: 'category_id must reference a valid category' });
+  const checked = parts === undefined ? { parts: null } : validateParts(parts, total);
+  if (checked.error) return res.status(400).json({ error: checked.error });
   const r = db
     .prepare(
       'INSERT INTO recurrences (name, amount, day_of_month, account_id, category_id, auto_post) VALUES (?, ?, ?, ?, ?, ?)',
     )
-    .run(name.trim(), Number(amount), day, account_id, category_id, auto_post ? 1 : 0);
-  res.json(db.prepare('SELECT * FROM recurrences WHERE id = ?').get(r.lastInsertRowid));
+    .run(
+      name.trim(),
+      total,
+      day,
+      account_id,
+      checked.parts ? null : category_id,
+      auto_post ? 1 : 0,
+    );
+  if (checked.parts) {
+    const insPart = db.prepare(
+      'INSERT INTO recurrence_parts (recurrence_id, category_id, amount, sort) VALUES (?, ?, ?, ?)',
+    );
+    checked.parts.forEach((part) =>
+      insPart.run(r.lastInsertRowid, part.category_id, part.amount, part.sort),
+    );
+  }
+  res.json(
+    recurrenceWithParts(
+      db.prepare('SELECT * FROM recurrences WHERE id = ?').get(r.lastInsertRowid),
+    ),
+  );
 });
 
 router.patch('/:id', (req, res) => {
@@ -138,19 +245,68 @@ router.patch('/:id', (req, res) => {
     return res.status(400).json({ error: 'day_of_month must be 1-28' });
   if (b.amount !== undefined && !Number.isFinite(Number(b.amount)))
     return res.status(400).json({ error: 'amount must be a number' });
-  db.prepare(
-    'UPDATE recurrences SET name=?, amount=?, day_of_month=?, account_id=?, category_id=?, auto_post=?, active=? WHERE id=?',
-  ).run(
-    b.name ?? row.name,
-    Number(b.amount ?? row.amount),
-    Number(b.day_of_month ?? row.day_of_month),
-    b.account_id !== undefined ? b.account_id : row.account_id,
-    b.category_id !== undefined ? b.category_id : row.category_id,
-    b.auto_post !== undefined ? (b.auto_post ? 1 : 0) : row.auto_post,
-    b.active !== undefined ? (b.active ? 1 : 0) : row.active,
-    req.params.id,
-  );
-  res.json(db.prepare('SELECT * FROM recurrences WHERE id = ?').get(row.id));
+  if (b.name !== undefined && !b.name?.trim())
+    return res.status(400).json({ error: 'name must not be empty' });
+  const total = Number(b.amount ?? row.amount);
+  const accountId = b.account_id !== undefined ? b.account_id : row.account_id;
+  if (
+    accountId !== null &&
+    accountId !== undefined &&
+    !db.prepare('SELECT id FROM accounts WHERE id = ?').get(accountId)
+  )
+    return res.status(400).json({ error: 'account_id must reference a valid account' });
+  if (
+    b.category_id !== undefined &&
+    b.category_id !== null &&
+    !db.prepare('SELECT id FROM categories WHERE id = ?').get(b.category_id)
+  )
+    return res.status(400).json({ error: 'category_id must reference a valid category' });
+  const existingParts = partsFor(row.id);
+  const checked =
+    b.parts === undefined
+      ? existingParts.length >= 2
+        ? validateParts(existingParts, total)
+        : { parts: undefined }
+      : b.parts === null
+        ? { parts: null }
+        : validateParts(b.parts, total);
+  if (checked.error) return res.status(400).json({ error: checked.error });
+  const categoryId = Array.isArray(checked.parts)
+    ? null
+    : b.category_id !== undefined
+      ? b.category_id
+      : row.category_id;
+  db.exec('BEGIN');
+  try {
+    db.prepare(
+      'UPDATE recurrences SET name=?, amount=?, day_of_month=?, account_id=?, category_id=?, auto_post=?, active=? WHERE id=?',
+    ).run(
+      b.name !== undefined ? b.name.trim() : row.name,
+      total,
+      Number(b.day_of_month ?? row.day_of_month),
+      accountId,
+      categoryId,
+      b.auto_post !== undefined ? (b.auto_post ? 1 : 0) : row.auto_post,
+      b.active !== undefined ? (b.active ? 1 : 0) : row.active,
+      req.params.id,
+    );
+    if (b.parts !== undefined) {
+      db.prepare('DELETE FROM recurrence_parts WHERE recurrence_id = ?').run(row.id);
+      if (checked.parts) {
+        const insPart = db.prepare(
+          'INSERT INTO recurrence_parts (recurrence_id, category_id, amount, sort) VALUES (?, ?, ?, ?)',
+        );
+        checked.parts.forEach((part) =>
+          insPart.run(row.id, part.category_id, part.amount, part.sort),
+        );
+      }
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  res.json(recurrenceWithParts(db.prepare('SELECT * FROM recurrences WHERE id = ?').get(row.id)));
 });
 
 // Post an upcoming item now (creates the real transaction).
