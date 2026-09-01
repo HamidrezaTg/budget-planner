@@ -16,6 +16,9 @@ if (keystorePath != null && file(keystorePath).exists() && System.getenv("BP_AND
 android {
     namespace = "com.hamidreza.budgetplanner"
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         applicationId "com.hamidreza.budgetplanner"
         minSdkVersion rootProject.ext.minSdkVersion
