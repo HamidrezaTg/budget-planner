@@ -3,6 +3,11 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.18.2] — 2026-09-01
+
+### Fixed
+- Migrate legacy transaction columns before creating their dependent indexes.
+
 ## [3.18.1] — 2026-09-01
 
 ### Fixed
