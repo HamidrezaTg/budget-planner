@@ -116,6 +116,46 @@ test('dedup keys are migrated to a currency-aware format once', () => {
   dbm.closeUserDb('mig-user');
 });
 
+test('legacy transaction tables migrate before dependent indexes are created', () => {
+  const username = 'legacy-index-user';
+  const raw = new DatabaseSync(`${dir}/users/${username}.db`);
+  raw.exec(`
+    CREATE TABLE transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      description TEXT NOT NULL,
+      amount REAL NOT NULL,
+      tx_type TEXT,
+      currency TEXT NOT NULL DEFAULT 'EUR',
+      account_id INTEGER,
+      category_id INTEGER,
+      needs_review INTEGER NOT NULL DEFAULT 0,
+      source_file TEXT,
+      dedup_key TEXT NOT NULL UNIQUE
+    );
+    INSERT INTO transactions (date, description, amount, dedup_key)
+      VALUES ('2026-05-01', 'Legacy row', -12, 'legacy-row');
+  `);
+  raw.close();
+
+  const db = dbm.getUserDb(username);
+  const columns = db
+    .prepare('PRAGMA table_info(transactions)')
+    .all()
+    .map((c) => c.name);
+  assert.ok(columns.includes('split_of'));
+  assert.ok(columns.includes('fund_id'));
+  assert.ok(columns.includes('transfer_group'));
+  assert.equal(db.prepare('SELECT COUNT(*) AS c FROM transactions').get().c, 1);
+  assert.ok(
+    db
+      .prepare('PRAGMA index_list(transactions)')
+      .all()
+      .some((index) => index.name === 'idx_tx_transfer_group'),
+  );
+  dbm.closeUserDb(username);
+});
+
 test('usernames that collided under the legacy sanitizer get distinct databases', () => {
   // Legacy mapping collapsed "user.1" onto "user_1"'s file. Now they must be
   // separate files with separate data.

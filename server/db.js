@@ -289,15 +289,6 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_tx_cat ON transactions(category_id);
--- FK columns used in correlated subqueries and cascades have no automatic
--- index in SQLite: without these, a page of transactions scans attachments
--- and split children once per row.
-CREATE INDEX IF NOT EXISTS idx_tx_split_of ON transactions(split_of);
--- A transfer_group identifies a pair of rows that should be treated as one
--- movement. The index keeps the per-row exclusion in dashboard/report
--- queries fast even when a year of statements is loaded.
-CREATE INDEX IF NOT EXISTS idx_tx_transfer_group ON transactions(transfer_group);
-CREATE INDEX IF NOT EXISTS idx_tx_fund ON transactions(fund_id);
 
 CREATE TABLE IF NOT EXISTS category_rules (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -431,6 +422,15 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
   try {
     db.exec('ALTER TABLE transactions ADD COLUMN transfer_group TEXT');
   } catch {}
+
+  // These columns were added to older databases by the migrations above. Do
+  // not create their indexes in the initial schema batch, or a legacy database
+  // fails before it can reach the ALTER TABLE statements.
+  db.exec(`
+CREATE INDEX IF NOT EXISTS idx_tx_split_of ON transactions(split_of);
+CREATE INDEX IF NOT EXISTS idx_tx_transfer_group ON transactions(transfer_group);
+CREATE INDEX IF NOT EXISTS idx_tx_fund ON transactions(fund_id);
+  `);
 
   // Deduplication fingerprint now includes the transaction currency. Recompute
   // existing keys once (guarded by PRAGMA user_version) so re-imports of old
