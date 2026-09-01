@@ -164,6 +164,13 @@ test('ntfy settings are authenticated and mask stored tokens', async () => {
   assert.equal('token' in current, false);
 });
 
+test('settings reports the installed server version', async () => {
+  const version = await api('/settings/version', 'GET', null, cookies);
+  assert.match(version.server_version, /^\d+\.\d+\.\d+$/);
+  assert.equal(typeof version.update_available, 'boolean');
+  assert.ok(version.checked_at);
+});
+
 test('setup refuses to run once an account exists', async () => {
   const r = await fetch(`${srv.url}/api/auth/setup`, {
     method: 'POST',

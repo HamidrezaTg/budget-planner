@@ -3,6 +3,15 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.18.3] — 2026-09-01
+
+### Added
+- Show the installed server version and latest GitHub release in Settings.
+- Add shared working-month navigation, account-filtered reports, and multiple income sources.
+
+### Changed
+- Improve dialog scrolling, responsive text wrapping, fund terminology, and appearance themes.
+
 ## [3.18.2] — 2026-09-01
 
 ### Fixed

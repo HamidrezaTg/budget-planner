@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, currentMonth, setCurrency } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
@@ -33,6 +33,19 @@ export default function Settings({ me }) {
     topic: '',
     token: '',
   });
+  const [versionInfo, setVersionInfo] = useState(null);
+  const [versionBusy, setVersionBusy] = useState(false);
+
+  const checkVersion = useCallback(async (refresh = false) => {
+    setVersionBusy(true);
+    try {
+      setVersionInfo(await api.get(`/settings/version${refresh ? '?refresh=1' : ''}`));
+    } catch (error) {
+      setVersionInfo({ error: error.message });
+    } finally {
+      setVersionBusy(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (me?.username)
@@ -66,7 +79,8 @@ export default function Settings({ me }) {
         setNtfyForm((previous) => ({ ...previous, ...settings }));
       })
       .catch(() => {});
-  }, []);
+    checkVersion(true);
+  }, [checkVersion]);
 
   const providerDef = cfg?.providers?.find((p) => p.id === provider);
   const needsKey = providerDef ? !providerDef.no_key : true;
@@ -318,6 +332,55 @@ export default function Settings({ me }) {
   return (
     <div className="settings-grid">
       <h1 className="settings-title">Settings</h1>
+
+      <div className="card settings-card version-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Server status</p>
+            <h2 style={{ fontSize: 18, margin: 0 }}>Version</h2>
+          </div>
+          <button
+            className="btn ghost small"
+            onClick={() => checkVersion(true)}
+            disabled={versionBusy}
+          >
+            {versionBusy ? 'Checking…' : 'Check for updates'}
+          </button>
+        </div>
+        {!versionInfo ? (
+          <p className="muted tiny">Checking the installed server version…</p>
+        ) : versionInfo.error && !versionInfo.server_version ? (
+          <p className="error tiny">Could not read the server version: {versionInfo.error}</p>
+        ) : (
+          <div className="version-status">
+            <div>
+              <span className="muted tiny">Installed server</span>
+              <strong>v{versionInfo.server_version}</strong>
+            </div>
+            <div>
+              <span className="muted tiny">Latest release</span>
+              <strong>
+                {versionInfo.latest_version ? `v${versionInfo.latest_version}` : 'Unavailable'}
+              </strong>
+            </div>
+            {versionInfo.update_available ? (
+              <div className="version-update">
+                <span className="warn">Update available</span>
+                <a href={versionInfo.release_url} target="_blank" rel="noreferrer">
+                  View release
+                </a>
+              </div>
+            ) : (
+              <div className="good">
+                {versionInfo.error ? 'Update check unavailable' : 'You are up to date'}
+              </div>
+            )}
+          </div>
+        )}
+        {versionInfo?.error && versionInfo.server_version && (
+          <p className="muted tiny">Last check could not reach GitHub: {versionInfo.error}</p>
+        )}
+      </div>
 
       {/* Appearance */}
       <div className="card settings-card">

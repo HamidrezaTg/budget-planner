@@ -98,6 +98,7 @@ const expectedOperations = [
   ['GET', '/reports/export/monthly/{month}'],
   ['GET', '/reports/export/yearly/{year}'],
   ['GET', '/settings'],
+  ['GET', '/settings/version'],
   ['PUT', '/settings'],
   ['GET', '/settings/ntfy'],
   ['PUT', '/settings/ntfy'],

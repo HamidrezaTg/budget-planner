@@ -1069,6 +1069,23 @@
         }
       }
     },
+    "/settings/version": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Check the installed server version and latest release",
+        "operationId": "getServerVersion",
+        "parameters": [
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["1"] }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
     "/settings/ntfy": {
       "get": {
         "tags": ["Settings"],

@@ -1574,6 +1574,30 @@ tr.override-row td:first-child {
   margin: 0 0 4px;
   grid-column: 1 / -1;
 }
+.version-status {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.version-status > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.version-status strong {
+  font-family: var(--font-mono);
+  font-size: 15px;
+}
+.version-update {
+  margin-left: auto;
+}
+.version-update a {
+  display: block;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 650;
+}
 .settings-card {
   display: flex;
   flex-direction: column;

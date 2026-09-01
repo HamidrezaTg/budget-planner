@@ -18,11 +18,16 @@ import path from 'node:path';
 import multer from 'multer';
 import { DatabaseSync } from 'node:sqlite';
 import { ntfyConfig, publishNtfy, validateNtfyConfig } from '../services/notifications.js';
+import { getVersionStatus } from '../version.js';
 
 const router = Router();
 router.use(requireAuth);
 
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
+
+router.get('/version', async (req, res) => {
+  res.json(await getVersionStatus({ refresh: req.query.refresh === '1' }));
+});
 
 const restoreUpload = multer({
   storage: multer.memoryStorage(),
