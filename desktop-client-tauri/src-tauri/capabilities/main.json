@@ -18,7 +18,6 @@
     "core:menu:default",
     "autostart:default",
     "log:default",
-    "os:default",
-    "updater:default"
+    "os:default"
   ]
 }

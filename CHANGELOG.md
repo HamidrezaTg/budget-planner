@@ -3,6 +3,11 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.18.6] — 2026-09-01
+
+### Fixed
+- Prevent the Linux, macOS, and Windows desktop clients from exiting during startup when the optional updater is not configured.
+
 ## [3.18.5] — 2026-09-01
 
 ### Added

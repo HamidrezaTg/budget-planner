@@ -131,7 +131,6 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(desktop)]
             app.set_menu(build_menu(app.handle())?)?;
