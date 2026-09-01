@@ -8,6 +8,8 @@ export default function Chat() {
   const [busy, setBusy] = useState(false);
   const [proposals, setProposals] = useState([]);
   const [aiReady, setAiReady] = useState(null);
+  const composerRef = React.useRef(null);
+  const messagesRef = React.useRef(null);
   // Switching tabs clears the conversation; an in-flight response from the
   // previous tab must not repopulate the new one.
   const tabRef = React.useRef(tab);
@@ -18,6 +20,10 @@ export default function Chat() {
       .then((s) => setAiReady(!!s.base_url))
       .catch(() => setAiReady(false));
   }, [tab]);
+
+  useEffect(() => {
+    messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, busy]);
 
   const switchTab = (t) => {
     tabRef.current = t;
@@ -82,6 +88,19 @@ export default function Chat() {
 
   const dismiss = (i) => setProposals((p) => p.filter((_, j) => j !== i));
 
+  const prompts =
+    tab === 'finance'
+      ? [
+          'How much did I spend this month?',
+          'Which categories are over budget?',
+          'Show my biggest expenses',
+        ]
+      : [
+          'Raise the Groceries budget to 650',
+          'List my active commitments',
+          'Add a monthly income source',
+        ];
+
   if (aiReady === false) {
     return (
       <div>
@@ -96,18 +115,35 @@ export default function Chat() {
 
   return (
     <div className="chat-page">
-      <div className="page-head">
-        <h1>{tab === 'finance' ? 'Ask your finances' : 'Dev mode (guarded)'}</h1>
-        <div className="month-nav">
+      <div className="chat-hero">
+        <div className="chat-identity">
+          <div className="chat-avatar" aria-hidden="true">
+            ✦
+          </div>
+          <div>
+            <p className="eyebrow">Your private assistant</p>
+            <h1>{tab === 'finance' ? 'Ask your finances' : 'Build with the assistant'}</h1>
+            <p className="muted">
+              {tab === 'finance'
+                ? 'Read-only answers from your budget data.'
+                : 'Changes are proposed first and never applied automatically.'}
+            </p>
+          </div>
+        </div>
+        <div className="chat-mode-tabs" role="tablist" aria-label="Assistant mode">
           <button
-            className={`btn ghost ${tab === 'finance' ? 'active' : ''}`}
+            className={`chat-mode ${tab === 'finance' ? 'active' : ''}`}
             onClick={() => switchTab('finance')}
+            role="tab"
+            aria-selected={tab === 'finance'}
           >
-            Finance — read-only
+            Finance
           </button>
           <button
-            className={`btn ghost ${tab === 'dev' ? 'active' : ''}`}
+            className={`chat-mode ${tab === 'dev' ? 'active' : ''}`}
             onClick={() => switchTab('dev')}
+            role="tab"
+            aria-selected={tab === 'dev'}
           >
             Dev mode
           </button>
@@ -122,21 +158,46 @@ export default function Chat() {
         </p>
       )}
 
-      <div className="card chat-box">
-        {messages.length === 0 && (
-          <div className="muted chat-empty">
-            {tab === 'finance'
-              ? 'Try: “How much did we spend on Groceries since July?” or “Which category is most over budget?”'
-              : 'Try: “Raise the Groceries budget to 650” or “End the Barclays commitment in December 2027”'}
-          </div>
-        )}
-        {messages.map((m, i) => (
-          <div key={i} className={`chat-msg ${m.role}`}>
-            <div className="chat-who">{m.role === 'user' ? 'You' : 'AI'}</div>
-            <div className="chat-text">{m.content}</div>
-          </div>
-        ))}
-        {busy && <div className="muted chat-empty">Thinking…</div>}
+      <div className="chat-shell">
+        <div className="chat-box" ref={messagesRef}>
+          {messages.length === 0 && (
+            <div className="chat-welcome">
+              <div className="chat-welcome-mark" aria-hidden="true">
+                ✦
+              </div>
+              <h2>
+                {tab === 'finance' ? 'What would you like to know?' : 'What should we change?'}
+              </h2>
+              <p className="muted">
+                {tab === 'finance'
+                  ? 'Ask a plain-language question. The assistant only reads your private budget data.'
+                  : 'Describe an adjustment and review the proposed changes before applying them.'}
+              </p>
+              <div className="chat-prompts">
+                {prompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    className="chat-prompt"
+                    onClick={() => {
+                      setInput(prompt);
+                      composerRef.current?.focus();
+                    }}
+                  >
+                    {prompt}
+                    <span aria-hidden="true">→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} className={`chat-msg ${m.role}`}>
+              <div className="chat-who">{m.role === 'user' ? 'You' : 'AI'}</div>
+              <div className="chat-text">{m.content}</div>
+            </div>
+          ))}
+          {busy && <div className="muted chat-empty">Thinking…</div>}
+        </div>
       </div>
 
       {tab === 'dev' && proposals.length > 0 && (
@@ -157,21 +218,40 @@ export default function Chat() {
       )}
 
       <form
-        className="chat-input"
+        className="chat-composer"
         onSubmit={(e) => {
           e.preventDefault();
           send();
         }}
       >
-        <input
-          placeholder="Ask something…"
+        <textarea
+          ref={composerRef}
+          rows="1"
+          placeholder={
+            tab === 'finance' ? 'Message your budget assistant…' : 'Describe a proposed change…'
+          }
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
           disabled={busy}
+          aria-label="Message"
         />
-        <button className="btn primary" type="submit" disabled={busy || !input.trim()}>
-          Send
-        </button>
+        <div className="chat-composer-footer">
+          <span className="muted tiny">Enter to send · Shift + Enter for a new line</span>
+          <button
+            className="chat-send"
+            type="submit"
+            disabled={busy || !input.trim()}
+            aria-label="Send message"
+          >
+            {busy ? '…' : '↑'}
+          </button>
+        </div>
       </form>
     </div>
   );

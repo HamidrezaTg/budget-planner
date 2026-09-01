@@ -184,11 +184,14 @@ export function incomeForMonth(month) {
 
 // Sum of planned spend on Revolut-tagged categories minus completed incoming
 // transfer rows. Ordinary income or refunds do not reduce the transfer need.
+// Some older accounts were created as a generic Card while being named
+// "Revolut", so both representations remain valid here. Matching the name
+// keeps the account identity separate from its generic type in the UI.
 export function transferToRevolut(month) {
   const cats = db
     .prepare(
       `SELECT c.* FROM categories c JOIN accounts a ON a.id = c.account_id
-       WHERE a.kind = 'revolut'`,
+       WHERE a.kind = 'revolut' OR lower(trim(a.name)) LIKE '%revolut%'`,
     )
     .all();
   const planned = cats.reduce((sum, c) => sum + plannedForCategory(c, month), 0);
@@ -201,7 +204,8 @@ export function completedTransferToRevolut(month) {
     .prepare(
       `SELECT t.amount, t.currency FROM transactions t
        JOIN accounts a ON a.id = t.account_id
-       WHERE a.kind = 'revolut' AND t.amount > 0
+       WHERE (a.kind = 'revolut' OR lower(trim(a.name)) LIKE '%revolut%')
+         AND t.amount > 0
          AND t.transfer_group IS NOT NULL
          AND substr(t.date, 1, 7) = ? AND ${NOT_PARENT('t')}`,
     )

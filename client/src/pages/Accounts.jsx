@@ -8,11 +8,19 @@ const kinds = [
   ['cash', 'Cash'],
   ['other', 'Other'],
 ];
-const editKinds = [...kinds, ['sparkasse', 'Sparkasse'], ['revolut', 'Revolut']];
 const currencies = ['EUR', 'USD', 'GBP', 'CHF'];
 
 function kindLabel(kind) {
-  return editKinds.find(([value]) => value === kind)?.[1] || kind || 'Other';
+  if (kind === 'sparkasse') return 'Bank';
+  if (kind === 'revolut') return 'Card';
+  return kinds.find(([value]) => value === kind)?.[1] || kind || 'Other';
+}
+
+function editableKind(kind) {
+  if (kinds.some(([value]) => value === kind)) return kind;
+  if (kind === 'sparkasse') return 'bank';
+  if (kind === 'revolut') return 'card';
+  return 'other';
 }
 
 export default function Accounts() {
@@ -76,7 +84,7 @@ export default function Accounts() {
       ...previous,
       [account.id]: {
         name: account.name,
-        kind: editKinds.some(([value]) => value === account.kind) ? account.kind : 'other',
+        kind: editableKind(account.kind),
         opening_balance: String(account.opening_balance ?? 0),
         display_currency: account.display_currency || 'EUR',
         is_spending_pot: !!account.is_spending_pot,
@@ -315,7 +323,7 @@ export default function Accounts() {
                               })
                             }
                           >
-                            {editKinds.map(([value, label]) => (
+                            {kinds.map(([value, label]) => (
                               <option key={value} value={value}>
                                 {label}
                               </option>

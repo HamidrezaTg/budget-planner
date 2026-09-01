@@ -196,7 +196,7 @@ test('Revolut transfer need subtracts completed incoming transfers', () => {
     db.prepare('DELETE FROM categories').run();
     db.prepare('DELETE FROM accounts').run();
     const revolut = db
-      .prepare("INSERT INTO accounts (name, kind) VALUES ('Revolut', 'revolut')")
+      .prepare("INSERT INTO accounts (name, kind) VALUES ('Sparkasse Revolut', 'card')")
       .run().lastInsertRowid;
     db.prepare(
       "INSERT INTO categories (name, monthly_budget, account_id) VALUES ('Daily spend', 250, ?)",

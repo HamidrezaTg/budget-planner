@@ -3,6 +3,15 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.18.4] — 2026-09-01
+
+### Fixed
+- Keep account names such as "Sparkasse Revolut" separate from their generic account type.
+- Recognize Revolut-named accounts when calculating the remaining transfer amount.
+
+### Changed
+- Refresh the Accounts table layout and redesign the AI Chat composer and welcome screen.
+
 ## [3.18.3] — 2026-09-01
 
 ### Added
