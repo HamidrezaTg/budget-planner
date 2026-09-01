@@ -66,6 +66,104 @@ test('setup creates the admin account and logs in', async () => {
   assert.equal(info.admin, true);
 });
 
+test('projection scenarios compare transient deltas without changing GET projection', async () => {
+  const before = await api('/projection?months=2', 'GET', null, cookies);
+  const now = new Date();
+  const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const next =
+    now.getMonth() === 11
+      ? `${now.getFullYear() + 1}-01`
+      : `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, '0')}`;
+
+  const compared = await api(
+    '/projection/scenarios',
+    'POST',
+    {
+      horizon: 2,
+      scenarios: [
+        {
+          name: 'Raise and repair',
+          monthly_income_delta: 100,
+          monthly_outgoings_delta: 25,
+          one_offs: [{ month: next, amount: 200 }],
+        },
+      ],
+    },
+    cookies,
+  );
+  assert.deepEqual(compared.baseline, before);
+  assert.equal(compared.scenarios.length, 1);
+  assert.equal(compared.scenarios[0].projection.months[0].net, 75);
+  assert.equal(compared.scenarios[0].projection.months[1].net, -125);
+  assert.equal(compared.scenarios[0].projection.months[1].total_predicted, -50);
+  assert.deepEqual(await api('/projection?months=2', 'GET', null, cookies), before);
+  assert.equal(compared.baseline.from, from);
+});
+
+test('projection scenarios reject malformed payloads strictly', async () => {
+  const invalid = async (body) => {
+    const response = await fetch(`${srv.url}/api/projection/scenarios`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookies },
+      body: JSON.stringify(body),
+    });
+    assert.equal(response.status, 400);
+    return response.json();
+  };
+  const scenario = {
+    name: 'Valid',
+    monthly_income_delta: 0,
+    monthly_outgoings_delta: 0,
+    one_offs: [],
+  };
+
+  await invalid({ horizon: 0, scenarios: [scenario] });
+  await invalid({ horizon: 241, scenarios: [scenario] });
+  await invalid({ horizon: '2', scenarios: [scenario] });
+  await invalid({ horizon: 2, scenarios: [] });
+  await invalid({ horizon: 2, scenarios: [scenario, scenario, scenario, scenario] });
+  await invalid({
+    horizon: 2,
+    scenarios: [{ ...scenario, monthly_income_delta: '10' }],
+  });
+  await invalid({
+    horizon: 2,
+    scenarios: [{ ...scenario, one_offs: [{ month: '2026-13', amount: 10 }] }],
+  });
+  await invalid({ horizon: 2, scenarios: [{ ...scenario, extra: true }] });
+});
+
+test('read-only share links expose only planned categories and can be revoked', async () => {
+  const share = await api('/shares', 'POST', { month: '2026-05', expires_in_days: 30 }, cookies);
+  assert.ok(share.token);
+  const publicResponse = await fetch(`${srv.url}/api/share/${share.token}`);
+  assert.equal(publicResponse.status, 200);
+  assert.equal(publicResponse.headers.get('cache-control'), 'no-store');
+  const publicView = await publicResponse.json();
+  assert.equal(publicView.month, '2026-05');
+  assert.ok(Array.isArray(publicView.categories));
+  assert.equal('transactions' in publicView, false);
+  assert.equal('accounts' in publicView, false);
+  await api(`/shares/${share.id}`, 'DELETE', null, cookies);
+  const revoked = await fetch(`${srv.url}/api/share/${share.token}`);
+  assert.equal(revoked.status, 404);
+});
+
+test('ntfy settings are authenticated and mask stored tokens', async () => {
+  const saved = await api(
+    '/settings/ntfy',
+    'PUT',
+    { enabled: false, server: 'https://ntfy.sh', topic: 'ci-alerts', token: 'tk_secret_value' },
+    cookies,
+  );
+  assert.equal(saved.enabled, false);
+  assert.equal(saved.has_token, true);
+  assert.equal(saved.token_hint, 'tk_s…alue');
+  const current = await api('/settings/ntfy', 'GET', null, cookies);
+  assert.equal(current.token_hint, 'tk_s…alue');
+  assert.equal('token' in current, false);
+});
+
 test('setup refuses to run once an account exists', async () => {
   const r = await fetch(`${srv.url}/api/auth/setup`, {
     method: 'POST',

@@ -3,6 +3,17 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.18.0] — 2026-09-01
+
+### Added
+- Per-account display currencies with monthly FX conversion for aggregate balances.
+- Transient side-by-side forecast scenarios with monthly and one-off adjustments.
+- Hashed, expiring read-only budget share links with revocation.
+- Optional ntfy daily warning summaries for Android subscribers.
+
+### Changed
+- Account balances and transaction views now display their recorded/account currency.
+
 ## [3.17.0] — 2026-08-31
 
 ### Added

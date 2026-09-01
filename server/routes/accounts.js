@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { db } from '../db.js';
+import { db, getSetting } from '../db.js';
 
 const router = Router();
 
 // Keep legacy seed values editable while new accounts use the clearer generic
 // labels below. Existing data must not silently change kind during a rename.
 const VALID_KINDS = ['bank', 'card', 'cash', 'other', 'sparkasse', 'revolut'];
+const VALID_CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
 const NAME_RE = /^.{1,60}$/;
 
 function validateAccount(body, currentId = null, { partial = false } = {}) {
@@ -26,6 +27,8 @@ function validateAccount(body, currentId = null, { partial = false } = {}) {
     return 'opening_balance must be a number';
   if (body.is_spending_pot !== undefined && typeof body.is_spending_pot !== 'boolean')
     return 'is_spending_pot must be a boolean';
+  if (body.display_currency !== undefined && !VALID_CURRENCIES.includes(body.display_currency))
+    return `display_currency must be one of ${VALID_CURRENCIES.join(', ')}`;
   if (!partial && body.name === undefined) return 'Account name must be 1-60 characters';
   return null;
 }
@@ -40,14 +43,15 @@ router.post('/', (req, res) => {
   if (err) return res.status(400).json({ error: err });
   const r = db
     .prepare(
-      `INSERT INTO accounts (name, kind, is_spending_pot, opening_balance)
-       VALUES (?, ?, ?, ?)`,
+      `INSERT INTO accounts (name, kind, is_spending_pot, opening_balance, display_currency)
+       VALUES (?, ?, ?, ?, ?)`,
     )
     .run(
       String(b.name).trim(),
       String(b.kind ?? 'other'),
       b.is_spending_pot ? 1 : 0,
       Number(b.opening_balance ?? 0),
+      b.display_currency ?? getSetting('currency') ?? 'EUR',
     );
   res.json(db.prepare('SELECT * FROM accounts WHERE id = ?').get(r.lastInsertRowid));
 });
@@ -75,6 +79,10 @@ router.patch('/:id', (req, res) => {
   if (b.opening_balance !== undefined) {
     sets.push('opening_balance = ?');
     args.push(Number(b.opening_balance));
+  }
+  if (b.display_currency !== undefined) {
+    sets.push('display_currency = ?');
+    args.push(b.display_currency);
   }
   if (sets.length === 0) return res.status(400).json({ error: 'No editable fields provided' });
   args.push(req.params.id);

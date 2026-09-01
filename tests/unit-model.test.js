@@ -13,6 +13,8 @@ const {
   monthView,
   actualByCategory,
   fundBalanceAt,
+  accountBalanceAt,
+  convertCurrency,
 } = await import('../server/services/model.js');
 after(() => {
   cleanup(dir);
@@ -42,6 +44,13 @@ test('projection rolls forward when the latest observation predates the start mo
   const from = prepareProjectionData();
   const db = dbm.getUserDb('proj-user');
   const out = dbm.als.run(db, () => project(6, from));
+  const scenario = dbm.als.run(db, () =>
+    project(6, from, {
+      monthly_income_delta: 100,
+      monthly_outgoings_delta: 0,
+      one_offs: [],
+    }),
+  );
   // The test only creates a Bank account with opening_balance 0; the anchor
   // observed is 5000 and the model sees 2000/month net income with no spend,
   // so predicted total at the anchor = 5000 (the observed). The 2 intervening
@@ -51,7 +60,30 @@ test('projection rolls forward when the latest observation predates the start mo
   const first = out.months[0];
   assert.equal(first.month, from);
   assert.equal(first.total_predicted, 5000 + 3 * 2000);
+  assert.equal(scenario.anchored_at, out.anchored_at);
+  assert.equal(scenario.months[0].total_predicted - first.total_predicted, 100);
   dbm.closeUserDb('proj-user');
+});
+
+test('account balances remain in account currency while aggregate conversion uses FX rates', () => {
+  const db = dbm.getUserDb('currency-user');
+  dbm.als.run(db, () => {
+    const account = db
+      .prepare(
+        "INSERT INTO accounts (name, display_currency, opening_balance) VALUES ('USD bank', 'USD', 100)",
+      )
+      .run().lastInsertRowid;
+    db.prepare(
+      `INSERT INTO transactions (date, description, amount, currency, account_id, dedup_key)
+       VALUES ('2026-08-15', 'Pay', -10, 'USD', ?, 'currency-test')`,
+    ).run(account);
+    db.prepare(
+      "INSERT INTO fx_rates (month, currency, rate, source) VALUES ('2026-08', 'USD', 0.9, 'manual')",
+    ).run();
+    assert.equal(accountBalanceAt(account, '2026-08'), 90);
+    assert.equal(convertCurrency(90, 'USD', 'EUR', '2026-08'), 81);
+  });
+  dbm.closeUserDb('currency-user');
 });
 
 test('budget rollover accumulates across multiple months', () => {
@@ -204,4 +236,30 @@ test('projection includes per-account opening_balance in the total predicted', (
     assert.equal(m.total_predicted, 1000);
   }
   dbm.closeUserDb('opening-user');
+});
+
+test('projection applies transient monthly and one-off scenario deltas', () => {
+  const db = dbm.getUserDb('scenario-model-user');
+  const from = dbm.als.run(db, () => {
+    db.prepare("UPDATE income_sources SET current_amount = 1000 WHERE name = 'Salary'").run();
+    return currentMonth();
+  });
+
+  const baseline = dbm.als.run(db, () => project(2, from));
+  const scenario = dbm.als.run(db, () =>
+    project(2, from, {
+      monthly_income_delta: 200,
+      monthly_outgoings_delta: 50,
+      one_offs: [{ month: addMonths(from, 1), amount: 100 }],
+    }),
+  );
+
+  assert.equal(baseline.months[0].net, 1000);
+  assert.equal(scenario.months[0].income, 1200);
+  assert.equal(scenario.months[0].outgoings, 50);
+  assert.equal(scenario.months[0].net, 1150);
+  assert.equal(scenario.months[1].outgoings, 150);
+  assert.equal(scenario.months[1].net, 1050);
+  assert.equal(scenario.months[1].total_predicted - baseline.months[1].total_predicted, 200);
+  dbm.closeUserDb('scenario-model-user');
 });

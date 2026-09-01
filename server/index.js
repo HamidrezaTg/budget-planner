@@ -21,9 +21,12 @@ import recurrenceRoutes from './routes/recurrences.js';
 import attachmentRoutes from './routes/attachments.js';
 import reportRoutes from './routes/reports.js';
 import settingsRoutes from './routes/settings.js';
+import shareRoutes from './routes/shares.js';
+import sharedRoutes from './routes/shared.js';
 import aiRoutes from './routes/ai.js';
 import { requireAuth, sweepExpiredSessions } from './auth.js';
 import { gate } from './request-gate.js';
+import { runNotificationSweep } from './services/notifications.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 2026;
@@ -135,6 +138,8 @@ app.use('/api/recurrences', requireAuth, recurrenceRoutes);
 app.use('/api/attachments', requireAuth, attachmentRoutes);
 app.use('/api/reports', requireAuth, reportRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/shares', requireAuth, shareRoutes);
+app.use('/api/share', sharedRoutes);
 app.use('/api/ai', aiRoutes);
 
 // serve built client.
@@ -182,6 +187,10 @@ app.use((err, _req, res, next) => {
 // Remove expired sessions once at startup (and periodically after that).
 sweepExpiredSessions();
 setInterval(sweepExpiredSessions, 3600 * 1000).unref();
+runNotificationSweep().catch((error) =>
+  console.error(`[notifications] sweep failed: ${error.message}`),
+);
+setInterval(runNotificationSweep, 24 * 3600 * 1000).unref();
 
 app.listen(PORT, BIND_IP || undefined, () => {
   const shown = BIND_IP || '0.0.0.0';

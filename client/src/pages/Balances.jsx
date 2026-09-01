@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, eur } from '../api.js';
+import { api, formatMoney } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
 export default function Balances() {
@@ -75,7 +75,10 @@ export default function Balances() {
                     : 'bad'
                 }
               >
-                {eur(data.reconciled.find((r) => r.month === data.anchored_at).variance)}
+                {formatMoney(
+                  data.reconciled.find((r) => r.month === data.anchored_at).variance,
+                  data.reconciled.find((r) => r.month === data.anchored_at).display_currency,
+                )}
               </b>
             </>
           )}
@@ -131,13 +134,15 @@ export default function Balances() {
                         }
                       />
                     ) : (
-                      eur(a.opening_balance)
+                      formatMoney(a.opening_balance, a.display_currency)
                     )}
                   </td>
-                  <td className="num muted">{eur(a.predicted_at_month)}</td>
+                  <td className="num muted">
+                    {formatMoney(a.predicted_at_month, a.display_currency)}
+                  </td>
                   <td className="num muted">
                     {a.latest_observation ? (
-                      `${a.latest_observation.month} · ${eur(a.latest_observation.balance)}`
+                      `${a.latest_observation.month} · ${formatMoney(a.latest_observation.balance, a.display_currency)}`
                     ) : (
                       <span className="muted tiny">no observation</span>
                     )}
@@ -145,7 +150,9 @@ export default function Balances() {
                   <td
                     className={`num ${a.variance == null ? 'muted' : a.variance >= 0 ? 'good' : 'bad'}`}
                   >
-                    {a.variance == null ? '—' : (a.variance >= 0 ? '+' : '') + eur(a.variance)}
+                    {a.variance == null
+                      ? '—'
+                      : (a.variance >= 0 ? '+' : '') + formatMoney(a.variance, a.display_currency)}
                   </td>
                   <td>
                     {edit ? (
@@ -243,11 +250,11 @@ export default function Balances() {
                   )}
                 </td>
                 <td>{r.account_name}</td>
-                <td className="num">{eur(r.balance)}</td>
-                <td className="num">{eur(r.predicted)}</td>
+                <td className="num">{formatMoney(r.balance, r.display_currency)}</td>
+                <td className="num">{formatMoney(r.predicted, r.display_currency)}</td>
                 <td className={`num ${r.variance >= 0 ? 'good' : 'bad'}`}>
                   {r.variance >= 0 ? '+' : ''}
-                  {eur(r.variance)}
+                  {formatMoney(r.variance, r.display_currency)}
                 </td>
                 <td>
                   <button

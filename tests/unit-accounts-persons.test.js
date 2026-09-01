@@ -79,6 +79,23 @@ test('account: rejects duplicate name and bad kind', async () => {
   assert.equal(bad.status, 400);
 });
 
+test('account: stores and validates display currency', async () => {
+  const c = await call('POST', '/api/accounts', {
+    name: 'Dollar account',
+    display_currency: 'USD',
+  });
+  assert.equal(c.status, 200);
+  assert.equal(c.body.display_currency, 'USD');
+  const bad = await call('POST', '/api/accounts', {
+    name: 'Bad currency',
+    display_currency: 'JPY',
+  });
+  assert.equal(bad.status, 400);
+  const updated = await call('PATCH', `/api/accounts/${c.body.id}`, { display_currency: 'GBP' });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.display_currency, 'GBP');
+});
+
 test('account: partial PATCH (rename) preserves is_spending_pot', async () => {
   const c = await call('POST', '/api/accounts', { name: 'Old' });
   const r = await call('PATCH', `/api/accounts/${c.body.id}`, { name: 'New' });

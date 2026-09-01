@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { project, currentMonth } from '../services/model.js';
+import { project, currentMonth, accountBalanceAt } from '../services/model.js';
 
 const router = Router();
 
@@ -10,7 +10,7 @@ router.get('/', (_req, res) => {
   const accounts = db.prepare('SELECT * FROM accounts ORDER BY id').all();
   const observations = db
     .prepare(
-      `SELECT o.*, a.name AS account_name FROM balance_observations o
+      `SELECT o.*, a.name AS account_name, a.display_currency FROM balance_observations o
        JOIN accounts a ON a.id = o.account_id ORDER BY o.month DESC`,
     )
     .all();
@@ -21,7 +21,7 @@ router.get('/', (_req, res) => {
   const reconciled = observations
     .filter((o) => byMonth[o.month])
     .map((o) => {
-      const perAccountPredicted = accountBalanceAt(accounts, o.account_id, o.month);
+      const perAccountPredicted = accountBalanceAt(o.account_id, o.month);
       return {
         ...o,
         predicted: perAccountPredicted,
@@ -33,7 +33,7 @@ router.get('/', (_req, res) => {
   // the current month, plus the latest observation and variance.
   const month = currentMonth();
   const perAccount = accounts.map((a) => {
-    const predicted = accountBalanceAt(accounts, a.id, month);
+    const predicted = accountBalanceAt(a.id, month);
     const latestObs = db
       .prepare(
         'SELECT balance, month FROM balance_observations WHERE account_id = ? ORDER BY month DESC LIMIT 1',
@@ -46,6 +46,7 @@ router.get('/', (_req, res) => {
       kind: a.kind,
       is_spending_pot: !!a.is_spending_pot,
       opening_balance: a.opening_balance,
+      display_currency: a.display_currency,
       predicted_at_month: Math.round(predicted * 100) / 100,
       latest_observation: latestObs ? { month: latestObs.month, balance: latestObs.balance } : null,
       variance,
@@ -60,20 +61,6 @@ router.get('/', (_req, res) => {
     anchored_at: proj.anchored_at,
   });
 });
-
-// Compute one account's predicted bank balance at the end of `month`.
-function accountBalanceAt(allAccounts, accountId, month) {
-  const a = allAccounts.find((x) => x.id === accountId);
-  if (!a) return 0;
-  const txSum = db
-    .prepare(
-      `SELECT COALESCE(SUM(amount),0) AS s FROM transactions
-       WHERE account_id = ? AND substr(date,1,7) <= ?
-         AND NOT (split_of IS NULL AND split_group IS NOT NULL)`,
-    )
-    .get(accountId, month).s;
-  return a.opening_balance + txSum;
-}
 
 // Enter/replace the observed balance for one account+month
 router.post('/', (req, res) => {

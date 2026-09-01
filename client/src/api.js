@@ -35,9 +35,12 @@ export const api = {
   },
 };
 
-export function eur(n) {
-  const currency = localStorage.getItem('bp-currency') || 'EUR';
+export function formatMoney(n, currency = localStorage.getItem('bp-currency') || 'EUR') {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency }).format(n ?? 0);
+}
+
+export function eur(n) {
+  return formatMoney(n);
 }
 
 export function setCurrency(currency) {

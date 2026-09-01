@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import multer from 'multer';
 import { DatabaseSync } from 'node:sqlite';
+import { ntfyConfig, publishNtfy, validateNtfyConfig } from '../services/notifications.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -144,6 +145,57 @@ router.put('/', (req, res) => {
   res.json({ ...ai, currency: getSetting('currency') || 'EUR', rates_cleared: ratesCleared });
 });
 
+function ntfyResponse() {
+  const config = ntfyConfig();
+  return {
+    enabled: config.enabled,
+    server: config.server,
+    topic: config.topic,
+    has_token: !!config.token,
+    token_hint: config.token ? `${config.token.slice(0, 4)}…${config.token.slice(-4)}` : '',
+  };
+}
+
+router.get('/ntfy', (_req, res) => res.json(ntfyResponse()));
+
+router.put('/ntfy', (req, res) => {
+  const current = ntfyConfig();
+  const next = {
+    server: req.body?.server ?? current.server,
+    topic: req.body?.topic ?? current.topic,
+  };
+  if (req.body?.enabled !== undefined && typeof req.body.enabled !== 'boolean')
+    return res.status(400).json({ error: 'enabled must be a boolean' });
+  try {
+    if (req.body?.enabled || next.topic) validateNtfyConfig(next);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  setSetting(
+    'ntfy_enabled',
+    req.body?.enabled ? '1' : req.body?.enabled === false ? '0' : current.enabled ? '1' : '0',
+  );
+  setSetting('ntfy_server', String(next.server).trim().replace(/\/+$/, ''));
+  setSetting('ntfy_topic', String(next.topic).trim());
+  if (req.body?.token) setSetting('ntfy_token', String(req.body.token).trim());
+  res.json(ntfyResponse());
+});
+
+router.post('/ntfy/test', async (_req, res) => {
+  const config = ntfyConfig();
+  if (!config.topic) return res.status(400).json({ error: 'Configure an ntfy topic first' });
+  try {
+    await publishNtfy({
+      ...config,
+      title: 'Budget Planner test notification',
+      message: 'ntfy notifications are configured correctly.',
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(502).json({ ok: false, error: error.message });
+  }
+});
+
 // ------------------------------------------------------------ exchange rates
 // Monthly reference rates converting foreign transaction currencies into the
 // base currency. Missing rates count transactions 1:1 and are surfaced as
@@ -153,8 +205,12 @@ const MONTH_RE = /^\d{4}-\d{2}$/;
 router.get('/fx', (_req, res) => {
   const base = getSetting('currency') || 'EUR';
   const used = db
-    .prepare('SELECT DISTINCT currency FROM transactions WHERE currency != ? ORDER BY currency')
-    .all(base)
+    .prepare(
+      `SELECT currency FROM transactions WHERE currency != ?
+       UNION SELECT display_currency AS currency FROM accounts WHERE display_currency != ?
+       ORDER BY currency`,
+    )
+    .all(base, base)
     .map((r) => r.currency);
   const rates = db
     .prepare(
@@ -166,9 +222,14 @@ router.get('/fx', (_req, res) => {
     .prepare(
       `SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t
        LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
-       WHERE t.currency != ? AND f.month IS NULL`,
+       WHERE t.currency != ? AND f.month IS NULL
+       UNION
+       SELECT DISTINCT o.month, a.display_currency FROM balance_observations o
+       JOIN accounts a ON a.id = o.account_id
+       LEFT JOIN fx_rates f ON f.month = o.month AND f.currency = a.display_currency
+       WHERE a.display_currency != ? AND f.month IS NULL`,
     )
-    .all(base);
+    .all(base, base);
   res.json({ base, used, rates, missing: missingRows });
 });
 
@@ -201,19 +262,19 @@ router.delete('/fx', (req, res) => {
 router.post('/fx/fetch', async (req, res) => {
   const base = getSetting('currency') || 'EUR';
   const overwrite = req.body?.overwrite === true;
-  let rows = overwrite
-    ? db
-        .prepare(
-          'SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t WHERE t.currency != ?',
-        )
-        .all(base)
-    : db
-        .prepare(
-          `SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t
-           LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
-           WHERE t.currency != ? AND f.month IS NULL`,
-        )
-        .all(base);
+  const ratePairs = overwrite
+    ? `SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t WHERE t.currency != ?
+       UNION SELECT DISTINCT o.month, a.display_currency FROM balance_observations o
+       JOIN accounts a ON a.id = o.account_id WHERE a.display_currency != ?`
+    : `SELECT DISTINCT substr(t.date,1,7) AS month, t.currency FROM transactions t
+       LEFT JOIN fx_rates f ON f.month = substr(t.date,1,7) AND f.currency = t.currency
+       WHERE t.currency != ? AND f.month IS NULL
+       UNION
+       SELECT DISTINCT o.month, a.display_currency FROM balance_observations o
+       JOIN accounts a ON a.id = o.account_id
+       LEFT JOIN fx_rates f ON f.month = o.month AND f.currency = a.display_currency
+       WHERE a.display_currency != ? AND f.month IS NULL`;
+  let rows = db.prepare(ratePairs).all(base, base);
   // Cap the work per call: years of foreign-currency data would otherwise
   // hang the request for minutes and hammer frankfurter.dev. The response
   // reports what remains so the client can offer another round.

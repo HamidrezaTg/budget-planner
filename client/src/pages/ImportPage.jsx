@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, eur } from '../api.js';
+import { api, formatMoney } from '../api.js';
 
 function transferCandidates(preview = []) {
   const seen = new Set();
@@ -266,7 +266,7 @@ export default function ImportPage() {
                     />
                     <span>
                       <strong>
-                        {pair.date} · {eur(pair.amount)}
+                        {pair.date} · {formatMoney(pair.amount, pair.currency)}
                       </strong>
                       <span className="muted tiny">
                         {pair.first} ↔ {pair.second} · {pair.confidence} confidence
@@ -306,7 +306,9 @@ export default function ImportPage() {
                   <tr key={i} className={tx.duplicate ? 'dup' : ''}>
                     <td>{tx.date}</td>
                     <td>{tx.description}</td>
-                    <td className={tx.amount >= 0 ? 'income' : 'expense'}>{eur(tx.amount)}</td>
+                    <td className={tx.amount >= 0 ? 'income' : 'expense'}>
+                      {formatMoney(tx.amount, tx.currency)}
+                    </td>
                     <td>{tx.suggested_category_id ? '✓' : '—'}</td>
                     <td>{tx.duplicate ? 'duplicate' : tx.needs_review ? 'needs review' : 'ok'}</td>
                   </tr>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, eur } from '../api.js';
+import { api, formatMoney } from '../api.js';
 import { Modal, useDialogs } from '../components/Dialog.jsx';
 
 export default function Transactions() {
@@ -451,7 +451,7 @@ export default function Transactions() {
                   </button>
                 </td>
                 <td className={tx.amount >= 0 ? 'income' : 'expense'}>
-                  {eur(tx.amount)}
+                  {formatMoney(tx.amount, tx.currency)}
                   {tx.currency &&
                     tx.currency !== (localStorage.getItem('bp-currency') || 'EUR') && (
                       <span className="muted tiny" title={`recorded in ${tx.currency}`}>
@@ -644,8 +644,10 @@ export default function Transactions() {
         >
           <p className="modal-message">
             Original amount:{' '}
-            <b className={splitTx.amount >= 0 ? 'income' : 'expense'}>{eur(splitTx.amount)}</b> ·
-            parts must add up to it.
+            <b className={splitTx.amount >= 0 ? 'income' : 'expense'}>
+              {formatMoney(splitTx.amount, splitTx.currency)}
+            </b>{' '}
+            · parts must add up to it.
           </p>
           {splitParts.map((p, i) => (
             <div key={i} className="split-row">
@@ -698,8 +700,11 @@ export default function Transactions() {
                   : 'bad'
               }
             >
-              {eur(splitParts.reduce((s, p) => s + (Number(p.amount) || 0), 0))} of{' '}
-              {eur(splitTx.amount)}
+              {formatMoney(
+                splitParts.reduce((s, p) => s + (Number(p.amount) || 0), 0),
+                splitTx.currency,
+              )}{' '}
+              of {formatMoney(splitTx.amount, splitTx.currency)}
             </span>
             <button
               className="btn ghost small"
@@ -731,8 +736,10 @@ export default function Transactions() {
           width={520}
         >
           <p className="modal-message">
-            <b className={attTx.amount >= 0 ? 'income' : 'expense'}>{eur(attTx.amount)}</b> on{' '}
-            {attTx.date} · PDF, PNG, JPEG, WebP or CSV up to 10 MB.
+            <b className={attTx.amount >= 0 ? 'income' : 'expense'}>
+              {formatMoney(attTx.amount, attTx.currency)}
+            </b>{' '}
+            on {attTx.date} · PDF, PNG, JPEG, WebP or CSV up to 10 MB.
           </p>
           {attList === null ? (
             <div className="muted" style={{ margin: '10px 0' }}>

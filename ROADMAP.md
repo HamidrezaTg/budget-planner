@@ -76,7 +76,7 @@ git push --follow-tags
       reachability checks.
 - [x] v3.13.6 Add Tauri build script and AUR `PKGBUILD`.
 - [x] v3.13.7 CI matrix on Linux, macOS, Windows runners is green.
-- [ ] v3.13.8 Document install paths, signing, AUR publishing.
+- [x] v3.13.8 Document install paths, signing, AUR publishing.
 - [ ] v3.13.9 Test on each OS: server picker, server switch, tray behaviour.
 - [x] v3.13.10 Delete the now-redundant `desktop-client/` Electron directory.
 - [x] v3.13.11 Validate all release gates, then tag `v3.13.1` and push
@@ -128,10 +128,10 @@ git push --follow-tags
 ### v3.18 — Optional big modules
 
 - [x] v3.18.1 Recurring templates (multi-category templates).
-- [ ] v3.18.2 Multi-currency per-account display currency.
-- [ ] v3.18.3 Forecast scenarios side by side.
-- [ ] v3.18.4 Sharing budgets via read-only token.
-- [ ] v3.18.5 ntfy.sh push notifications (Android only).
+- [x] v3.18.2 Multi-currency per-account display currency.
+- [x] v3.18.3 Forecast scenarios side by side.
+- [x] v3.18.4 Sharing budgets via read-only token.
+- [x] v3.18.5 ntfy.sh push notifications (Android only).
 - [ ] v3.18.6 Tag `v3.18.0`, push `--follow-tags`.
 
 ## Postponed (per your instructions)

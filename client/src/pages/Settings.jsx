@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, setCurrency } from '../api.js';
+import { api, currentMonth, setCurrency } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
 export default function Settings({ me }) {
@@ -23,6 +23,16 @@ export default function Settings({ me }) {
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'light');
   const [rename, setRename] = useState({ username: me?.username || '', current_password: '' });
   const [renameMsg, setRenameMsg] = useState(null);
+  const [shares, setShares] = useState([]);
+  const [shareForm, setShareForm] = useState({ month: currentMonth(), expires_in_days: '30' });
+  const [newShare, setNewShare] = useState(null);
+  const [ntfy, setNtfy] = useState(null);
+  const [ntfyForm, setNtfyForm] = useState({
+    enabled: false,
+    server: 'https://ntfy.sh',
+    topic: '',
+    token: '',
+  });
 
   useEffect(() => {
     if (me?.username)
@@ -44,6 +54,17 @@ export default function Settings({ me }) {
     api
       .get('/settings/fx')
       .then(setFx)
+      .catch(() => {});
+    api
+      .get('/shares')
+      .then(setShares)
+      .catch(() => {});
+    api
+      .get('/settings/ntfy')
+      .then((settings) => {
+        setNtfy(settings);
+        setNtfyForm((previous) => ({ ...previous, ...settings }));
+      })
       .catch(() => {});
   }, []);
 
@@ -171,6 +192,54 @@ export default function Settings({ me }) {
       toast(e.message, 'error');
     } finally {
       setFxBusy(false);
+    }
+  };
+
+  const createShare = async (e) => {
+    e.preventDefault();
+    try {
+      const share = await api.post('/shares', {
+        month: shareForm.month,
+        expires_in_days: Number(shareForm.expires_in_days),
+      });
+      setNewShare(`${window.location.origin}/share/${share.token}`);
+      setShares((previous) => [share, ...previous]);
+    } catch (err) {
+      setDataMsg({ ok: false, text: err.message });
+    }
+  };
+
+  const revokeShare = async (share) => {
+    try {
+      await api.del(`/shares/${share.id}`);
+      setShares((previous) =>
+        previous.map((item) =>
+          item.id === share.id ? { ...item, revoked_at: new Date().toISOString() } : item,
+        ),
+      );
+    } catch (err) {
+      setDataMsg({ ok: false, text: err.message });
+    }
+  };
+
+  const saveNtfy = async (e) => {
+    e.preventDefault();
+    try {
+      const saved = await api.put('/settings/ntfy', ntfyForm);
+      setNtfy(saved);
+      setNtfyForm((previous) => ({ ...previous, token: '' }));
+      toast('ntfy settings saved.', 'ok');
+    } catch (err) {
+      setDataMsg({ ok: false, text: err.message });
+    }
+  };
+
+  const testNtfy = async () => {
+    try {
+      await api.post('/settings/ntfy/test');
+      toast('Test notification sent.', 'ok');
+    } catch (err) {
+      toast(err.message, 'error');
     }
   };
 
@@ -445,6 +514,124 @@ export default function Settings({ me }) {
           </p>
           {dataMsg && <div className={dataMsg.ok ? 'good' : 'error'}>{dataMsg.text}</div>}
         </div>
+        <div className="settings-section">
+          <h3>Read-only sharing</h3>
+          <p className="muted tiny">
+            Create a private link showing only the selected month's planned categories. The token is
+            shown once, so copy it before leaving this page.
+          </p>
+          <form className="inline-form" onSubmit={createShare}>
+            <input
+              type="month"
+              value={shareForm.month}
+              onChange={(e) => setShareForm({ ...shareForm, month: e.target.value })}
+              required
+            />
+            <input
+              type="number"
+              min="1"
+              max="365"
+              value={shareForm.expires_in_days}
+              onChange={(e) => setShareForm({ ...shareForm, expires_in_days: e.target.value })}
+              title="Days until the link expires"
+              style={{ width: 90 }}
+            />
+            <button className="btn primary" type="submit">
+              Create link
+            </button>
+          </form>
+          {newShare && (
+            <p className="good tiny" style={{ overflowWrap: 'anywhere' }}>
+              New link: <code>{newShare}</code>
+            </p>
+          )}
+          {shares.length > 0 && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Expires</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {shares.map((share) => (
+                  <tr key={share.id}>
+                    <td>{share.month}</td>
+                    <td>{new Date(share.expires_at).toLocaleDateString()}</td>
+                    <td>{share.revoked_at ? 'Revoked' : 'Active'}</td>
+                    <td>
+                      {!share.revoked_at && (
+                        <button className="btn danger small" onClick={() => revokeShare(share)}>
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* Android notifications */}
+      <div className="card settings-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Android notifications</p>
+            <h2 style={{ fontSize: 18, margin: 0 }}>ntfy</h2>
+          </div>
+          {ntfy?.has_token && <span className="muted tiny">Token saved</span>}
+        </div>
+        <form className="settings-section" onSubmit={saveNtfy}>
+          <label className="check-label">
+            <input
+              type="checkbox"
+              checked={ntfyForm.enabled}
+              onChange={(e) => setNtfyForm({ ...ntfyForm, enabled: e.target.checked })}
+            />
+            Send daily warning summaries
+          </label>
+          <label className="muted tiny">
+            Server
+            <input
+              value={ntfyForm.server}
+              onChange={(e) => setNtfyForm({ ...ntfyForm, server: e.target.value })}
+              placeholder="https://ntfy.sh"
+            />
+          </label>
+          <label className="muted tiny">
+            Topic
+            <input
+              value={ntfyForm.topic}
+              onChange={(e) => setNtfyForm({ ...ntfyForm, topic: e.target.value })}
+              placeholder="my-budget-alerts"
+            />
+          </label>
+          <label className="muted tiny">
+            Access token (optional)
+            <input
+              type="password"
+              value={ntfyForm.token}
+              onChange={(e) => setNtfyForm({ ...ntfyForm, token: e.target.value })}
+              placeholder={ntfy?.has_token ? 'Leave blank to keep saved token' : 'tk_…'}
+            />
+          </label>
+          <div className="btn-row">
+            <button className="btn primary" type="submit">
+              Save ntfy
+            </button>
+            <button className="btn" type="button" onClick={testNtfy} disabled={!ntfy?.topic}>
+              Send test
+            </button>
+          </div>
+          <p className="muted tiny">
+            Subscribe to the topic in the ntfy Android app. The server sends at most one warning
+            summary per day after a successful delivery.
+          </p>
+        </form>
       </div>
 
       {/* AI connection */}
@@ -584,7 +771,7 @@ export default function Settings({ me }) {
         </div>
       </div>
 
-      {/* Exchange rates (only if there are foreign-currency transactions) */}
+      {/* Exchange rates (foreign transactions and account display currencies) */}
       {fx && fx.used.length > 0 && (
         <div className="card settings-card" style={{ gridColumn: '1 / -1' }}>
           <div className="panel-head">
@@ -596,7 +783,7 @@ export default function Settings({ me }) {
           </div>
           <div className="settings-section">
             <p className="muted tiny">
-              Transactions recorded in another currency are converted to <b>{fx.base}</b> with a
+              Foreign transactions and account balances are converted to <b>{fx.base}</b> with a
               monthly rate ({fx.base} units per 1 foreign unit). Without a rate they count 1:1 and a
               warning card appears on the Dashboard.
             </p>

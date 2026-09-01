@@ -73,6 +73,11 @@ const expectedOperations = [
   ['POST', '/balances'],
   ['DELETE', '/balances/{id}'],
   ['GET', '/projection'],
+  ['POST', '/projection/scenarios'],
+  ['GET', '/shares'],
+  ['POST', '/shares'],
+  ['DELETE', '/shares/{id}'],
+  ['GET', '/share/{token}'],
   ['GET', '/recurrences'],
   ['POST', '/recurrences'],
   ['PATCH', '/recurrences/{id}'],
@@ -91,6 +96,9 @@ const expectedOperations = [
   ['GET', '/reports/export/yearly/{year}'],
   ['GET', '/settings'],
   ['PUT', '/settings'],
+  ['GET', '/settings/ntfy'],
+  ['PUT', '/settings/ntfy'],
+  ['POST', '/settings/ntfy/test'],
   ['GET', '/settings/fx'],
   ['PUT', '/settings/fx'],
   ['DELETE', '/settings/fx'],
@@ -148,4 +156,17 @@ test('OpenAPI defines the session cookie and reusable payload schemas', () => {
   for (const schema of ['Error', 'Json', 'Binary', 'Multipart']) {
     assert.ok(document.components.schemas[schema], `missing reusable ${schema} schema`);
   }
+});
+
+test('OpenAPI documents strict projection scenario payloads', () => {
+  const request = document.components.requestBodies.ProjectionScenarios;
+  assert.ok(request);
+  const schema = document.components.schemas.ProjectionScenarios;
+  assert.deepEqual(schema.required, ['horizon', 'scenarios']);
+  assert.equal(schema.additionalProperties, false);
+  assert.equal(schema.properties.horizon.minimum, 1);
+  assert.equal(schema.properties.horizon.maximum, 240);
+  assert.equal(schema.properties.scenarios.maxItems, 3);
+  assert.equal(document.components.schemas.ProjectionScenario.additionalProperties, false);
+  assert.equal(document.components.schemas.ProjectionOneOff.additionalProperties, false);
 });

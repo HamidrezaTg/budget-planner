@@ -109,6 +109,8 @@ Manage the places where money lives: bank accounts, cards, cash, and spending po
 
 - **Opening balance** — the real balance when you start using the planner. It is the
   starting point for per-account reconciliation and projection totals.
+- **Currency** — the currency used for this account's opening balance, observations,
+  and running balance. Choose EUR, USD, GBP, or CHF.
 - **Edit** — rename the account, change its type, update the opening balance, or mark
   it as a spending pot.
 - **Delete** — only succeeds when no transactions or balance observations reference
@@ -169,6 +171,9 @@ already covered by a commitment (no double counting). Income = usual amounts unl
 a month has an actual entry. Shows free vs committed savings and predicted total
 balance per month.
 
+- **Scenarios** — compare up to three transient alternatives with monthly income or
+  outgoing changes and dated one-off amounts. Scenarios never change your saved budget.
+
 ## AI Chat
 
 - **Finance (read-only)** — ask anything about your data. The AI can only run
@@ -194,6 +199,18 @@ Ollama (local, no key), LM Studio (local, no key), Custom.
 - **Danger zone: reset** — deletes all transactions and attachments, keeps
   budgets, rules, funds and income sources.
 
+### Read-only sharing
+
+Create a month-specific link in the Data section. The link shows planned category
+amounts only, expires automatically, and can be revoked at any time. The raw token
+is shown only when it is created; the server stores only its hash.
+
+### Android notifications
+
+Configure an ntfy server and topic in Settings, then subscribe to that topic in the
+ntfy Android app. When enabled, the server sends at most one daily summary of new
+warning or danger insights, and retries on a later sweep if delivery fails.
+
 ### Username
 Change your username from the Identity section. The current password is required;
 the private database, uploads, and the active session move with the account. Admins
@@ -203,17 +220,17 @@ can rename other users from **Admin → Users**.
 Change your password (invalidates all sessions) and switch light/dark.
 
 ### Multi-currency
-Transactions keep the currency they were recorded in (from your statements). Everything
 
-### Multi-currency
+Transactions keep the currency they were recorded in (from your statements). Each account
+has its own display currency, while budgets and aggregate reports use the global currency
+chosen under Appearance:
 
-Transactions keep the currency they were recorded in (from your statements). Everything
-is reported in the display currency chosen under Appearance:
-
-- Budgets, funds, commitments and income are planning figures and always live in the
+- Budgets, funds, commitments and income are planning figures and always live in the global
   display currency.
+- Account balances and observations stay in the account's display currency.
 - Actual spending converts per month via an **exchange rates** table: rate = display
-  units per 1 foreign unit, applied by transaction month.
+  units per 1 foreign unit, applied by transaction month. Aggregate balances convert each
+  account through the same monthly table.
 - **Fetch missing from ECB** imports monthly reference rates from frankfurter.app
   (ECB data, keyless — requests contain only dates and currency codes).
 - You can also enter or correct any month/currency rate manually.

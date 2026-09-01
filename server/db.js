@@ -44,6 +44,16 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(username);
+CREATE TABLE IF NOT EXISTS share_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  month TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_share_tokens_user ON share_tokens(user_id);
 `);
 
 // migration: role column; the first account ever created becomes admin
@@ -183,7 +193,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   name TEXT NOT NULL UNIQUE,
   kind TEXT NOT NULL DEFAULT 'sparkasse',
   is_spending_pot INTEGER NOT NULL DEFAULT 0,
-  opening_balance REAL NOT NULL DEFAULT 0
+  opening_balance REAL NOT NULL DEFAULT 0,
+  display_currency TEXT NOT NULL DEFAULT 'EUR'
 );
 
 CREATE TABLE IF NOT EXISTS persons (
@@ -372,6 +383,12 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS notification_deliveries (
+  event_key TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  sent_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS ai_audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -423,6 +440,18 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
   if (v < 1) {
     migrateDedupKeys(db);
     db.exec('PRAGMA user_version = 1');
+  }
+  const hasDisplayCurrency = db
+    .prepare('PRAGMA table_info(accounts)')
+    .all()
+    .some((column) => column.name === 'display_currency');
+  if (!hasDisplayCurrency) {
+    try {
+      db.exec('ALTER TABLE accounts ADD COLUMN display_currency TEXT');
+    } catch {}
+    const base =
+      db.prepare("SELECT value FROM settings WHERE key = 'currency'").get()?.value || 'EUR';
+    db.prepare('UPDATE accounts SET display_currency = ? WHERE display_currency IS NULL').run(base);
   }
 
   const seed = db.prepare('SELECT COUNT(*) AS c FROM categories').get().c;

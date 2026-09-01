@@ -22,6 +22,7 @@ import Help from './pages/Help.jsx';
 import Users from './pages/Users.jsx';
 import Recurring from './pages/Recurring.jsx';
 import Accounts from './pages/Accounts.jsx';
+import Shared from './pages/Shared.jsx';
 
 export default function App() {
   const [status, setStatus] = useState(null);
@@ -92,6 +93,7 @@ export default function App() {
       <ErrorBoundary>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/share/:token" element={<Shared />} />
           <Route element={<Layout me={me} />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/budgets" element={<Budgets />} />

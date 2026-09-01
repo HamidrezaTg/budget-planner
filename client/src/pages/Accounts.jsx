@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, eur } from '../api.js';
+import { api, formatMoney } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 
 const kinds = [
@@ -9,6 +9,7 @@ const kinds = [
   ['other', 'Other'],
 ];
 const editKinds = [...kinds, ['sparkasse', 'Sparkasse'], ['revolut', 'Revolut']];
+const currencies = ['EUR', 'USD', 'GBP', 'CHF'];
 
 function kindLabel(kind) {
   return editKinds.find(([value]) => value === kind)?.[1] || kind || 'Other';
@@ -22,6 +23,7 @@ export default function Accounts() {
     name: '',
     kind: 'bank',
     opening_balance: '0',
+    display_currency: localStorage.getItem('bp-currency') || 'EUR',
     is_spending_pot: false,
   });
   const [editing, setEditing] = useState({});
@@ -51,8 +53,15 @@ export default function Accounts() {
         kind: form.kind,
         opening_balance: Number(form.opening_balance) || 0,
         is_spending_pot: form.is_spending_pot,
+        display_currency: form.display_currency,
       });
-      setForm({ name: '', kind: 'bank', opening_balance: '0', is_spending_pot: false });
+      setForm({
+        name: '',
+        kind: 'bank',
+        opening_balance: '0',
+        display_currency: localStorage.getItem('bp-currency') || 'EUR',
+        is_spending_pot: false,
+      });
       setShowAdd(false);
       setError('');
       toast(`Account "${form.name.trim()}" added.`);
@@ -69,6 +78,7 @@ export default function Accounts() {
         name: account.name,
         kind: editKinds.some(([value]) => value === account.kind) ? account.kind : 'other',
         opening_balance: String(account.opening_balance ?? 0),
+        display_currency: account.display_currency || 'EUR',
         is_spending_pot: !!account.is_spending_pot,
       },
     }));
@@ -89,6 +99,7 @@ export default function Accounts() {
         kind: edit.kind,
         opening_balance: Number(edit.opening_balance) || 0,
         is_spending_pot: !!edit.is_spending_pot,
+        display_currency: edit.display_currency,
       });
       cancelEdit(account.id);
       setError('');
@@ -222,6 +233,17 @@ export default function Accounts() {
               onChange={(e) => setForm({ ...form, opening_balance: e.target.value })}
             />
           </label>
+          <label className="muted tiny">
+            Currency
+            <select
+              value={form.display_currency}
+              onChange={(e) => setForm({ ...form, display_currency: e.target.value })}
+            >
+              {currencies.map((currency) => (
+                <option key={currency}>{currency}</option>
+              ))}
+            </select>
+          </label>
           <label className="check-label">
             <input
               type="checkbox"
@@ -259,6 +281,7 @@ export default function Accounts() {
                 <th>Account</th>
                 <th>Type</th>
                 <th className="num">Opening balance</th>
+                <th>Currency</th>
                 <th>Spending pot</th>
                 <th></th>
               </tr>
@@ -314,6 +337,21 @@ export default function Accounts() {
                           />
                         </td>
                         <td>
+                          <select
+                            value={edit.display_currency}
+                            onChange={(e) =>
+                              setEditing({
+                                ...editing,
+                                [account.id]: { ...edit, display_currency: e.target.value },
+                              })
+                            }
+                          >
+                            {currencies.map((currency) => (
+                              <option key={currency}>{currency}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
                           <label className="check-label">
                             <input
                               type="checkbox"
@@ -348,7 +386,10 @@ export default function Accounts() {
                         <td>
                           <span className="count-pill">{kindLabel(account.kind)}</span>
                         </td>
-                        <td className="num">{eur(account.opening_balance)}</td>
+                        <td className="num">
+                          {formatMoney(account.opening_balance, account.display_currency)}
+                        </td>
+                        <td>{account.display_currency}</td>
                         <td>
                           {account.is_spending_pot ? (
                             <span className="good">Yes</span>
