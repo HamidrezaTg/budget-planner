@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 test('login, import, review, and dashboard flow', async ({ page }) => {
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'Budget Planner' })).toBeVisible();
@@ -21,7 +23,7 @@ test('login, import, review, and dashboard flow', async ({ page }) => {
       name: 'statement.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from(
-        'Started Date,Description,Amount,Currency\n2026-08-01,Coffee,-4.50,EUR\n',
+        `Started Date,Description,Amount,Currency\n${month}-01,Coffee,-4.50,EUR\n`,
       ),
     });
 
