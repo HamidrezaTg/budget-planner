@@ -3,6 +3,11 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.18.1] — 2026-09-01
+
+### Fixed
+- Use the macOS-native `shasum` command when adding DMG checksums to releases.
+
 ## [3.18.0] — 2026-09-01
 
 ### Added

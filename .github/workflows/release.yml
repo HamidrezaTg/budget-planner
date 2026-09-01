@@ -139,7 +139,7 @@ jobs:
           gh release download "v${VERSION}" \
             --pattern SHA256SUMS.txt \
             --dir "$RUNNER_TEMP"
-          sha256sum dist/*.dmg >> "$RUNNER_TEMP/SHA256SUMS.txt"
+          shasum -a 256 dist/*.dmg >> "$RUNNER_TEMP/SHA256SUMS.txt"
           gh release upload "v${VERSION}" \
             "$RUNNER_TEMP/SHA256SUMS.txt" \
             --clobber

@@ -132,7 +132,7 @@ git push --follow-tags
 - [x] v3.18.3 Forecast scenarios side by side.
 - [x] v3.18.4 Sharing budgets via read-only token.
 - [x] v3.18.5 ntfy.sh push notifications (Android only).
-- [ ] v3.18.6 Tag `v3.18.0`, push `--follow-tags`.
+- [x] v3.18.6 Tag `v3.18.0`, push `--follow-tags`.
 
 ## Postponed (per your instructions)
 
