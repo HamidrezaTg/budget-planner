@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react';
-import { api, eur, currentMonth, monthLabel } from '../api.js';
+import { api, eur, monthLabel } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
+import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
 export default function Income() {
-  const [month, setMonth] = useState(currentMonth());
+  const { month } = useWorkingMonth();
   const [data, setData] = useState(null);
   const [edits, setEdits] = useState({});
   const [error, setError] = useState('');
-  const { prompt, confirm } = useDialogs();
+  const { prompt, confirm, toast } = useDialogs();
+  const [persons, setPersons] = useState([]);
+  const [sourceForm, setSourceForm] = useState({
+    name: '',
+    current_amount: '',
+    person_id: '',
+    recurring: true,
+  });
+  const [sourceEdits, setSourceEdits] = useState({});
 
   const load = () =>
     api
@@ -15,11 +24,83 @@ export default function Income() {
       .then((d) => {
         setData(d);
         setEdits({});
+        setSourceEdits(
+          Object.fromEntries(
+            d.sources.map((source) => [
+              source.id,
+              {
+                name: source.name,
+                current_amount: String(source.current_amount ?? 0),
+                person_id: source.person_id ?? '',
+                recurring: !!source.recurring,
+              },
+            ]),
+          ),
+        );
       })
       .catch((e) => setError(e.message));
   useEffect(() => {
     load();
   }, [month]);
+  useEffect(() => {
+    api
+      .get('/persons')
+      .then(setPersons)
+      .catch(() => {});
+  }, []);
+
+  const addSource = async (event) => {
+    event.preventDefault();
+    if (!sourceForm.name.trim()) return;
+    try {
+      await api.post('/income/sources', {
+        ...sourceForm,
+        name: sourceForm.name.trim(),
+        current_amount: Number(sourceForm.current_amount) || 0,
+        person_id: sourceForm.person_id || null,
+      });
+      setSourceForm({ name: '', current_amount: '', person_id: '', recurring: true });
+      toast(`Income source "${sourceForm.name.trim()}" added.`);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const saveSource = async (source) => {
+    const edit = sourceEdits[source.id];
+    if (!edit?.name.trim()) return setError('Income source name is required.');
+    try {
+      await api.patch(`/income/sources/${source.id}`, {
+        ...edit,
+        name: edit.name.trim(),
+        current_amount: Number(edit.current_amount) || 0,
+        person_id: edit.person_id || null,
+      });
+      toast(`Income source "${edit.name.trim()}" saved.`);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const removeSource = async (source) => {
+    const ok = await confirm({
+      title: `Delete income source "${source.name}"?`,
+      message:
+        'Its monthly actual entries will also be removed. Other income sources are unchanged.',
+      danger: true,
+      confirmLabel: 'Delete source',
+    });
+    if (!ok) return;
+    try {
+      await api.del(`/income/sources/${source.id}`);
+      toast(`Income source "${source.name}" deleted.`);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
   if (!data)
     return <div className="loading">{error ? `Failed to load: ${error}` : 'Loading…'}</div>;
 
@@ -43,7 +124,6 @@ export default function Income() {
     <div>
       <div className="page-head">
         <h1>Income — {monthLabel(month)}</h1>
-        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
       </div>
       <p className="muted">
         Actual income must be entered, not assumed. The “usual” amount is used by the projection
@@ -51,6 +131,121 @@ export default function Income() {
       </p>
 
       {error && <div className="error">{error}</div>}
+
+      <div className="card income-sources-card">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Income setup</p>
+            <h2>Income sources</h2>
+          </div>
+          <span className="muted tiny">Add each salary or recurring income separately.</span>
+        </div>
+        <form className="income-source-form" onSubmit={addSource}>
+          <input
+            placeholder="Source name, e.g. Salary"
+            value={sourceForm.name}
+            onChange={(e) => setSourceForm({ ...sourceForm, name: e.target.value })}
+            maxLength={80}
+            required
+          />
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Usual amount"
+            value={sourceForm.current_amount}
+            onChange={(e) => setSourceForm({ ...sourceForm, current_amount: e.target.value })}
+          />
+          <select
+            value={sourceForm.person_id}
+            onChange={(e) => setSourceForm({ ...sourceForm, person_id: e.target.value })}
+          >
+            <option value="">No person</option>
+            {persons.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name}
+              </option>
+            ))}
+          </select>
+          <label className="check-label">
+            <input
+              type="checkbox"
+              checked={sourceForm.recurring}
+              onChange={(e) => setSourceForm({ ...sourceForm, recurring: e.target.checked })}
+            />
+            Recurring
+          </label>
+          <button className="btn primary" type="submit" disabled={!sourceForm.name.trim()}>
+            Add source
+          </button>
+        </form>
+        <div className="income-source-list">
+          {data.sources.map((source) => {
+            const edit = sourceEdits[source.id] ?? {};
+            return (
+              <div className="income-source-row" key={source.id}>
+                <input
+                  aria-label={`${source.name} source name`}
+                  value={edit.name ?? ''}
+                  onChange={(e) =>
+                    setSourceEdits((p) => ({
+                      ...p,
+                      [source.id]: { ...edit, name: e.target.value },
+                    }))
+                  }
+                />
+                <input
+                  aria-label={`${source.name} usual amount`}
+                  type="number"
+                  step="0.01"
+                  value={edit.current_amount ?? ''}
+                  onChange={(e) =>
+                    setSourceEdits((p) => ({
+                      ...p,
+                      [source.id]: { ...edit, current_amount: e.target.value },
+                    }))
+                  }
+                />
+                <select
+                  aria-label={`${source.name} person`}
+                  value={edit.person_id ?? ''}
+                  onChange={(e) =>
+                    setSourceEdits((p) => ({
+                      ...p,
+                      [source.id]: { ...edit, person_id: e.target.value },
+                    }))
+                  }
+                >
+                  <option value="">No person</option>
+                  {persons.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name}
+                    </option>
+                  ))}
+                </select>
+                <label className="check-label">
+                  <input
+                    type="checkbox"
+                    checked={!!edit.recurring}
+                    onChange={(e) =>
+                      setSourceEdits((p) => ({
+                        ...p,
+                        [source.id]: { ...edit, recurring: e.target.checked },
+                      }))
+                    }
+                  />
+                  Recurring
+                </label>
+                <button className="btn small primary" onClick={() => saveSource(source)}>
+                  Save
+                </button>
+                <button className="btn small danger" onClick={() => removeSource(source)}>
+                  Delete
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="card stat big-income">
         <div className="stat-label">Total income this month</div>

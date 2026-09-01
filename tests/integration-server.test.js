@@ -558,6 +558,65 @@ test('yearly report includes per-category monthly spending', async () => {
   );
 });
 
+test('report filters and exports respect the selected account', async () => {
+  const first = await api('/accounts', 'POST', { name: 'Report account A' }, cookies);
+  const second = await api('/accounts', 'POST', { name: 'Report account B' }, cookies);
+  const category = await api(
+    '/categories',
+    'POST',
+    { name: 'Report groceries', monthly_budget: 200, account_id: first.id },
+    cookies,
+  );
+  await api(
+    '/transactions',
+    'POST',
+    {
+      date: '2026-05-20',
+      description: 'A-only grocery',
+      amount: -40,
+      currency: 'EUR',
+      account_id: first.id,
+      category_id: category.id,
+    },
+    cookies,
+  );
+  await api(
+    '/transactions',
+    'POST',
+    {
+      date: '2026-05-20',
+      description: 'B-only grocery',
+      amount: -90,
+      currency: 'EUR',
+      account_id: second.id,
+    },
+    cookies,
+  );
+
+  const report = await api(`/reports/monthly/2026-05?account_id=${first.id}`, 'GET', null, cookies);
+  assert.equal(report.totals.expenses, -40);
+  assert.ok(report.byCategory.some((row) => row.name === 'Report groceries' && row.spent === -40));
+
+  const csv = await fetch(`${srv.url}/api/reports/export/monthly/2026-05?account_id=${first.id}`, {
+    headers: { Cookie: cookies },
+  });
+  assert.equal(csv.status, 200);
+  const csvText = await csv.text();
+  assert.match(csvText, /A-only grocery/);
+  assert.doesNotMatch(csvText, /B-only grocery/);
+
+  const xlsx = await fetch(
+    `${srv.url}/api/reports/export/monthly/2026-05.xlsx?account_id=${first.id}`,
+    {
+      headers: { Cookie: cookies },
+    },
+  );
+  assert.equal(xlsx.status, 200);
+  const workbook = XLSX.read(Buffer.from(await xlsx.arrayBuffer()), { type: 'buffer' });
+  const summary = XLSX.utils.sheet_to_json(workbook.Sheets.Summary);
+  assert.ok(summary.some((row) => row.Category === 'Report groceries' && row.Actual === 40));
+});
+
 async function api(path, method, body, cookie) {
   const r = await fetch(`${srv.url}/api${path}`, {
     method,

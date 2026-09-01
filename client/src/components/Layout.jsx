@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
+import { WorkingMonthProvider, useWorkingMonth } from './WorkingMonth.jsx';
 
 const groups = [
   {
@@ -42,12 +43,21 @@ const groups = [
 ];
 
 export default function Layout({ me }) {
+  return (
+    <WorkingMonthProvider>
+      <LayoutContent me={me} />
+    </WorkingMonthProvider>
+  );
+}
+
+function LayoutContent({ me }) {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('bp-collapsed') === '1');
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'light');
   const [privacy, setPrivacy] = useState(() => localStorage.getItem('bp-privacy') === '1');
   const [nativeShell, setNativeShell] = useState(false);
+  const { month, setMonth } = useWorkingMonth();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -171,6 +181,16 @@ export default function Layout({ me }) {
           <span className="brand-name">Budget Planner</span>
         </button>
 
+        <div className="working-month">
+          <label htmlFor="working-month">Working month</label>
+          <input
+            id="working-month"
+            type="month"
+            value={month}
+            onChange={(event) => setMonth(event.target.value)}
+          />
+        </div>
+
         <nav className="side-nav" aria-label="Main navigation">
           {groups2.map((g) => (
             <div key={g.label} className="nav-group">
@@ -218,10 +238,14 @@ export default function Layout({ me }) {
             </button>
             <button
               className="icon-btn"
-              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              title={
+                theme === 'dark' || theme === 'midnight'
+                  ? 'Switch to light mode'
+                  : 'Switch to dark mode'
+              }
+              onClick={() => setTheme(theme === 'dark' || theme === 'midnight' ? 'light' : 'dark')}
             >
-              {theme === 'dark' ? '☀' : '☾'}
+              {theme === 'dark' || theme === 'midnight' ? '☀' : '☾'}
             </button>
             <button className="icon-btn" title="Log out" onClick={logout}>
               ⇥

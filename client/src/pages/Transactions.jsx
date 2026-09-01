@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, formatMoney } from '../api.js';
 import { Modal, useDialogs } from '../components/Dialog.jsx';
+import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
+  const { month: workingMonth, setMonth: setWorkingMonth } = useWorkingMonth();
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState([]);
-  const [month, setMonth] = useState(params.get('month') || '');
+  const [month, setMonth] = useState(params.get('month') || workingMonth);
   const [review, setReviewOnly] = useState(params.get('review') === '1');
   const [suggestions, setSuggestions] = useState(null);
   const [aiBusy, setAiBusy] = useState(false);
@@ -45,8 +47,8 @@ export default function Transactions() {
   // a "needs review" link while already on the page now refilters too.
   useEffect(() => {
     setReviewOnly(params.get('review') === '1');
-    setMonth(params.get('month') || '');
-  }, [params]);
+    setMonth(params.get('month') || workingMonth);
+  }, [params, workingMonth]);
 
   // A request-sequence guard: the newest request wins, so fast month/filter
   // switching can never let an older response clobber a newer one.
@@ -337,7 +339,14 @@ export default function Transactions() {
       <div className="filters card">
         <label>
           Month
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => {
+              setMonth(e.target.value);
+              setWorkingMonth(e.target.value);
+            }}
+          />
         </label>
         <button
           className={`btn ghost ${review ? 'active' : ''}`}

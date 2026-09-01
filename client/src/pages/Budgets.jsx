@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { api, currentMonth, monthLabel } from '../api.js';
+import { api, monthLabel } from '../api.js';
+import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
 // Budgets: per-month plan per category. Editing saves an override for the
 // selected month; the standing monthly plan is editable too.
 export default function Budgets() {
-  const [month, setMonth] = useState(currentMonth());
+  const { month } = useWorkingMonth();
   const [meta, setMeta] = useState({ groups: [], accounts: [] });
   const [lines, setLines] = useState([]);
   const [edits, setEdits] = useState({});
@@ -105,9 +106,6 @@ export default function Budgets() {
     <div>
       <div className="page-head">
         <h1>Budgets — {monthLabel(month)}</h1>
-        <div className="month-nav">
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-        </div>
       </div>
       <p className="muted">
         “Plan for {monthLabel(month)}” overrides the standing plan for that month only. Every

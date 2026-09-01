@@ -18,7 +18,7 @@ function validateScenarioRequest(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return 'Request body must be an object';
   }
-  if (Object.keys(body).some((key) => !['horizon', 'scenarios'].includes(key))) {
+  if (Object.keys(body).some((key) => !['horizon', 'from', 'scenarios'].includes(key))) {
     return 'Request contains an unknown field';
   }
   if (!Number.isInteger(body.horizon) || body.horizon < 1 || body.horizon > 240) {
@@ -26,6 +26,9 @@ function validateScenarioRequest(body) {
   }
   if (!Array.isArray(body.scenarios) || body.scenarios.length < 1 || body.scenarios.length > 3) {
     return 'scenarios must contain between 1 and 3 scenarios';
+  }
+  if (body.from !== undefined && (typeof body.from !== 'string' || !MONTH_RE.test(body.from))) {
+    return 'from must be YYYY-MM';
   }
 
   for (let index = 0; index < body.scenarios.length; index++) {
@@ -76,7 +79,7 @@ router.post('/scenarios', (req, res) => {
   const error = validateScenarioRequest(req.body);
   if (error) return res.status(400).json({ error });
 
-  const baseline = project(req.body.horizon);
+  const baseline = project(req.body.horizon, req.body.from);
   res.json({
     baseline,
     scenarios: req.body.scenarios.map((scenario) => ({

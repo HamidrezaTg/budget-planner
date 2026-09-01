@@ -8,6 +8,7 @@ const dir = freshDataDir();
 const dbm = await loadDb(dir);
 const accountsRoute = (await import('../server/routes/accounts.js')).default;
 const personsRoute = (await import('../server/routes/persons.js')).default;
+const incomeRoute = (await import('../server/routes/income.js')).default;
 const { als } = dbm;
 after(() => {
   cleanup(dir);
@@ -20,6 +21,7 @@ function app() {
   a.use((_req, _res, next) => als.run(dbm.getUserDb('test-user'), next));
   a.use('/api/accounts', accountsRoute);
   a.use('/api/persons', personsRoute);
+  a.use('/api/income', incomeRoute);
   return a;
 }
 function call(method, path, body) {
@@ -129,4 +131,28 @@ test('person: create + list + rename + delete', async () => {
   assert.equal(r.body.name, 'Alicia');
   const d = await call('DELETE', `/api/persons/${c.body.id}`);
   assert.equal(d.status, 200);
+});
+
+test('income source: create, update, and delete', async () => {
+  const person = await call('POST', '/api/persons', { name: 'Salary owner' });
+  const created = await call('POST', '/api/income/sources', {
+    name: 'Contract work',
+    current_amount: 1200,
+    person_id: person.body.id,
+    recurring: false,
+  });
+  assert.equal(created.status, 200);
+  assert.equal(created.body.current_amount, 1200);
+  assert.equal(created.body.recurring, 0);
+  const updated = await call('PATCH', `/api/income/sources/${created.body.id}`, {
+    name: 'Consulting',
+    current_amount: 1500,
+    recurring: true,
+    person_id: null,
+  });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.name, 'Consulting');
+  assert.equal(updated.body.person_id, null);
+  const deleted = await call('DELETE', `/api/income/sources/${created.body.id}`);
+  assert.equal(deleted.status, 200);
 });

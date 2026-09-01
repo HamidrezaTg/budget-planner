@@ -182,7 +182,8 @@ export function incomeForMonth(month) {
   return { total, parts };
 }
 
-// Sum of planned spend on Revolut-tagged categories — the monthly transfer.
+// Sum of planned spend on Revolut-tagged categories minus completed incoming
+// transfer rows. Ordinary income or refunds do not reduce the transfer need.
 export function transferToRevolut(month) {
   const cats = db
     .prepare(
@@ -190,7 +191,22 @@ export function transferToRevolut(month) {
        WHERE a.kind = 'revolut'`,
     )
     .all();
-  return cats.reduce((sum, c) => sum + plannedForCategory(c, month), 0);
+  const planned = cats.reduce((sum, c) => sum + plannedForCategory(c, month), 0);
+  const transferred = completedTransferToRevolut(month);
+  return Math.max(0, planned - transferred);
+}
+
+export function completedTransferToRevolut(month) {
+  return db
+    .prepare(
+      `SELECT t.amount, t.currency FROM transactions t
+       JOIN accounts a ON a.id = t.account_id
+       WHERE a.kind = 'revolut' AND t.amount > 0
+         AND t.transfer_group IS NOT NULL
+         AND substr(t.date, 1, 7) = ? AND ${NOT_PARENT('t')}`,
+    )
+    .all(month)
+    .reduce((sum, t) => sum + convertCurrency(t.amount, t.currency, baseCurrency(), month), 0);
 }
 
 // Fund running balance at end of `month` (can go negative by design).
@@ -645,6 +661,7 @@ export function monthView(month) {
     actual_total: round2(totalsActual),
     month_result: round2(totalsPlanned - totalsActual),
     transfer_to_revolut: round2(transferToRevolut(month)),
+    completed_transfer_to_revolut: round2(completedTransferToRevolut(month)),
     funds,
     warnings: {
       untagged_categories: untagged,

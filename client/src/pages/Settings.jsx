@@ -332,22 +332,23 @@ export default function Settings({ me }) {
             Theme — Light or dark mode. Applies to the web client and the Android app.
           </p>
           <div className="pill-row" role="group" aria-label="Theme">
-            <button
-              className={`btn ${theme === 'light' ? 'primary' : 'ghost'}`}
-              onClick={() => pickTheme('light')}
-              aria-pressed={theme === 'light'}
-              title="Use the light theme"
-            >
-              Light
-            </button>
-            <button
-              className={`btn ${theme === 'dark' ? 'primary' : 'ghost'}`}
-              onClick={() => pickTheme('dark')}
-              aria-pressed={theme === 'dark'}
-              title="Use the dark theme"
-            >
-              Dark
-            </button>
+            {[
+              ['system', 'System'],
+              ['light', 'Light'],
+              ['dark', 'Dark'],
+              ['midnight', 'Midnight'],
+              ['forest', 'Forest'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                className={`btn ${theme === value ? 'primary' : 'ghost'}`}
+                onClick={() => pickTheme(value)}
+                aria-pressed={theme === value}
+                title={`Use the ${label.toLowerCase()} theme`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
         <div className="settings-section">

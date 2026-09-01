@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api, eur, currentMonth } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
+import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
 export default function Funds() {
+  const { month } = useWorkingMonth();
   const [data, setData] = useState(null);
   const [amounts, setAmounts] = useState({});
   const [msg, setMsg] = useState('');
@@ -17,12 +19,12 @@ export default function Funds() {
 
   const load = () =>
     api
-      .get('/funds')
+      .get(`/funds?month=${month}`)
       .then(setData)
       .catch((e) => setMsg(e.message));
   useEffect(() => {
     load();
-  }, []);
+  }, [month]);
   if (!data) return <div className="loading">{msg ? `Failed to load: ${msg}` : 'Loading…'}</div>;
 
   const move = async (fundId, kind) => {
@@ -201,7 +203,7 @@ export default function Funds() {
                 <th className="num">Balance</th>
                 <th>Goal</th>
                 <th className="num">Monthly contribution</th>
-                <th style={{ minWidth: 250 }}>Move money</th>
+                <th style={{ minWidth: 250 }}>Add or withdraw</th>
                 <th></th>
               </tr>
             </thead>
@@ -331,19 +333,19 @@ export default function Funds() {
                       />
                       <button
                         className="btn small"
-                        title="Record a contribution into this fund"
+                        title="Add money to this fund"
                         disabled={!amounts[f.id]}
                         onClick={() => move(f.id, 'contribution')}
                       >
-                        In
+                        Add
                       </button>
                       <button
                         className="btn small"
-                        title="Record a withdrawal from this fund"
+                        title="Withdraw money from this fund"
                         disabled={!amounts[f.id]}
                         onClick={() => move(f.id, 'withdrawal')}
                       >
-                        Out
+                        Withdraw
                       </button>
                     </div>
                   </td>
@@ -363,7 +365,7 @@ export default function Funds() {
         )}
       </div>
 
-      <h2>Recent movements</h2>
+      <h2>Recent fund activity</h2>
       <div className="card table-card tight">
         <table>
           <thead>

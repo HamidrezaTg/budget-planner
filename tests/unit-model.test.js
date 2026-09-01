@@ -15,6 +15,8 @@ const {
   fundBalanceAt,
   accountBalanceAt,
   convertCurrency,
+  transferToRevolut,
+  completedTransferToRevolut,
 } = await import('../server/services/model.js');
 after(() => {
   cleanup(dir);
@@ -185,6 +187,31 @@ test('transfer rows are excluded from category spend and from month totals', () 
     assert.equal(view.actual_total, 80);
   });
   dbm.closeUserDb('xfer-user');
+});
+
+test('Revolut transfer need subtracts completed incoming transfers', () => {
+  const db = dbm.getUserDb('revolut-user');
+  dbm.als.run(db, () => {
+    db.prepare('DELETE FROM transactions').run();
+    db.prepare('DELETE FROM categories').run();
+    db.prepare('DELETE FROM accounts').run();
+    const revolut = db
+      .prepare("INSERT INTO accounts (name, kind) VALUES ('Revolut', 'revolut')")
+      .run().lastInsertRowid;
+    db.prepare(
+      "INSERT INTO categories (name, monthly_budget, account_id) VALUES ('Daily spend', 250, ?)",
+    ).run(revolut);
+    const month = currentMonth();
+    db.prepare(
+      `INSERT INTO transactions (date, description, amount, currency, account_id, transfer_group, dedup_key)
+       VALUES (?, 'Top up', 100, 'EUR', ?, 'transfer-1', 'revolut-transfer')`,
+    ).run(`${month}-01`, revolut);
+    assert.equal(completedTransferToRevolut(month), 100);
+    assert.equal(transferToRevolut(month), 150);
+    db.prepare('UPDATE transactions SET amount = 300').run();
+    assert.equal(transferToRevolut(month), 0);
+  });
+  dbm.closeUserDb('revolut-user');
 });
 
 test('a transaction linked to a fund draws the fund balance down', () => {

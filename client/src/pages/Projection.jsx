@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { api, eur, currentMonth } from '../api.js';
+import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
 const monthNames = [
   'Jan',
@@ -36,6 +37,7 @@ const blankScenario = () => ({
 });
 
 export default function Projection() {
+  const { month } = useWorkingMonth();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [horizon, setHorizon] = useState('96');
@@ -45,13 +47,13 @@ export default function Projection() {
 
   useEffect(() => {
     api
-      .get('/projection?months=96')
+      .get(`/projection?months=96&from=${month}`)
       .then((projection) => {
         setData(projection);
         setHorizon(String(projection.horizon));
       })
       .catch((e) => setError(e.message));
-  }, []);
+  }, [month]);
 
   const updateScenario = (index, patch) => {
     setScenarioForms((previous) =>
@@ -113,6 +115,7 @@ export default function Projection() {
     try {
       const result = await api.post('/projection/scenarios', {
         horizon: numericHorizon,
+        from: month,
         scenarios: scenarioForms.map((scenario) => ({
           name: scenario.name.trim(),
           monthly_income_delta: Number(scenario.monthly_income_delta),

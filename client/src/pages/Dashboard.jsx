@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, eur, currentMonth, monthLabel } from '../api.js';
+import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
 const GROUP_COLORS = {
   Housing: '#3157d5',
@@ -13,7 +14,7 @@ const GROUP_COLORS = {
 };
 
 export default function Dashboard() {
-  const [month, setMonth] = useState(currentMonth());
+  const { month, setMonth } = useWorkingMonth();
   const [data, setData] = useState(null);
   const [upcoming, setUpcoming] = useState(null);
 
@@ -109,10 +110,10 @@ export default function Dashboard() {
       <div className="stats-row">
         <div className="card stat highlight">
           <div className="stat-label">
-            <span>Transfer to Revolut</span>
+            <span>Still to transfer to Revolut</span>
           </div>
           <div className="stat-value">{eur(data.transfer_to_revolut)}</div>
-          <p>move this amount to your spending account</p>
+          <p>{eur(data.completed_transfer_to_revolut)} already transferred this month</p>
           <div className="safe-meter">
             <i style={{ width: `${spentPct}%` }} />
           </div>

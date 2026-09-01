@@ -14,6 +14,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { api, eur } from '../api.js';
+import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
 const fmtEur = (v) => eur(v);
 const monthNames = [
@@ -50,34 +51,43 @@ function previousMonth(month) {
 }
 
 export default function Reports() {
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(
-    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-  );
+  const { month } = useWorkingMonth();
+  const [year, setYear] = useState(Number(month.slice(0, 4)));
   const [monthly, setMonthly] = useState(null);
   const [previousMonthly, setPreviousMonthly] = useState(null);
   const [yearly, setYearly] = useState(null);
   const [history, setHistory] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [accountId, setAccountId] = useState('');
   const [trendCategory, setTrendCategory] = useState('');
   const [error, setError] = useState('');
 
+  useEffect(() => setYear(Number(month.slice(0, 4))), [month]);
   useEffect(() => {
     api
-      .get(`/reports/monthly/${month}`)
+      .get('/accounts')
+      .then(setAccounts)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const query = accountId ? `?account_id=${accountId}` : '';
+    api
+      .get(`/reports/monthly/${month}${query}`)
       .then(setMonthly)
       .catch((e) => setError(e.message));
     api
-      .get(`/reports/monthly/${previousMonth(month)}`)
+      .get(`/reports/monthly/${previousMonth(month)}${query}`)
       .then(setPreviousMonthly)
       .catch(() => setPreviousMonthly(null));
-  }, [month]);
+  }, [month, accountId]);
   useEffect(() => {
+    const query = accountId ? `?account_id=${accountId}` : '';
     api
-      .get(`/reports/yearly/${year}`)
+      .get(`/reports/yearly/${year}${query}`)
       .then(setYearly)
       .catch((e) => setError(e.message));
-  }, [year]);
+  }, [year, accountId]);
   useEffect(() => {
     // also triggers capture of any closed months still missing a snapshot
     api
@@ -102,6 +112,7 @@ export default function Reports() {
     return { name: monthNames[index], spent: row ? Math.abs(row.spent) : 0 };
   });
   const printReport = () => window.print();
+  const exportQuery = accountId ? `?account_id=${accountId}` : '';
 
   return (
     <div>
@@ -111,12 +122,23 @@ export default function Reports() {
       <div className="filters card">
         <label>
           Month
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+          <span>{month}</span>
         </label>
-        <a className="btn ghost" href={`/api/reports/export/monthly/${month}`}>
+        <label>
+          Account
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <option value="">All accounts</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <a className="btn ghost" href={`/api/reports/export/monthly/${month}${exportQuery}`}>
           ⬇ Export monthly CSV
         </a>
-        <a className="btn ghost" href={`/api/reports/export/monthly/${month}.xlsx`}>
+        <a className="btn ghost" href={`/api/reports/export/monthly/${month}.xlsx${exportQuery}`}>
           ⬇ Excel
         </a>
         <label style={{ marginLeft: 16 }}>
@@ -128,10 +150,10 @@ export default function Reports() {
             style={{ width: 90 }}
           />
         </label>
-        <a className="btn ghost" href={`/api/reports/export/yearly/${year}`}>
+        <a className="btn ghost" href={`/api/reports/export/yearly/${year}${exportQuery}`}>
           ⬇ Export yearly CSV
         </a>
-        <a className="btn ghost" href={`/api/reports/export/yearly/${year}.xlsx`}>
+        <a className="btn ghost" href={`/api/reports/export/yearly/${year}.xlsx${exportQuery}`}>
           ⬇ Excel
         </a>
         <button className="btn ghost print-report" onClick={printReport}>
