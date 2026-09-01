@@ -134,6 +134,67 @@ git push --follow-tags
 - [x] v3.18.5 ntfy.sh push notifications (Android only).
 - [x] v3.18.6 Tag `v3.18.0`, push `--follow-tags`.
 
+## External follow-up plan
+
+The remaining items require operating systems, external accounts, or secrets
+that are not available in this Linux workspace. Keep their roadmap checkboxes
+unchecked until the evidence listed below is recorded.
+
+### v3.13.9 Native runtime checks
+
+Use the released `v3.18.1` desktop bundles, or a newer release, and run the
+checks in `docs/OS_TEST_MATRIX.md`:
+
+- [ ] Linux: launch the `.deb` or AppImage, select a valid server, switch
+      servers, test the menu/tray behavior, and confirm invalid discovery URLs
+      are rejected.
+- [ ] macOS: open the unsigned DMG, use **Open Anyway** if prompted, select a
+      valid server, switch servers, and verify the native menu, dock, and
+      single-instance behavior.
+- [ ] Windows: install the NSIS or MSI bundle, select a valid server, switch
+      servers, and verify taskbar/tray behavior and invalid discovery rejection.
+- [ ] For every platform, confirm the client remembers valid URLs and never
+      creates or exposes a local budget database.
+- [ ] Record OS version, bundle filename, date, and pass/fail notes in
+      `docs/OS_TEST_MATRIX.md`, then mark v3.13.9 complete.
+
+### v3.15.4 AUR publication
+
+This is separate from the CI package validation, which already passes:
+
+- [ ] Create or use an AUR maintainer account with SSH access.
+- [ ] From the project root, run `./scripts/build-aur.sh` to regenerate and
+      validate `packaging/aur/budget-planner-client/PKGBUILD` and `.SRCINFO`.
+- [ ] Clone the AUR repository with
+      `git clone ssh://aur@aur.archlinux.org/budget-planner-client.git`.
+- [ ] Copy the generated `PKGBUILD` and `.SRCINFO` into that checkout, review
+      the version, source URL, and checksum, then commit and push to AUR.
+- [ ] Verify the package can be installed from AUR, record the package URL and
+      submission date, then mark v3.15.4 complete.
+
+### v3.16.3 Tauri updater channel
+
+The updater plugin is installed but intentionally not enabled for public
+updates. Complete the implementation and key setup together:
+
+- [ ] Generate a Tauri updater key once, or provide an existing project key,
+      using `npm run tauri signer generate -- -w ~/.tauri/budget-planner.key`
+      from `desktop-client-tauri/`.
+- [ ] Back up the private key securely. Never commit it, paste it into chat, or
+      store it in the repository. The public key may be committed.
+- [ ] Add the public key and the GitHub Releases `latest.json` endpoint to the
+      updater section of `desktop-client-tauri/src-tauri/tauri.conf.json`.
+- [ ] Set `bundle.createUpdaterArtifacts` to `true` and update the release
+      workflow to sign and publish updater artifacts for Linux, macOS, and
+      Windows, including each platform's `.sig` file and static JSON metadata.
+- [ ] Configure repository secrets `TAURI_SIGNING_PRIVATE_KEY` and, if used,
+      `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Do not put either value in source.
+- [ ] Install an older signed desktop build, publish a newer signed release,
+      and verify the client detects, verifies, downloads, and installs the
+      update on each supported OS.
+- [ ] Record the public key location, endpoint, release URL, and OS results in
+      `docs/DESKTOP_CLIENT.md`, then mark v3.16.3 complete.
+
 ## Postponed (per your instructions)
 
 - GoCardless/PSD2 bank synchronization.
