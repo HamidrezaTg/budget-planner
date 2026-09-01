@@ -44,8 +44,10 @@ export default function Dashboard() {
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   };
 
+  const budgetActualTotal = data.budget_actual_total ?? data.actual_total;
+  const coveredTotal = (data.fund_covered_total ?? 0) + (data.commitment_covered_total ?? 0);
   const spentPct =
-    data.planned_total > 0 ? Math.min(100, (data.actual_total / data.planned_total) * 100) : 0;
+    data.planned_total > 0 ? Math.min(100, (budgetActualTotal / data.planned_total) * 100) : 0;
   const isCurrent = month === currentMonth();
 
   // Server sends raw numbers in `fields`; format here so amounts follow the
@@ -73,7 +75,7 @@ export default function Dashboard() {
           <p className="eyebrow">Monthly check-in</p>
           <h1>{monthLabel(month)}</h1>
           <p className="muted">
-            Planned {eur(data.planned_total)} · Actual {eur(data.actual_total)} · Income{' '}
+            Planned {eur(data.planned_total)} · Spent {eur(data.actual_total)} · Income{' '}
             {eur(data.income)}
           </p>
         </div>
@@ -131,18 +133,22 @@ export default function Dashboard() {
           </div>
           <div className="stat-value">{eur(data.actual_total)}</div>
           <p>
-            of {eur(data.planned_total)} planned · {Math.round(spentPct)}%
+            {eur(budgetActualTotal)} charged to categories · {eur(coveredTotal)} covered
           </p>
         </div>
         <div className="card stat">
           <div className="stat-label">
             <span>Month result</span>
           </div>
-          <div className={`stat-value ${data.month_result >= 0 ? 'income' : 'expense'}`}>
-            {data.month_result >= 0 ? '+' : ''}
-            {eur(data.month_result)}
+          <div
+            className={`stat-value ${(data.budget_result ?? data.month_result) >= 0 ? 'income' : 'expense'}`}
+          >
+            {(data.budget_result ?? data.month_result) >= 0 ? '+' : ''}
+            {eur(data.budget_result ?? data.month_result)}
           </div>
-          <p>{data.month_result >= 0 ? 'under' : 'over'} the plan, all groups</p>
+          <p>
+            {(data.budget_result ?? data.month_result) >= 0 ? 'under' : 'over'} the category plan
+          </p>
         </div>
         <Link to="/transactions?review=1" className="card stat review-link">
           <div className="stat-label">
@@ -236,19 +242,27 @@ export default function Dashboard() {
                 <h2>
                   {eur(g.actual)}{' '}
                   <span className="muted" style={{ fontSize: 14 }}>
-                    of {eur(g.planned)} planned
+                    spent · {eur(g.budget_actual ?? g.actual)} charged to plan
                   </span>
                 </h2>
               </div>
-              <span className={g.difference >= 0 ? 'count-pill good' : 'count-pill bad'}>
-                {g.difference >= 0 ? `${eur(g.difference)} under` : `${eur(-g.difference)} over`}
+              <span
+                className={
+                  (g.budget_difference ?? g.difference) >= 0 ? 'count-pill good' : 'count-pill bad'
+                }
+              >
+                {(g.budget_difference ?? g.difference) >= 0
+                  ? `${eur(g.budget_difference ?? g.difference)} under`
+                  : `${eur(-(g.budget_difference ?? g.difference))} over`}
               </span>
             </div>
             {g.rows.map((r) => {
+              const budgetActual = r.budget_actual ?? r.actual;
+              const covered = (r.fund_covered ?? 0) + (r.commitment_covered ?? 0);
               const pct =
                 r.planned > 0
-                  ? Math.min(100, (r.actual / r.planned) * 100)
-                  : r.actual > 0
+                  ? Math.min(100, (budgetActual / r.planned) * 100)
+                  : budgetActual > 0
                     ? 100
                     : 0;
               return (
@@ -262,24 +276,27 @@ export default function Dashboard() {
                     <i
                       style={{
                         width: `${pct}%`,
-                        background: r.planned > 0 && r.actual > r.planned ? 'var(--red)' : color,
+                        background:
+                          r.planned > 0 && budgetActual > r.planned ? 'var(--red)' : color,
                       }}
                     />
                   </div>
                   <div className="category-meta">
                     <span>
                       {r.planned > 0
-                        ? `${Math.round((r.actual / r.planned) * 100)}% used`
+                        ? `${Math.round((budgetActual / r.planned) * 100)}% of plan used`
                         : 'no plan'}
                     </span>
                     <span>
-                      {r.planned > 0
-                        ? r.difference >= 0
-                          ? `${eur(r.difference)} left`
-                          : `${eur(-r.difference)} over`
-                        : r.actual > 0
-                          ? 'untagged plan'
-                          : ''}
+                      {covered > 0
+                        ? `${r.fund_covered > 0 ? `Fund ${eur(r.fund_covered)}` : ''}${r.commitment_covered > 0 ? `${r.fund_covered > 0 ? ' · ' : ''}Commitment ${eur(r.commitment_covered)}` : ''}${r.planned > 0 ? ` · ${eur(Math.max(0, r.planned - budgetActual))} left` : ''}`
+                        : r.planned > 0
+                          ? budgetActual <= r.planned
+                            ? `${eur(r.planned - budgetActual)} left`
+                            : `${eur(budgetActual - r.planned)} over`
+                          : budgetActual > 0
+                            ? 'untagged plan'
+                            : ''}
                     </span>
                   </div>
                 </div>

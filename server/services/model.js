@@ -168,6 +168,46 @@ export function actualByCategory(month) {
   return map;
 }
 
+// Break category actuals into the portions paid from a fund or attributed to a
+// commitment. `actual` remains the existing net category actual; coverage only
+// describes negative (spending) rows and therefore cannot turn refunds into
+// covered budget. A row carrying both links is covered once in budget_actual.
+export function actualCoverageByCategory(month) {
+  const rows = db
+    .prepare(
+      `SELECT t.category_id, ${FX_MULT} * t.amount AS amount,
+              t.fund_id, t.commitment_id
+       FROM transactions t ${FX_JOIN}
+       WHERE substr(t.date,1,7) = ? AND t.category_id IS NOT NULL AND ${NOT_COUNTED()}`,
+    )
+    .all(month);
+  const map = {};
+  for (const row of rows) {
+    const item = (map[row.category_id] ??= {
+      total_actual: 0,
+      actual_total: 0,
+      fund_covered: 0,
+      commitment_covered: 0,
+    });
+    item.total_actual -= row.amount;
+    item.actual_total = item.total_actual;
+    if (row.amount >= 0) continue;
+    const spent = -row.amount;
+    if (row.fund_id != null) item.fund_covered += spent;
+    if (row.commitment_id != null) item.commitment_covered += spent;
+  }
+  for (const item of Object.values(map)) {
+    const covered = Math.min(
+      Math.max(0, item.total_actual),
+      item.fund_covered + item.commitment_covered,
+    );
+    item.budget_actual = Math.max(0, item.total_actual - covered);
+    item.uncovered_amount = item.budget_actual;
+    item.uncovered = item.budget_actual;
+  }
+  return map;
+}
+
 export function incomeForMonth(month) {
   const sources = db.prepare('SELECT * FROM income_sources ORDER BY id').all();
   let total = 0;
@@ -454,8 +494,8 @@ function insightsForMonth(month, view) {
   }
 
   view.rows
-    .filter((r) => r.planned > 0 && r.actual > r.planned)
-    .sort((a, b) => b.actual - b.planned - (a.actual - a.planned))
+    .filter((r) => r.planned > 0 && r.budget_actual > r.planned)
+    .sort((a, b) => b.budget_actual - b.planned - (a.budget_actual - a.planned))
     .slice(0, 4)
     .forEach((r) => {
       insights.push({
@@ -465,15 +505,15 @@ function insightsForMonth(month, view) {
         message: '',
         link: '/budgets',
         action: 'Open budgets',
-        fields: { amount_over: round2(r.actual - r.planned) },
+        fields: { amount_over: round2(r.budget_actual - r.planned) },
       });
     });
 
   if (month === currentMonth() && view.planned_total > 0) {
     const now = new Date();
     const elapsed = now.getDate() / daysInMonth(month);
-    const spent = view.actual_total / view.planned_total;
-    if (spent > elapsed + 0.1 && view.actual_total > 0) {
+    const spent = (view.budget_actual_total ?? view.actual_total) / view.planned_total;
+    if (spent > elapsed + 0.1 && (view.budget_actual_total ?? view.actual_total) > 0) {
       insights.push({
         kind: 'pace',
         severity: 'warning',
@@ -584,9 +624,18 @@ function insightsForMonth(month, view) {
 export function monthView(month) {
   const cats = getAllCategories();
   const actuals = actualByCategory(month);
+  const coverage = actualCoverageByCategory(month);
   const rows = cats.map((c) => {
     const planned = plannedForCategory(c, month);
     const actualNet = actuals[c.id] ?? 0;
+    const covered = coverage[c.id] ?? {
+      total_actual: actualNet,
+      actual_total: actualNet,
+      fund_covered: 0,
+      commitment_covered: 0,
+      budget_actual: Math.max(0, actualNet),
+      uncovered_amount: Math.max(0, actualNet),
+    };
     return {
       id: c.id,
       name: c.name,
@@ -596,7 +645,14 @@ export function monthView(month) {
       account: c.account_name,
       planned,
       actual: round2(actualNet),
+      total_actual: round2(actualNet),
+      fund_covered: round2(covered.fund_covered),
+      commitment_covered: round2(covered.commitment_covered),
+      budget_actual: round2(covered.budget_actual),
+      uncovered_amount: round2(covered.uncovered_amount),
+      uncovered: round2(covered.uncovered_amount),
       difference: round2(planned - actualNet),
+      budget_difference: round2(planned - covered.budget_actual),
     };
   });
 
@@ -608,18 +664,37 @@ export function monthView(month) {
       sort: r.group_sort,
       planned: 0,
       actual: 0,
+      total_actual: 0,
+      actual_total: 0,
+      fund_covered: 0,
+      commitment_covered: 0,
+      budget_actual: 0,
+      uncovered_amount: 0,
+      uncovered: 0,
       difference: 0,
+      budget_difference: 0,
       rows: [],
     };
     groupsMap[g].planned += r.planned;
     groupsMap[g].actual += r.actual;
+    groupsMap[g].total_actual += r.total_actual;
+    groupsMap[g].actual_total += r.actual_total;
+    groupsMap[g].fund_covered += r.fund_covered;
+    groupsMap[g].commitment_covered += r.commitment_covered;
+    groupsMap[g].budget_actual += r.budget_actual;
+    groupsMap[g].uncovered_amount += r.uncovered_amount;
+    groupsMap[g].uncovered += r.uncovered;
     groupsMap[g].difference += r.difference;
+    groupsMap[g].budget_difference += r.budget_difference;
     groupsMap[g].rows.push(r);
   }
   const groups = Object.values(groupsMap).sort((a, b) => a.sort - b.sort);
 
   const totalsPlanned = rows.reduce((s, r) => s + r.planned, 0);
   const totalsActual = rows.reduce((s, r) => s + r.actual, 0);
+  const totalsFundCovered = rows.reduce((s, r) => s + r.fund_covered, 0);
+  const totalsCommitmentCovered = rows.reduce((s, r) => s + r.commitment_covered, 0);
+  const totalsBudgetActual = rows.reduce((s, r) => s + r.budget_actual, 0);
   const inc = incomeForMonth(month);
 
   const untagged = cats.filter((c) => !c.account_id && c.is_active).map((c) => c.name);
@@ -663,6 +738,11 @@ export function monthView(month) {
     })),
     planned_total: round2(totalsPlanned),
     actual_total: round2(totalsActual),
+    fund_covered_total: round2(totalsFundCovered),
+    commitment_covered_total: round2(totalsCommitmentCovered),
+    budget_actual_total: round2(totalsBudgetActual),
+    uncovered_total: round2(totalsBudgetActual),
+    budget_result: round2(totalsPlanned - totalsBudgetActual),
     month_result: round2(totalsPlanned - totalsActual),
     transfer_to_revolut: round2(transferToRevolut(month)),
     completed_transfer_to_revolut: round2(completedTransferToRevolut(month)),

@@ -286,6 +286,187 @@ test('full import → split → delete-parent flow removes split children via th
   assert.equal(listedAfter.rows.length, 0);
 });
 
+test('transaction links, transfer pairing, coverage, and paired deletion are enforced', async () => {
+  const source = await api('/accounts', 'POST', { name: 'Workflow source' }, cookies);
+  const target = await api('/accounts', 'POST', { name: 'Workflow target' }, cookies);
+  const category = await api(
+    '/categories',
+    'POST',
+    { name: 'Workflow category', account_id: source.id },
+    cookies,
+  );
+  const fund = await api(
+    '/funds',
+    'POST',
+    { name: 'Workflow fund', start_month: '2026-06' },
+    cookies,
+  );
+  const commitment = await api(
+    '/commitments',
+    'POST',
+    {
+      name: 'Workflow commitment',
+      start_month: '2026-06',
+      monthly_amount: 30,
+      account_id: source.id,
+      category_id: category.id,
+    },
+    cookies,
+  );
+
+  const invalid = await fetch(`${srv.url}/api/transactions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({
+      date: '2026-06-20',
+      description: 'Invalid link',
+      amount: -1,
+      account_id: 999999,
+      commitment_id: 999999,
+    }),
+  });
+  assert.equal(invalid.status, 400);
+
+  const invalidSources = await api(
+    '/transactions',
+    'POST',
+    {
+      date: '2026-06-20',
+      description: 'Two funding sources',
+      amount: -1,
+      fund_id: fund.id,
+      commitment_id: commitment.id,
+    },
+    cookies,
+  ).catch((error) => ({ error }));
+  assert.match(invalidSources.error?.message ?? '', /fund or commitment/i);
+
+  await api(
+    '/transactions',
+    'POST',
+    {
+      date: '2026-06-20',
+      description: 'Fund-covered payment',
+      amount: -20,
+      account_id: source.id,
+      category_id: category.id,
+      fund_id: fund.id,
+    },
+    cookies,
+  );
+  await api(
+    '/transactions',
+    'POST',
+    {
+      date: '2026-06-20',
+      description: 'Commitment-covered payment',
+      amount: -30,
+      account_id: source.id,
+      category_id: category.id,
+      commitment_id: commitment.id,
+    },
+    cookies,
+  );
+  const listed = await api('/transactions', 'GET', null, cookies);
+  const covered = listed.rows.find((row) => row.description === 'Commitment-covered payment');
+  assert.equal(covered.commitment_name, 'Workflow commitment');
+  const commitments = await api('/commitments?month=2026-06', 'GET', null, cookies);
+  const paidCommitment = commitments.find((row) => row.id === commitment.id);
+  assert.equal(paidCommitment.paid_amount, 30);
+  assert.equal(paidCommitment.payment_status, 'paid');
+
+  const invalidPatch = await fetch(`${srv.url}/api/transactions/${covered.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ account_id: 999999 }),
+  });
+  assert.equal(invalidPatch.status, 400);
+
+  const dashboard = await api('/dashboard/2026-06', 'GET', null, cookies);
+  const coverage = dashboard.rows.find((row) => row.id === category.id);
+  assert.equal(coverage.actual, 50);
+  assert.equal(coverage.total_actual, 50);
+  assert.equal(coverage.fund_covered, 20);
+  assert.equal(coverage.commitment_covered, 30);
+  assert.equal(coverage.budget_actual, 0);
+  assert.equal(coverage.uncovered_amount, 0);
+
+  const transfer = await api(
+    '/transactions/transfer',
+    'POST',
+    {
+      source_account_id: source.id,
+      target_account_id: target.id,
+      amount: 42,
+      date: '2026-06-21',
+      description: 'Workflow transfer',
+    },
+    cookies,
+  );
+  assert.equal(transfer.transactions.length, 2);
+  assert.equal(transfer.transactions[0].transfer_group, transfer.transfer_group);
+  assert.equal(transfer.transactions[0].category_id, null);
+
+  const existing = await api(
+    '/transactions',
+    'POST',
+    [
+      {
+        date: '2026-06-22',
+        description: 'Imported transfer out',
+        amount: -8,
+        account_id: source.id,
+      },
+      {
+        date: '2026-06-23',
+        description: 'Imported transfer in',
+        amount: 8,
+        account_id: target.id,
+      },
+    ],
+    cookies,
+  );
+  await api(`/transactions/${existing.ids[0]}`, 'PATCH', { category_id: category.id }, cookies);
+  const pair = await api(
+    '/transactions/transfer/pair',
+    'POST',
+    { transaction_a_id: existing.ids[0], transaction_b_id: existing.ids[1] },
+    cookies,
+  );
+  assert.equal(pair.transactions[0].transfer_group, pair.transfer_group);
+  assert.equal(pair.transactions[0].category_id, null);
+  const unpaired = await api(`/transactions/${existing.ids[0]}/unpair`, 'POST', null, cookies);
+  assert.equal(unpaired.unpaired, 2);
+  const existingRows = (await api('/transactions', 'GET', null, cookies)).rows.filter((row) =>
+    existing.ids.includes(row.id),
+  );
+  assert.equal(
+    existingRows.every((row) => row.transfer_group === null),
+    true,
+  );
+
+  const candidates = await api('/transactions/transfer/candidates', 'GET', null, cookies);
+  assert.equal(
+    candidates.candidates.some(
+      (candidate) =>
+        candidate.transaction_a_id === transfer.source_id ||
+        candidate.transaction_b_id === transfer.source_id,
+    ),
+    false,
+  );
+
+  const deleted = await fetch(
+    `${srv.url}/api/transactions/${transfer.source_id}?delete_partner=true`,
+    { method: 'DELETE', headers: { Cookie: cookies } },
+  );
+  assert.equal(deleted.status, 200);
+  const afterDelete = await api('/transactions', 'GET', null, cookies);
+  assert.equal(
+    afterDelete.rows.some((row) => transfer.ids.includes(row.id)),
+    false,
+  );
+});
+
 test('unknown API routes return a JSON 404', async () => {
   const r = await fetch(`${srv.url}/api/definitely-not-a-route`);
   assert.equal(r.status, 404);

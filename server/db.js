@@ -285,6 +285,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   split_group TEXT,                          -- set on all parts of a split
   split_of INTEGER REFERENCES transactions(id) ON DELETE CASCADE,
   fund_id INTEGER REFERENCES funds(id) ON DELETE SET NULL,   -- a transaction can be paid from a fund
+  commitment_id INTEGER REFERENCES commitments(id) ON DELETE SET NULL,
   transfer_group TEXT                        -- non-NULL: this row is part of a bank↔card transfer; excluded from spend/income sums
 );
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
@@ -422,6 +423,11 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
   try {
     db.exec('ALTER TABLE transactions ADD COLUMN transfer_group TEXT');
   } catch {}
+  try {
+    db.exec(
+      'ALTER TABLE transactions ADD COLUMN commitment_id INTEGER REFERENCES commitments(id) ON DELETE SET NULL',
+    );
+  } catch {}
 
   // These columns were added to older databases by the migrations above. Do
   // not create their indexes in the initial schema batch, or a legacy database
@@ -430,6 +436,7 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
 CREATE INDEX IF NOT EXISTS idx_tx_split_of ON transactions(split_of);
 CREATE INDEX IF NOT EXISTS idx_tx_transfer_group ON transactions(transfer_group);
 CREATE INDEX IF NOT EXISTS idx_tx_fund ON transactions(fund_id);
+CREATE INDEX IF NOT EXISTS idx_tx_commitment ON transactions(commitment_id);
   `);
 
   // Deduplication fingerprint now includes the transaction currency. Recompute

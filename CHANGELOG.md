@@ -3,6 +3,15 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.18.5] — 2026-09-01
+
+### Added
+- Add transaction deletion, paired account transfers, account reassignment, and fund/commitment links.
+- Show fund and commitment coverage separately from ordinary category budget usage.
+
+### Fixed
+- Imported transfer pairs no longer retain an incorrect spending category.
+
 ## [3.18.4] — 2026-09-01
 
 ### Fixed

@@ -13,6 +13,7 @@ function transferCandidates(preview = []) {
         id: tx.transfer_pair_id,
         date: tx.date,
         amount: Math.abs(tx.amount),
+        currency: tx.currency,
         first: tx.description,
         second: other?.description || 'matching entry',
         confidence: tx.transfer_pair_confidence,

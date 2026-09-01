@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { api, eur } from '../api.js';
+import { api, eur, monthLabel } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
+import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
 export default function Commitments() {
   const [rows, setRows] = useState([]);
@@ -13,10 +14,11 @@ export default function Commitments() {
   });
   const [edits, setEdits] = useState({});
   const { confirm, toast } = useDialogs();
+  const { month } = useWorkingMonth();
 
   const load = () =>
     api
-      .get('/commitments')
+      .get(`/commitments?month=${month}`)
       .then(setRows)
       .catch((e) => toast(e.message, 'error'));
   useEffect(() => {
@@ -25,7 +27,7 @@ export default function Commitments() {
       .get('/categories/meta/all')
       .then(setMeta)
       .catch(() => {});
-  }, []);
+  }, [month]);
 
   const add = async (e) => {
     e.preventDefault();
@@ -64,7 +66,8 @@ export default function Commitments() {
       <h1>Commitments</h1>
       <p className="muted">
         Fixed dated commitments — loans, instalments, plans. Each has a start and end month; the
-        projection automatically drops them out when they finish.
+        projection automatically drops them out when they finish. Payment status below is for{' '}
+        {monthLabel(month)}.
       </p>
 
       <div className="card table-card">
@@ -74,6 +77,7 @@ export default function Commitments() {
               <th>Name</th>
               <th>Account</th>
               <th className="num">Monthly</th>
+              <th className="num">Paid</th>
               <th>Start</th>
               <th>End</th>
               <th></th>
@@ -88,6 +92,10 @@ export default function Commitments() {
                 </td>
                 <td className="muted">{r.account_name ?? '—'}</td>
                 <td className="num">{eur(r.monthly_amount)}</td>
+                <td className={`num ${r.payment_status === 'paid' ? 'good' : ''}`}>
+                  {eur(r.paid_amount)}
+                  <span className="muted tiny"> · {r.payment_status}</span>
+                </td>
                 <td>{r.start_month}</td>
                 <td>
                   <input

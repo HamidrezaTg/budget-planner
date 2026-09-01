@@ -399,9 +399,89 @@
         "tags": ["Resources"],
         "summary": "Delete a transaction",
         "operationId": "deleteTransaction",
+        "parameters": [
+          {
+            "name": "delete_partner",
+            "in": "query",
+            "description": "When true, delete the paired transfer row atomically too.",
+            "schema": { "type": "boolean", "default": false }
+          }
+        ],
         "responses": {
           "200": { "$ref": "#/components/responses/JsonResponse" },
           "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/transfer": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create a paired manual transfer",
+        "operationId": "createTransfer",
+        "requestBody": { "$ref": "#/components/requestBodies/TransferCreate" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/transfer/candidates": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List possible transfer pairs",
+        "operationId": "listTransferCandidates",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/transactions/transfer/pair": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Pair existing transactions as a transfer",
+        "operationId": "pairTransfer",
+        "requestBody": { "$ref": "#/components/requestBodies/TransferPair" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/transfer/unpair": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Unpair a transfer",
+        "operationId": "unpairTransfer",
+        "requestBody": { "$ref": "#/components/requestBodies/TransferUnpair" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/{id}/pair": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Pair a transaction with another transaction",
+        "operationId": "pairTransaction",
+        "requestBody": { "$ref": "#/components/requestBodies/TransferPair" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/{id}/unpair": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Unpair a transaction",
+        "operationId": "unpairTransaction",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
           "404": { "$ref": "#/components/responses/ErrorResponse" }
         }
       }
@@ -586,6 +666,7 @@
         "tags": ["Resources"],
         "summary": "List commitments",
         "operationId": "listCommitments",
+        "parameters": [{ "$ref": "#/components/parameters/MonthQuery" }],
         "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
       },
       "post": {
@@ -1464,6 +1545,24 @@
           }
         }
       },
+      "TransferCreate": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/TransferCreate" } }
+        }
+      },
+      "TransferPair": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/TransferPair" } }
+        }
+      },
+      "TransferUnpair": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/TransferUnpair" } }
+        }
+      },
       "TransactionPatch": {
         "required": true,
         "content": {
@@ -1840,14 +1939,48 @@
           "account_id": { "type": ["integer", "null"] },
           "category_id": { "type": ["integer", "null"] },
           "fund_id": { "type": ["integer", "null"] },
+          "commitment_id": { "type": ["integer", "null"] },
           "transfer_group": { "type": ["string", "null"] }
         }
+      },
+      "TransferCreate": {
+        "type": "object",
+        "required": ["source_account_id", "target_account_id", "date", "amount"],
+        "properties": {
+          "source_account_id": { "type": "integer", "minimum": 1 },
+          "target_account_id": { "type": "integer", "minimum": 1 },
+          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "description": { "type": "string", "maxLength": 200, "default": "Transfer" },
+          "amount": { "type": "number", "exclusiveMinimum": 0 },
+          "currency": { "$ref": "#/components/schemas/Currency" }
+        }
+      },
+      "TransferPair": {
+        "type": "object",
+        "oneOf": [
+          { "required": ["transaction_a_id", "transaction_b_id"] },
+          { "required": ["transaction_id", "partner_id"] },
+          { "required": ["partner_id"] }
+        ],
+        "properties": {
+          "transaction_a_id": { "type": "integer", "minimum": 1 },
+          "transaction_b_id": { "type": "integer", "minimum": 1 },
+          "transaction_id": { "type": "integer", "minimum": 1 },
+          "partner_id": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "TransferUnpair": {
+        "type": "object",
+        "required": ["transaction_id"],
+        "properties": { "transaction_id": { "type": "integer", "minimum": 1 } }
       },
       "TransactionPatch": {
         "type": "object",
         "properties": {
+          "account_id": { "type": ["integer", "null"] },
           "category_id": { "type": ["integer", "null"] },
           "fund_id": { "type": ["integer", "null"] },
+          "commitment_id": { "type": ["integer", "null"] },
           "transfer_group": { "type": ["string", "null"] },
           "description": { "type": "string" },
           "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },

@@ -345,10 +345,8 @@ router.post(
         for (let i = 0; i < withCats.length; i++) {
           const tx = withCats[i];
           const dedupKey = finalDedupKeys[i];
-          const transferGroup =
-            tx.transfer_pair_id && confirmedPairs.has(tx.transfer_pair_id)
-              ? tx.transfer_pair_id
-              : null;
+          const isTransfer = tx.transfer_pair_id && confirmedPairs.has(tx.transfer_pair_id);
+          const transferGroup = isTransfer ? tx.transfer_pair_id : null;
           const r = ins.run(
             tx.date,
             tx.description,
@@ -356,8 +354,8 @@ router.post(
             tx.revolut_type,
             tx.currency,
             accId,
-            tx.suggested_category_id,
-            tx.needs_review,
+            isTransfer ? null : tx.suggested_category_id,
+            isTransfer ? 0 : tx.needs_review,
             path.basename(filePath),
             dedupKey,
             transferGroup,

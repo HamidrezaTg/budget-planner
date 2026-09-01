@@ -1,11 +1,30 @@
 import { Router } from 'express';
 import { db } from '../db.js';
+import { currentMonth } from '../services/model.js';
 
 const router = Router();
 
 // Strict YYYY-MM: a month like "2026-9" or "2026-00" would corrupt month
 // arithmetic (NaN balances, silently dropped commitments).
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function addPaymentStatus(row, month) {
+  const paid = db
+    .prepare(
+      `SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END), 0) AS amount
+       FROM transactions
+       WHERE commitment_id = ? AND substr(date, 1, 7) = ?
+         AND transfer_group IS NULL
+         AND NOT (split_of IS NULL AND split_group IS NOT NULL)`,
+    )
+    .get(row.id, month).amount;
+  return {
+    ...row,
+    payment_month: month,
+    paid_amount: Math.round(paid * 100) / 100,
+    payment_status: paid + 0.01 >= row.monthly_amount ? 'paid' : paid > 0 ? 'partial' : 'unpaid',
+  };
+}
 
 function planAmount(v, field) {
   const n = Number(v ?? 0);
@@ -15,6 +34,7 @@ function planAmount(v, field) {
 }
 
 router.get('/', (_req, res) => {
+  const month = MONTH_RE.test(_req.query.month ?? '') ? _req.query.month : currentMonth();
   const rows = db
     .prepare(
       `SELECT cm.*, a.name AS account_name, f.name AS fund_name,
@@ -24,7 +44,8 @@ router.get('/', (_req, res) => {
        LEFT JOIN funds f ON f.id = cm.fund_id
        ORDER BY cm.start_month, cm.name`,
     )
-    .all();
+    .all()
+    .map((row) => addPaymentStatus(row, month));
   res.json(rows);
 });
 
