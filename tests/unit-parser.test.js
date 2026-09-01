@@ -11,6 +11,41 @@ import {
   transactionsFromGrid,
 } from '../server/services/parser.js';
 
+function makeZip({ compressedSize = 1, uncompressedSize = 1, centralSignature = 0x02014b50 } = {}) {
+  const name = Buffer.from('xl/workbook.xml');
+  const data = Buffer.from('x');
+  const local = Buffer.alloc(30 + name.length + data.length);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt16LE(8, 8);
+  local.writeUInt16LE(0, 10);
+  local.writeUInt32LE(compressedSize, 18);
+  local.writeUInt32LE(uncompressedSize, 22);
+  local.writeUInt16LE(name.length, 26);
+  local.writeUInt16LE(0, 28);
+  name.copy(local, 30);
+  data.copy(local, 30 + name.length);
+
+  const central = Buffer.alloc(46 + name.length);
+  central.writeUInt32LE(centralSignature, 0);
+  central.writeUInt16LE(20, 4);
+  central.writeUInt16LE(20, 6);
+  central.writeUInt16LE(8, 8);
+  central.writeUInt32LE(compressedSize, 20);
+  central.writeUInt32LE(uncompressedSize, 24);
+  central.writeUInt16LE(name.length, 28);
+  central.writeUInt32LE(0, 42);
+  name.copy(central, 46);
+
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(1, 8);
+  eocd.writeUInt16LE(1, 10);
+  eocd.writeUInt32LE(central.length, 12);
+  eocd.writeUInt32LE(local.length, 16);
+  return Buffer.concat([local, central, eocd]);
+}
+
 test('toISODate rejects impossible calendar dates', () => {
   assert.equal(toISODate('31/31/2026', 'string'), null);
   assert.equal(toISODate('29.02.2026', 'string'), null); // not a leap year
@@ -109,6 +144,42 @@ test('XLSX import remains compatible with the maintained spreadsheet package', (
       currency: 'EUR',
       dedup_key: '2026-05-01|-4.50|EUR|coffee',
     });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('XLSX ZIP preflight rejects malformed archives before spreadsheet parsing', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'bp-xlsx-malformed-'));
+  try {
+    const missingEnd = path.join(dir, 'missing-end.xlsx');
+    writeFileSync(missingEnd, Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    assert.throws(() => parseStatement(missingEnd), /missing ZIP end record/);
+
+    const badCentral = path.join(dir, 'bad-central.xlsx');
+    writeFileSync(badCentral, makeZip({ centralSignature: 0xdeadbeef }));
+    assert.throws(() => parseStatement(badCentral), /invalid central directory entry/);
+
+    const oversizedEntry = path.join(dir, 'oversized-entry.xlsx');
+    writeFileSync(oversizedEntry, makeZip({ uncompressedSize: 64 * 1024 * 1024 + 1 }));
+    assert.throws(() => parseStatement(oversizedEntry), /byte limit/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('XLSX ZIP preflight rejects unsafe expansion ratios and entry counts', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'bp-xlsx-limits-'));
+  try {
+    const ratio = path.join(dir, 'ratio.xlsx');
+    writeFileSync(ratio, makeZip({ compressedSize: 1, uncompressedSize: 1001 }));
+    assert.throws(() => parseStatement(ratio), /compression ratio/);
+
+    const tooMany = path.join(dir, 'too-many.xlsx');
+    const archive = makeZip();
+    archive.writeUInt16LE(2001, archive.length - 12);
+    writeFileSync(tooMany, archive);
+    assert.throws(() => parseStatement(tooMany), /too many ZIP entries/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

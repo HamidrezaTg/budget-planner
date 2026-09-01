@@ -6,9 +6,39 @@ import crypto from 'node:crypto';
 import { learnRule, categorizeTransaction, createAutomationRule } from '../services/categorizer.js';
 
 const router = Router();
+const DEFAULT_TRANSACTION_LIMIT = 500;
+const MAX_TRANSACTION_LIMIT = 1000;
+
+function paginationParams(query, res) {
+  const parse = (name, fallback, minimum, maximum) => {
+    const raw = query[name] ?? fallback;
+    if (Array.isArray(raw) || !/^\d+$/.test(String(raw))) {
+      res.status(400).json({
+        error: `${name} must be an integer${maximum ? ` between ${minimum} and ${maximum}` : ' greater than or equal to 0'}`,
+      });
+      return null;
+    }
+    const value = Number(raw);
+    if (!Number.isSafeInteger(value) || value < minimum || (maximum && value > maximum)) {
+      res.status(400).json({
+        error: `${name} must be an integer${maximum ? ` between ${minimum} and ${maximum}` : ' greater than or equal to 0'}`,
+      });
+      return null;
+    }
+    return value;
+  };
+
+  const limit = parse('limit', DEFAULT_TRANSACTION_LIMIT, 1, MAX_TRANSACTION_LIMIT);
+  if (limit === null) return null;
+  const offset = parse('offset', 0, 0);
+  if (offset === null) return null;
+  return { limit, offset };
+}
 
 router.get('/', (req, res) => {
-  const { month, review, category_id, limit = 500, offset = 0 } = req.query;
+  const { month, review, category_id } = req.query;
+  const pagination = paginationParams(req.query, res);
+  if (!pagination) return;
   const where = [];
   const params = [];
 
@@ -36,7 +66,7 @@ router.get('/', (req, res) => {
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     ORDER BY t.date DESC, t.id DESC
     LIMIT ? OFFSET ?`;
-  const rows = db.prepare(sql).all(...params, Number(limit), Number(offset));
+  const rows = db.prepare(sql).all(...params, pagination.limit, pagination.offset);
 
   const countSql = `SELECT COUNT(*) AS c FROM transactions t ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
   const total = db.prepare(countSql).get(...params).c;

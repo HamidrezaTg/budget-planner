@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [upcoming, setUpcoming] = useState(null);
 
   useEffect(() => {
+    api.post('/reports/history/capture').catch(() => {});
     api
       .get(`/dashboard/${month}`)
       .then(setData)
@@ -28,7 +29,8 @@ export default function Dashboard() {
   useEffect(() => {
     if (month === currentMonth()) {
       api
-        .get('/recurrences')
+        .post('/recurrences/auto-post')
+        .then(() => api.get('/recurrences'))
         .then((r) => setUpcoming(r.upcoming))
         .catch(() => {});
     } else {

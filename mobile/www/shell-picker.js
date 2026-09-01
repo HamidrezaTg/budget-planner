@@ -24,10 +24,10 @@
     try {
       const parsed = JSON.parse(stored || '[]');
       if (stored !== null && Array.isArray(parsed))
-        return parsed.map(normalizeUrl).filter((url) => /^https?:\/\/.+/i.test(url));
+        return parsed.map(normalizeUrl).filter((url) => /^https:\/\/.+/i.test(url));
     } catch {}
     const legacy = normalizeUrl(localStorage.getItem(LEGACY_KEY));
-    return legacy && /^https?:\/\/.+/i.test(legacy) ? [legacy] : [];
+    return legacy && /^https:\/\/.+/i.test(legacy) ? [legacy] : [];
   }
 
   function saveUrls(list) {
@@ -45,6 +45,7 @@
   }
 
   async function probe(url) {
+    if (!/^https:\/\/.+/i.test(url)) throw new Error('HTTPS is required');
     const response = await fetch(url + '/.well-known/budget-planner', {
       signal: AbortSignal.timeout(8000),
     });

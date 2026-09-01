@@ -144,8 +144,9 @@ Upcoming panel on the Dashboard.
 For irregular bills: accrue monthly, withdraw when the bill lands.
 
 - **Balance** = opening balance + monthly contribution × months since start +
-  recorded movements. Contributions accrue automatically — you only record
-  withdrawals (**Out**) when a bill actually arrives, and occasional extra deposits (**In**).
+  recorded movements + linked transactions. Contributions accrue automatically;
+  manual deposits (**In**), withdrawals (**Out**), linked bills, and linked refunds
+  all affect the same balance.
 - A **negative balance is a warning, not an error** — the bill arrived early.
 - **Goals** — set a target amount and optional date; the page shows progress, what is
   still needed per month, and whether you are on track. Overdue goals raise a danger

@@ -89,9 +89,8 @@ export default function Reports() {
       .catch((e) => setError(e.message));
   }, [year, accountId]);
   useEffect(() => {
-    // also triggers capture of any closed months still missing a snapshot
     api
-      .get('/reports/history')
+      .post('/reports/history/capture')
       .then((h) => setHistory(h.rows))
       .catch(() => {});
   }, []);

@@ -93,6 +93,10 @@ function monthlySummary(month, accountId) {
 
 // ------------------------------------------------------------ scheduled snapshots
 router.get('/history', (_req, res) => {
+  res.json({ captured: 0, rows: monthlyReportHistory() });
+});
+
+router.post('/history/capture', (_req, res) => {
   const captured = ensureMonthlyReports();
   res.json({ captured, rows: monthlyReportHistory() });
 });

@@ -223,7 +223,12 @@ function LayoutContent({ me }) {
 
           <div className="side-actions">
             {nativeShell && (
-              <button className="icon-btn" title="Switch server" onClick={switchServer}>
+              <button
+                className="icon-btn"
+                title="Switch server"
+                aria-label="Switch server"
+                onClick={switchServer}
+              >
                 ⌘
               </button>
             )}
@@ -243,11 +248,16 @@ function LayoutContent({ me }) {
                   ? 'Switch to light mode'
                   : 'Switch to dark mode'
               }
+              aria-label={
+                theme === 'dark' || theme === 'midnight'
+                  ? 'Switch to light mode'
+                  : 'Switch to dark mode'
+              }
               onClick={() => setTheme(theme === 'dark' || theme === 'midnight' ? 'light' : 'dark')}
             >
               {theme === 'dark' || theme === 'midnight' ? '☀' : '☾'}
             </button>
-            <button className="icon-btn" title="Log out" onClick={logout}>
+            <button className="icon-btn" title="Log out" aria-label="Log out" onClick={logout}>
               ⇥
             </button>
           </div>

@@ -3,6 +3,21 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.19.0] — 2026-09-01
+
+### Added
+- Paginated transaction browsing with strict API bounds and accessible controls.
+- GitHub-only signed Android APK/AAB release preparation and an iOS Capacitor scaffold.
+
+### Changed
+- Fund balances now reconcile scheduled accruals, manual movements, and linked transactions.
+- Native clients require HTTPS server endpoints, including HTTPS Tailscale access.
+- Recurrence auto-posting and report snapshot capture are explicit POST operations.
+
+### Security
+- Added progressive login cooldowns, cross-origin state-change protection, XLSX ZIP limits,
+  and deeper attachment content validation.
+
 ## [3.18.6] — 2026-09-01
 
 ### Fixed

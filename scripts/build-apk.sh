@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Build the Android APK — a pure CLIENT for your self-hosted Budget Planner.
 # The app contains no backend: on first launch it asks for the server address
-# (e.g. http://192.168.1.10:2026 or your Tailscale URL), remembers it, and
+# (e.g. https://budget.example.ts.net), remembers it, and
 # loads the planner from there.
 #
 # Output: dist/budget-planner-android.apk
 #
-# Release signing (optional): export BP_ANDROID_KEYSTORE, BP_ANDROID_KEYSTORE_PASSWORD
-# and BP_ANDROID_KEY_ALIAS (plus optional BP_ANDROID_KEY_PASSWORD) before running.
-# With them set this builds a SIGNED release APK; without them it falls back to a
-# debug-key build for local testing only. The keystore file itself is never read
-# into git or CI state beyond what gradle needs for one invocation.
+# Release signing: export BP_ANDROID_KEYSTORE, BP_ANDROID_KEYSTORE_PASSWORD and
+# BP_ANDROID_KEY_ALIAS (plus optional BP_ANDROID_KEY_PASSWORD) before running.
+# With them set this builds a SIGNED release APK. Without them, only an explicitly
+# requested debug APK is produced for local testing. Keystore material stays outside
+# git and is passed to Gradle for one invocation.
 set -euo pipefail
 cd "$(dirname "$0")/../mobile"
 
@@ -30,8 +30,12 @@ grep -q "versionCode ${VERSION_CODE}" android/app/build.gradle || { echo "ERROR:
 grep -q "versionName \"${ROOT_VERSION}\"" android/app/build.gradle || { echo "ERROR: versionName stamping failed" >&2; exit 1; }
 echo "==> stamped version ${ROOT_VERSION} (code ${VERSION_CODE})"
 
-grep -q 'android:usesCleartextTraffic="true"' android/app/src/main/AndroidManifest.xml || {
-  echo "ERROR: AndroidManifest.xml is missing usesCleartextTraffic (needed for LAN self-hosting)" >&2
+grep -q 'android:usesCleartextTraffic="false"' android/app/src/main/AndroidManifest.xml || {
+  echo "ERROR: AndroidManifest.xml must disable cleartext traffic for native HTTPS policy" >&2
+  exit 1
+}
+grep -q 'android:networkSecurityConfig="@xml/network_security_config"' android/app/src/main/AndroidManifest.xml || {
+  echo "ERROR: AndroidManifest.xml is missing the HTTPS network security policy" >&2
   exit 1
 }
 npx cap sync android > /dev/null
@@ -65,9 +69,10 @@ if [ -n "${BP_ANDROID_KEYSTORE:-}" ] && [ -f "$BP_ANDROID_KEYSTORE" ] \
 fi
 
 if [ "$SIGNED_RELEASE" = true ]; then
-  echo "==> gradle assembleRelease (signed with ${BP_ANDROID_KEYSTORE})"
+  echo "==> gradle assembleRelease (release signing configured)"
   ( cd android && ./gradlew assembleRelease --no-daemon -q )
   cp android/app/build/outputs/apk/release/app-release.apk ../dist/budget-planner-android.apk
+  test -s ../dist/budget-planner-android.apk
 else
   # A debug-key build must NEVER land under the release filename: users
   # sideload updates by filename, and the public debug key would let anyone

@@ -85,12 +85,12 @@
     <div id="view-setup" class="hidden">
       <p id="setup-intro">
         This app is a client for your self-hosted planner. Enter the address of the machine
-        running the server — e.g. <b>http://192.168.1.10:2026</b> (home LAN) or your Tailscale
-        address. The server itself never runs on this device.
+        running the server — e.g. <b>https://budget.example.ts.net</b> or another HTTPS
+        Tailscale endpoint. The server itself never runs on this device.
       </p>
       <label for="server">Server address</label>
       <input id="server" type="url" inputmode="url" autocomplete="off"
-             placeholder="http://192.168.1.10:2026" />
+             placeholder="https://budget.example.ts.net" />
       <div id="saved-list" class="hidden"></div>
       <div class="err" id="err"></div>
       <button id="go">Connect</button>
@@ -207,8 +207,8 @@
     goBtn.addEventListener('click', async () => {
       let url = normalizeUrl(input.value);
       err.textContent = '';
-      if (!/^https?:\/\/.+/i.test(url)) {
-        err.textContent = 'Enter a full address starting with http:// or https://';
+      if (!/^https:\/\/.+/i.test(url)) {
+        err.textContent = 'Enter a full HTTPS address (use an HTTPS Tailscale endpoint for private access)';
         return;
       }
       busy(true);

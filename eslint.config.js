@@ -10,6 +10,8 @@ export default [
       'dist/**',
       'desktop-client-tauri/**',
       'mobile/www/**',
+      'mobile/android/app/src/main/assets/**',
+      'mobile/ios/**/public/**',
     ],
   },
   eslint.configs.recommended,
@@ -24,6 +26,14 @@ export default [
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
+      globals: globals.node,
+    },
+  },
+  {
+    files: ['mobile/tests/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'commonjs',
       globals: globals.node,
     },
   },

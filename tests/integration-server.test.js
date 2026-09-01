@@ -66,6 +66,33 @@ test('setup creates the admin account and logs in', async () => {
   assert.equal(info.admin, true);
 });
 
+test('state-changing requests reject cross-origin browser headers but allow same-origin and native requests', async () => {
+  const rejected = await fetch(`${srv.url}/api/accounts`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: cookies,
+      Origin: 'https://attacker.example',
+    },
+    body: JSON.stringify({ name: 'Should not exist' }),
+  });
+  assert.equal(rejected.status, 403);
+
+  const sameOrigin = await fetch(`${srv.url}/api/accounts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies, Origin: srv.url },
+    body: JSON.stringify({ name: 'Same origin account' }),
+  });
+  assert.equal(sameOrigin.status, 200);
+
+  const nativeStyle = await fetch(`${srv.url}/api/accounts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ name: 'Native client account' }),
+  });
+  assert.equal(nativeStyle.status, 200);
+});
+
 test('projection scenarios compare transient deltas without changing GET projection', async () => {
   const before = await api('/projection?months=2', 'GET', null, cookies);
   const now = new Date();
@@ -217,7 +244,7 @@ test('staged imports cannot be confirmed by another user', async () => {
 });
 
 test('failed logins are rate-limited', async () => {
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 3; i++) {
     const r = await fetch(`${srv.url}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -231,6 +258,38 @@ test('failed logins are rate-limited', async () => {
     body: JSON.stringify({ username: 'alice', password: 'wrong-pass' }),
   });
   assert.equal(r.status, 429);
+  assert.ok(Number(r.headers.get('retry-after')) >= 1);
+});
+
+test('GET reads do not post recurrences or capture snapshots', async () => {
+  const rec = await api(
+    '/recurrences',
+    'POST',
+    { name: 'Read-only recurrence', amount: -7, day_of_month: 1, auto_post: true },
+    cookies,
+  );
+  const before = (await api('/transactions?limit=1000', 'GET', null, cookies)).rows.filter(
+    (row) => row.description === 'Read-only recurrence',
+  ).length;
+  const listed = await api('/recurrences', 'GET', null, cookies);
+  assert.equal(listed.autoPosted, 0);
+  const after = (await api('/transactions?limit=1000', 'GET', null, cookies)).rows.filter(
+    (row) => row.description === 'Read-only recurrence',
+  ).length;
+  assert.equal(after, before);
+  const historyBefore = await api('/reports/history', 'GET', null, cookies);
+  const dashboard = await api('/dashboard/2026-05', 'GET', null, cookies);
+  assert.ok(dashboard);
+  const historyAfter = await api('/reports/history', 'GET', null, cookies);
+  assert.deepEqual(historyAfter.rows, historyBefore.rows);
+
+  const posted = await api('/recurrences/auto-post', 'POST', null, cookies);
+  assert.ok(posted.autoPosted >= 1);
+  const postedRows = (await api('/transactions?limit=1000', 'GET', null, cookies)).rows.filter(
+    (row) => row.description === 'Read-only recurrence',
+  );
+  for (const row of postedRows) await api(`/transactions/${row.id}`, 'DELETE', null, cookies);
+  await api(`/recurrences/${rec.id}`, 'DELETE', null, cookies);
 });
 
 test('full import → split → delete-parent flow removes split children via the API', async () => {
@@ -284,6 +343,61 @@ test('full import → split → delete-parent flow removes split children via th
   const listedAfter = await api('/transactions', 'GET', null, cookies);
   assert.equal(listedAfter.rows.filter((r) => r.split_of === tx.id).length, 0);
   assert.equal(listedAfter.rows.length, 0);
+});
+
+test('attachment validation rejects truncated files and accepts a structurally valid PDF', async () => {
+  const created = await api(
+    '/transactions',
+    'POST',
+    { date: '2026-07-01', description: 'Attachment validation', amount: -2 },
+    cookies,
+  );
+  const txId = created.ids[0];
+
+  const upload = (bytes, type, name) => {
+    const fd = new FormData();
+    fd.append('transaction_id', String(txId));
+    fd.append('file', new Blob([bytes], { type }), name);
+    return fetch(`${srv.url}/api/attachments`, {
+      method: 'POST',
+      headers: { Cookie: cookies },
+      body: fd,
+    });
+  };
+
+  const fakePdf = await upload(Buffer.from('%PDF-1.7\ntruncated'), 'application/pdf', 'fake.pdf');
+  assert.equal(fakePdf.status, 400);
+  assert.match((await fakePdf.json()).error, /does not look/);
+
+  const fakePng = await upload(
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    'image/png',
+    'fake.png',
+  );
+  assert.equal(fakePng.status, 400);
+
+  const validPdf = await upload(
+    Buffer.from('%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n'),
+    'application/pdf',
+    'receipt.pdf',
+  );
+  assert.equal(validPdf.status, 200);
+  const attachment = await validPdf.json();
+  assert.equal(attachment.mime, 'application/pdf');
+  await api(`/attachments/${attachment.id}`, 'DELETE', null, cookies);
+
+  const validPng = await upload(
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    ),
+    'image/png',
+    'pixel.png',
+  );
+  assert.equal(validPng.status, 200);
+  const image = await validPng.json();
+  assert.equal(image.mime, 'image/png');
+  await api(`/attachments/${image.id}`, 'DELETE', null, cookies);
 });
 
 test('transaction links, transfer pairing, coverage, and paired deletion are enforced', async () => {
@@ -467,10 +581,129 @@ test('transaction links, transfer pairing, coverage, and paired deletion are enf
   );
 });
 
+test('fund totals reconcile all cash flows and reject invalid month/amount values', async () => {
+  const invalid = async (path, method, body) => {
+    const response = await fetch(`${srv.url}/api${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', Cookie: cookies },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    assert.equal(response.status, 400);
+    return response.json();
+  };
+
+  await invalid('/funds?month=2026-13', 'GET');
+  await invalid('/funds', 'POST', { name: 'Invalid fund month', start_month: '2026-00' });
+  await invalid('/funds', 'POST', {
+    name: 'Invalid fund amount',
+    start_month: '2026-08',
+    monthly_contribution: 'Infinity',
+  });
+
+  const account = await api('/accounts', 'POST', { name: 'Fund reconciliation account' }, cookies);
+  const fund = await api(
+    '/funds',
+    'POST',
+    {
+      name: 'Fund reconciliation API',
+      start_month: '2026-08',
+      monthly_contribution: 100,
+      opening_balance: 50,
+      target_amount: 500,
+      target_date: '2026-12',
+    },
+    cookies,
+  );
+  await invalid(`/funds/${fund.id}/movement`, 'POST', {
+    kind: 'contribution',
+    amount: 'NaN',
+    month: '2026-09',
+  });
+  await invalid(`/funds/${fund.id}/movement`, 'POST', {
+    kind: 'contribution',
+    amount: 10,
+    month: '2026-13',
+  });
+  await invalid(`/funds/${fund.id}`, 'PATCH', { target_date: '2026-13' });
+  await invalid(`/funds/${fund.id}`, 'PATCH', { target_amount: 'Infinity' });
+  await invalid(`/funds/${fund.id}`, 'PATCH', { target_date: '' });
+  await invalid(`/funds/${fund.id}`, 'PATCH', { target_amount: '' });
+
+  await api(
+    `/funds/${fund.id}/movement`,
+    'POST',
+    { kind: 'contribution', amount: 25, month: '2026-08' },
+    cookies,
+  );
+  await api(
+    `/funds/${fund.id}/movement`,
+    'POST',
+    { kind: 'withdrawal', amount: 40, month: '2026-09' },
+    cookies,
+  );
+  await api(
+    '/transactions',
+    'POST',
+    [
+      {
+        date: '2026-08-05',
+        description: 'Fund reconciliation bill',
+        amount: -80,
+        account_id: account.id,
+        fund_id: fund.id,
+      },
+      {
+        date: '2026-09-05',
+        description: 'Fund reconciliation refund',
+        amount: 15,
+        account_id: account.id,
+        fund_id: fund.id,
+      },
+    ],
+    cookies,
+  );
+
+  const listed = await api('/funds?month=2026-09', 'GET', null, cookies);
+  const reconciled = listed.funds.find((row) => row.id === fund.id);
+  assert.equal(reconciled.contributed_so_far, 290);
+  assert.equal(reconciled.withdrawn_so_far, 120);
+  assert.equal(reconciled.balance, 170);
+  assert.equal(reconciled.contributed_so_far - reconciled.withdrawn_so_far, reconciled.balance);
+});
+
 test('unknown API routes return a JSON 404', async () => {
   const r = await fetch(`${srv.url}/api/definitely-not-a-route`);
   assert.equal(r.status, 404);
   assert.deepEqual(await r.json(), { error: 'Not found' });
+});
+
+test('transaction listing paginates and rejects invalid pagination parameters', async () => {
+  const all = await api('/transactions?limit=1000', 'GET', null, cookies);
+  assert.ok(all.total >= 2);
+
+  const first = await api('/transactions?limit=1&offset=0', 'GET', null, cookies);
+  const second = await api('/transactions?limit=1&offset=1', 'GET', null, cookies);
+  assert.equal(first.rows.length, 1);
+  assert.equal(second.rows.length, 1);
+  assert.equal(first.total, all.total);
+  assert.equal(second.total, all.total);
+  assert.notEqual(first.rows[0].id, second.rows[0].id);
+
+  for (const query of [
+    'limit=0',
+    'limit=1001',
+    'limit=1.5',
+    'limit=not-a-number',
+    'offset=-1',
+    'offset=1.5',
+    'offset=not-a-number',
+    'offset=9007199254740992',
+  ]) {
+    const response = await fetch(`${srv.url}/api/transactions?${query}`, {
+      headers: { Cookie: cookies },
+    });
+    assert.equal(response.status, 400, query);
+  }
 });
 
 test('healthz responds without authentication', async () => {
@@ -520,13 +753,14 @@ test('recurrence posting is idempotent and future posts do not suppress the curr
   const posted = await api(`/recurrences/${rec.id}/post`, 'POST', { month: nextMonth }, cookies);
   assert.equal(posted.ok, true);
 
-  // Listing runs autoPost: the CURRENT month must still be posted even though
-  // last_posted_month now points at the future month (never moves backwards,
-  // and a future post must not suppress this month).
+  // Listing is read-only now. Explicit auto-posting must still post the
+  // CURRENT month even though last_posted_month points at the future month.
   const list = await api('/recurrences', 'GET', null, cookies);
-  assert.equal(list.autoPosted >= 1, true);
+  assert.equal(list.autoPosted, 0);
   const mine = list.recurrences.find((r) => r.id === rec.id);
   assert.equal(mine.last_posted_month, nextMonth);
+  const autoPosted = await api('/recurrences/auto-post', 'POST', null, cookies);
+  assert.equal(autoPosted.autoPosted >= 1, true);
 
   // Both months exist exactly once — re-listing must not duplicate anything.
   const before = (await api('/transactions?limit=1000', 'GET', null, cookies)).rows.filter(

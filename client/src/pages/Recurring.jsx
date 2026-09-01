@@ -23,7 +23,8 @@ export default function Recurring() {
 
   const load = () =>
     api
-      .get('/recurrences')
+      .post('/recurrences/auto-post')
+      .then(() => api.get('/recurrences'))
       .then(setData)
       .catch((e) => toast(e.message, 'error'));
   useEffect(() => {

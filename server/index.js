@@ -40,11 +40,34 @@ app.set('trust proxy', process.env.TRUST_PROXY === '1' ? 1 : false);
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
+// Cookie authentication makes browser-originated state changes vulnerable to
+// cross-site forms unless the request origin is checked. Native HTTP clients
+// commonly omit these headers, so absent Origin/Referer remains allowed; any
+// header that is present must identify this server.
 // Short per-request id: echoed to the client and attached to error logs, so a
 // user can report an id and the matching journalctl line can be found.
 app.use((req, res, next) => {
   req.id = crypto.randomBytes(6).toString('hex');
   res.setHeader('X-Request-Id', req.id);
+  next();
+});
+
+app.use('/api', (req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  if (req.get('sec-fetch-site')?.toLowerCase() === 'cross-site')
+    return res.status(403).json({ error: 'Cross-origin request rejected' });
+
+  const expected = `${req.protocol}://${req.get('host')}`;
+  for (const header of ['origin', 'referer']) {
+    const value = req.get(header);
+    if (!value) continue;
+    try {
+      if (new URL(value).origin !== new URL(expected).origin)
+        return res.status(403).json({ error: 'Cross-origin request rejected' });
+    } catch {
+      return res.status(403).json({ error: 'Cross-origin request rejected' });
+    }
+  }
   next();
 });
 

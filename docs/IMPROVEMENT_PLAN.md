@@ -183,8 +183,8 @@ The implementation should preserve existing user databases and avoid destructive
 
 **Status: MOSTLY DONE.** Migration, split deletion, restore, projection, recurrence,
 import, currency, and rollover-accumulation changes all have implementation plus
-regression coverage. Open: fund `contributed_so_far` vs balance consistency,
-reflected-semantics decisions (§4.10), parser ambiguous-date decision.
+regression coverage. Open: reflected-semantics decisions (§4.10), parser
+ambiguous-date decision.
 
 ### 4.1 Enable SQLite foreign keys — PARTIAL
 
@@ -379,17 +379,15 @@ verification, and the release workflow.
 1. Client component tests (React Testing Library scaffold; Dialog/Modal, key flows).
 2. ZIP-bomb protection for XLSX imports and deeper attachment content validation.
 3. Electron update story (autoUpdater or apt repo) — bundled Chromium gets no fixes today.
-4. Fund accounting: reconcile `contributed_so_far` with `fundBalanceAt` (manual
-   contribution movements are currently double-counted in balance).
-5. Transactions list pagination (>500 rows silently capped; add a hint or paging).
-6. Client a11y audit: remaining unlabeled selects/inputs, upload() 401 handling,
+4. Transactions list pagination (>500 rows silently capped; add a hint or paging).
+5. Client a11y audit: remaining unlabeled selects/inputs, upload() 401 handling,
    Reports year-input guard, currency locale consistency, Budgets month-clear guard.
-7. GET endpoints that mutate (recurrence auto-post, snapshot capture) → consider
+6. GET endpoints that mutate (recurrence auto-post, snapshot capture) → consider
    POST + CSRF stance review.
-8. Optional hardening: API-key-at-rest encryption, progressive login delays/lockout.
-9. CI: add repo secrets `BP_ANDROID_KEYSTORE*` so releases carry CI-signed APKs;
+7. Optional hardening: API-key-at-rest encryption, progressive login delays/lockout.
+8. CI: add repo secrets `BP_ANDROID_KEYSTORE*` so releases carry CI-signed APKs;
    add an APK build job; version the APK filename.
-10. Physical-phone verification of the v3.9.2 APK (upgrade path from debug builds).
+9. Physical-phone verification of the v3.9.2 APK (upgrade path from debug builds).
 
 ### Deferred by owner
 - Lenovo migration (was judged too early; do after a verified ZorinHP backup and

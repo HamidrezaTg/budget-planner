@@ -1440,6 +1440,18 @@ select option {
 .table-card td:last-child {
   white-space: nowrap;
 }
+.transaction-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.pagination-status {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
 table {
   width: 100%;
   border-collapse: collapse;

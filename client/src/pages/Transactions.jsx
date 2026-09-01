@@ -4,6 +4,8 @@ import { api, formatMoney } from '../api.js';
 import { Modal, useDialogs } from '../components/Dialog.jsx';
 import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
+const PAGE_SIZE = 50;
+
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
   const { month: workingMonth, setMonth: setWorkingMonth } = useWorkingMonth();
@@ -14,6 +16,7 @@ export default function Transactions() {
   const [commitments, setCommitments] = useState([]);
   const [month, setMonth] = useState(params.get('month') || workingMonth);
   const [review, setReviewOnly] = useState(params.get('review') === '1');
+  const [page, setPage] = useState(0);
   const [suggestions, setSuggestions] = useState(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState('');
@@ -54,6 +57,7 @@ export default function Transactions() {
   useEffect(() => {
     setReviewOnly(params.get('review') === '1');
     setMonth(params.get('month') || workingMonth);
+    setPage(0);
   }, [params, workingMonth]);
 
   // A request-sequence guard: the newest request wins, so fast month/filter
@@ -64,12 +68,15 @@ export default function Transactions() {
     const q = new URLSearchParams();
     if (month) q.set('month', month);
     if (review) q.set('review', '1');
+    q.set('limit', PAGE_SIZE);
+    q.set('offset', page * PAGE_SIZE);
     api
       .get(`/transactions?${q}`)
       .then((d) => {
         if (seq !== loadSeq.current) return;
         setRows(d.rows);
         setTotal(d.total);
+        setError('');
       })
       .catch((e) => {
         if (seq === loadSeq.current) setError(e.message);
@@ -163,7 +170,12 @@ export default function Transactions() {
   };
   useEffect(() => {
     load();
-  }, [month, review]);
+  }, [month, review, page]);
+
+  useEffect(() => {
+    const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
+    if (page > lastPage) setPage(lastPage);
+  }, [page, total]);
 
   const assign = async (tx, categoryId, remember) => {
     try {
@@ -441,6 +453,7 @@ export default function Transactions() {
             value={month}
             onChange={(e) => {
               setMonth(e.target.value);
+              setPage(0);
               setWorkingMonth(e.target.value);
             }}
           />
@@ -454,13 +467,21 @@ export default function Transactions() {
             } else {
               p.set('review', '1');
             }
+            setPage(0);
             setParams(p);
           }}
         >
           {review ? 'Showing needs-review' : 'Show needs-review only'}
         </button>
         {month && (
-          <button className="btn ghost" title="Show every month" onClick={() => setMonth('')}>
+          <button
+            className="btn ghost"
+            title="Show every month"
+            onClick={() => {
+              setMonth('');
+              setPage(0);
+            }}
+          >
             Clear month
           </button>
         )}
@@ -562,7 +583,7 @@ export default function Transactions() {
       {rows.length === 0 && <div className="card empty">Nothing here.</div>}
 
       <div className="card table-card">
-        <table>
+        <table id="transactions-table">
           <thead>
             <tr>
               <th>Date</th>
@@ -856,21 +877,49 @@ export default function Transactions() {
             ))}
           </tbody>
         </table>
+        <nav className="transaction-pagination" aria-label="Transaction pagination">
+          <button
+            type="button"
+            className="btn ghost small"
+            aria-label="Previous transactions page"
+            onClick={() => setPage((current) => current - 1)}
+            disabled={page === 0}
+          >
+            Previous
+          </button>
+          <span className="pagination-status" role="status" aria-live="polite">
+            {total === 0
+              ? 'Showing 0 of 0'
+              : `Showing ${page * PAGE_SIZE + 1}-${Math.min((page + 1) * PAGE_SIZE, total)} of ${total}`}{' '}
+            {total > 0 && `(page ${page + 1} of ${Math.ceil(total / PAGE_SIZE)})`}
+          </span>
+          <button
+            type="button"
+            className="btn ghost small"
+            aria-label="Next transactions page"
+            onClick={() => setPage((current) => current + 1)}
+            disabled={(page + 1) * PAGE_SIZE >= total}
+          >
+            Next
+          </button>
+        </nav>
       </div>
 
       {splitTx && (
         <Modal
           title={`Split — ${splitTx.description}`}
+          description={
+            <>
+              Original amount:{' '}
+              <b className={splitTx.amount >= 0 ? 'income' : 'expense'}>
+                {formatMoney(splitTx.amount, splitTx.currency)}
+              </b>{' '}
+              · parts must add up to it.
+            </>
+          }
           onClose={() => setSplitTx(null)}
           width={520}
         >
-          <p className="modal-message">
-            Original amount:{' '}
-            <b className={splitTx.amount >= 0 ? 'income' : 'expense'}>
-              {formatMoney(splitTx.amount, splitTx.currency)}
-            </b>{' '}
-            · parts must add up to it.
-          </p>
           {splitParts.map((p, i) => (
             <div key={i} className="split-row">
               <select
@@ -954,15 +1003,17 @@ export default function Transactions() {
       {attTx && (
         <Modal
           title={`Attachments — ${attTx.description}`}
+          description={
+            <>
+              <b className={attTx.amount >= 0 ? 'income' : 'expense'}>
+                {formatMoney(attTx.amount, attTx.currency)}
+              </b>{' '}
+              on {attTx.date} · PDF, PNG, JPEG, WebP or CSV up to 10 MB.
+            </>
+          }
           onClose={() => setAttTx(null)}
           width={520}
         >
-          <p className="modal-message">
-            <b className={attTx.amount >= 0 ? 'income' : 'expense'}>
-              {formatMoney(attTx.amount, attTx.currency)}
-            </b>{' '}
-            on {attTx.date} · PDF, PNG, JPEG, WebP or CSV up to 10 MB.
-          </p>
           {attList === null ? (
             <div className="muted" style={{ margin: '10px 0' }}>
               Loading…
@@ -1016,7 +1067,12 @@ export default function Transactions() {
       )}
 
       {addOpen && (
-        <Modal title="Add transaction" onClose={() => setAddOpen(false)} width={460}>
+        <Modal
+          title="Add transaction"
+          description="Enter the details for a new transaction."
+          onClose={() => setAddOpen(false)}
+          width={460}
+        >
           <form onSubmit={submitAdd} className="add-tx-form">
             <label className="modal-label" htmlFor="add-tx-date">
               Date

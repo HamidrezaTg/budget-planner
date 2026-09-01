@@ -53,12 +53,21 @@ transfer; everything tagged to the bank account(s) leaves by direct debit withou
 balance(f, M) = opening_balance(f)
               + monthly_contribution(f) × (months between start_month(f) and M, inclusive)
               + Σ fund_movements.amount(f, month ≤ M)      (withdrawals are negative)
+              + Σ linked_transactions.amount(f, date month ≤ M)
+                (transfers and split parents excluded; refunds are positive)
 ```
 
-- Contributions accrue automatically; only withdrawals are recorded by hand.
+- Contributions accrue automatically. Manual contributions and withdrawals, plus
+  linked fund transactions and refunds, are all cash flows in the same ledger.
 - The balance is **not clamped at zero**. A withdrawal larger than the balance
   produces a negative running balance — a legitimate early-bill warning.
 - Funds with a start month simply don't accrue before it.
+
+The API's `contributed_so_far` includes the opening balance, scheduled accruals,
+manual contributions, and positive linked transactions. `withdrawn_so_far`
+includes negative manual movements and negative linked transactions as positive
+outflow totals. Therefore `contributed_so_far - withdrawn_so_far` equals the
+displayed fund balance.
 
 ## Projection (from month F, horizon N)
 

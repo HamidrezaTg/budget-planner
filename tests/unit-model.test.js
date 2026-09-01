@@ -12,6 +12,7 @@ const {
   plannedForCategory,
   monthView,
   actualByCategory,
+  fundCashFlowsAt,
   fundBalanceAt,
   accountBalanceAt,
   convertCurrency,
@@ -242,6 +243,63 @@ test('a transaction linked to a fund draws the fund balance down', () => {
     assert.equal(Math.round(bal * 100) / 100, 20);
   });
   dbm.closeUserDb('fund-spend-user');
+});
+
+test('fund cash-flow totals include every source and reconcile with the balance', () => {
+  const db = dbm.getUserDb('fund-reconcile-user');
+  dbm.als.run(db, () => {
+    const setup = (sql, ...args) => db.prepare(sql).run(...args);
+    const month = currentMonth();
+    const prior = addMonths(month, -1);
+    const account = setup(
+      "INSERT INTO accounts (name) VALUES ('Fund reconciliation bank')",
+    ).lastInsertRowid;
+    const fund = setup(
+      `INSERT INTO funds (name, start_month, monthly_contribution, opening_balance)
+       VALUES ('Reconciled fund', ?, 100, 50)`,
+      prior,
+    ).lastInsertRowid;
+    setup(
+      `INSERT INTO fund_movements (fund_id, month, amount, kind) VALUES (?, ?, 25, 'contribution')`,
+      fund,
+      prior,
+    );
+    setup(
+      `INSERT INTO fund_movements (fund_id, month, amount, kind) VALUES (?, ?, -40, 'withdrawal')`,
+      fund,
+      month,
+    );
+    setup(
+      `INSERT INTO transactions (date, description, amount, currency, account_id, fund_id, dedup_key)
+       VALUES (?, 'Fund bill', -80, 'EUR', ?, ?, 'fund-reconcile-bill')`,
+      `${prior}-05`,
+      account,
+      fund,
+    );
+    setup(
+      `INSERT INTO transactions (date, description, amount, currency, account_id, fund_id, dedup_key)
+       VALUES (?, 'Fund refund', 15, 'EUR', ?, ?, 'fund-reconcile-refund')`,
+      `${month}-05`,
+      account,
+      fund,
+    );
+    setup(
+      `INSERT INTO transactions (date, description, amount, currency, account_id, fund_id, transfer_group, dedup_key)
+       VALUES (?, 'Internal transfer', 1000, 'EUR', ?, ?, 'fund-transfer', 'fund-reconcile-transfer')`,
+      `${month}-06`,
+      account,
+      fund,
+    );
+
+    const fundRow = db.prepare('SELECT * FROM funds WHERE id = ?').get(fund);
+    const flows = fundCashFlowsAt(fundRow, month);
+    assert.equal(flows.contributed, 290); // opening 50 + 2 × 100 + 25 + refund 15
+    assert.equal(flows.withdrawn, 120); // manual 40 + linked bill 80
+    assert.equal(flows.balance, 170);
+    assert.equal(fundBalanceAt(fundRow, month), flows.balance);
+    assert.equal(flows.contributed - flows.withdrawn, fundBalanceAt(fundRow, month));
+  });
+  dbm.closeUserDb('fund-reconcile-user');
 });
 
 test('projection includes per-account opening_balance in the total predicted', () => {

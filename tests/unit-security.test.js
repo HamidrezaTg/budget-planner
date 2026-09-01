@@ -1,6 +1,13 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { consume, clear } from '../server/rate-limit.js';
+import {
+  consume,
+  clear,
+  loginCooldownMs,
+  loginCooldownRemaining,
+  recordLoginFailure,
+  clearLoginFailures,
+} from '../server/rate-limit.js';
 import { freshDataDir, cleanup, loadDb, loadAuth } from './helpers.js';
 
 const dir = freshDataDir();
@@ -50,4 +57,22 @@ test('rate limiter returns 429 after exceeding the limit and clears on success',
   assert.equal(consume(key, 60_000, 10), true);
   clear(key);
   assert.equal(consume(key, 60_000, 10), false);
+});
+
+test('login cooldown grows progressively and clears after a successful login', () => {
+  const key = 'login-cooldown-test';
+  clearLoginFailures(key);
+  assert.equal(loginCooldownMs(1), 0);
+  assert.equal(loginCooldownMs(2), 0);
+  assert.equal(loginCooldownMs(3), 1_000);
+  assert.equal(loginCooldownMs(4), 2_000);
+  assert.equal(loginCooldownMs(10), 60_000);
+
+  recordLoginFailure(key);
+  recordLoginFailure(key);
+  assert.equal(loginCooldownRemaining(key), 0);
+  recordLoginFailure(key);
+  assert.ok(loginCooldownRemaining(key) > 0);
+  clearLoginFailures(key);
+  assert.equal(loginCooldownRemaining(key), 0);
 });

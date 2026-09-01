@@ -1,12 +1,12 @@
 apply plugin: 'com.android.application'
 
-// Release signing is opt-in via environment so keystores never enter git:
+// Release signing is supplied via environment so keystores never enter git:
 //   BP_ANDROID_KEYSTORE           path to the .keystore/.jks file
 //   BP_ANDROID_KEYSTORE_PASSWORD  keystore password
 //   BP_ANDROID_KEY_ALIAS          key alias
 //   BP_ANDROID_KEY_PASSWORD       key password (optional: falls back to keystore password)
-// Without these, `assembleRelease` falls back to the debug key for local testing
-// only — CI must always provide the environment or publish nothing.
+// Without these, release tasks fail instead of silently producing a debug-key
+// artifact. Local debug builds remain available through `assembleDebug`.
 def keystorePath = System.getenv("BP_ANDROID_KEYSTORE")
 def hasReleaseSigning = false
 if (keystorePath != null && file(keystorePath).exists() && System.getenv("BP_ANDROID_KEYSTORE_PASSWORD") && System.getenv("BP_ANDROID_KEY_ALIAS")) {
@@ -20,8 +20,8 @@ android {
         applicationId "com.hamidreza.budgetplanner"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 30902
-        versionName "3.9.2"
+        versionCode 31900
+        versionName "3.19.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -46,9 +46,16 @@ android {
             if (hasReleaseSigning) {
                 signingConfig signingConfigs.release
             } else {
-                logger.warn("BP_ANDROID_KEYSTORE not set — building an unsigned-in-practice (debug-key) release APK; do not distribute it.")
-                signingConfig signingConfigs.debug
+                logger.warn("Android release signing is not configured; release tasks will fail before producing an artifact.")
             }
+        }
+    }
+}
+
+tasks.matching { it.name in ["assembleRelease", "bundleRelease"] }.configureEach {
+    doFirst {
+        if (!hasReleaseSigning) {
+            throw new GradleException("Release signing requires BP_ANDROID_KEYSTORE, BP_ANDROID_KEYSTORE_PASSWORD, and BP_ANDROID_KEY_ALIAS")
         }
     }
 }

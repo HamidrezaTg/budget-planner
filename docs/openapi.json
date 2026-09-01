@@ -366,10 +366,23 @@
           { "$ref": "#/components/parameters/MonthQuery" },
           { "name": "review", "in": "query", "schema": { "type": "string", "enum": ["1"] } },
           { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 500 } },
-          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Rows per page. The maximum is 1000.",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 500 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of matching rows to skip.",
+            "schema": { "type": "integer", "minimum": 0, "default": 0 }
+          }
         ],
-        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
       },
       "post": {
         "tags": ["Resources"],
@@ -961,6 +974,16 @@
         }
       }
     },
+    "/recurrences/auto-post": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Post due recurring transactions",
+        "operationId": "autoPostRecurrences",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
     "/recurrences/{id}": {
       "parameters": [{ "$ref": "#/components/parameters/Id" }],
       "patch": {
@@ -1057,6 +1080,14 @@
         "tags": ["Reports"],
         "summary": "Get captured monthly report history",
         "operationId": "getReportHistory",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/reports/history/capture": {
+      "post": {
+        "tags": ["Reports"],
+        "summary": "Capture missing closed-month report snapshots",
+        "operationId": "captureReportHistory",
         "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
       }
     },
@@ -2093,8 +2124,8 @@
           "start_month": { "$ref": "#/components/schemas/Month" },
           "opening_balance": { "type": "number" },
           "category_id": { "type": ["integer", "null"] },
-          "target_amount": { "type": ["number", "null"] },
-          "target_date": { "type": ["string", "null"] }
+          "target_amount": { "type": ["number", "null"], "minimum": 0 },
+          "target_date": { "type": ["string", "null"], "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" }
         }
       },
       "FundPatch": {
@@ -2106,8 +2137,8 @@
           "start_month": { "$ref": "#/components/schemas/Month" },
           "opening_balance": { "type": "number" },
           "category_id": { "type": ["integer", "null"] },
-          "target_amount": { "type": ["number", "null"] },
-          "target_date": { "type": ["string", "null"] }
+          "target_amount": { "type": ["number", "null"], "minimum": 0 },
+          "target_date": { "type": ["string", "null"], "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" }
         }
       },
       "FundMovement": {

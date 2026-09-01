@@ -24,10 +24,21 @@ jobs:
           node-version: 22
           cache: npm
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+
       - name: Install dependencies
         run: |
           npm ci
           npm --prefix client ci
+          npm --prefix mobile ci
           if [ -f desktop-client-tauri/package-lock.json ]; then
             npm --prefix desktop-client-tauri ci
           else
@@ -61,22 +72,59 @@ jobs:
         # bundles are produced by their own OS-specific workflows.
         run: ./scripts/build-tauri-client.sh
 
-      # Android release signing requires BP_ANDROID_KEYSTORE* secrets; without
-      # them this step is skipped and the release ships without a new APK.
-      - name: Check signing secret
-        id: signcheck
+      - name: Check Android signing secrets
         env:
-          HAS_KEY: ${{ secrets.BP_ANDROID_KEYSTORE != '' }}
-        run: echo "has_key=$HAS_KEY" >> "$GITHUB_OUTPUT"
+          KEYSTORE_BASE64: ${{ secrets.BP_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.BP_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.BP_ANDROID_KEY_ALIAS }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo "Missing BP_ANDROID_KEYSTORE_BASE64" >&2; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "Missing BP_ANDROID_KEYSTORE_PASSWORD" >&2; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "Missing BP_ANDROID_KEY_ALIAS" >&2; exit 1; }
+
+      - name: Materialize Android keystore in runner temp
+        env:
+          KEYSTORE_BASE64: ${{ secrets.BP_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          KEYSTORE_PATH="$RUNNER_TEMP/budget-planner-release.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
 
       - name: Build signed Android APK
-        if: steps.signcheck.outputs.has_key == 'true'
         run: ./scripts/build-apk.sh
         env:
-          BP_ANDROID_KEYSTORE: ${{ secrets.BP_ANDROID_KEYSTORE }}
+          BP_ANDROID_KEYSTORE: ${{ runner.temp }}/budget-planner-release.keystore
           BP_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.BP_ANDROID_KEYSTORE_PASSWORD }}
           BP_ANDROID_KEY_ALIAS: ${{ secrets.BP_ANDROID_KEY_ALIAS }}
           BP_ANDROID_KEY_PASSWORD: ${{ secrets.BP_ANDROID_KEY_PASSWORD }}
+
+      - name: Verify signed Android APK
+        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify dist/budget-planner-android.apk"
+
+      - name: Build signed Android AAB (GitHub artifact only)
+        run: |
+          ( cd mobile/android && ./gradlew bundleRelease --no-daemon -q )
+          cp mobile/android/app/build/outputs/bundle/release/app-release.aab dist/budget-planner-android.aab
+        env:
+          BP_ANDROID_KEYSTORE: ${{ runner.temp }}/budget-planner-release.keystore
+          BP_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.BP_ANDROID_KEYSTORE_PASSWORD }}
+          BP_ANDROID_KEY_ALIAS: ${{ secrets.BP_ANDROID_KEY_ALIAS }}
+          BP_ANDROID_KEY_PASSWORD: ${{ secrets.BP_ANDROID_KEY_PASSWORD }}
+
+      - name: Upload Android GitHub build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: budget-planner-android-github-builds
+          if-no-files-found: error
+          path: |
+            dist/budget-planner-android.apk
+            dist/budget-planner-android.aab
+          retention-days: 14
+
+      - name: Remove materialized Android keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/budget-planner-release.keystore"
 
       - name: Generate checksums
         run: |

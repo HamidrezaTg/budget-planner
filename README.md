@@ -41,9 +41,9 @@ to it as clients — over your LAN or a VPN such as Tailscale:
 
 - **Android** — download `budget-planner-android.apk` from
   [Releases](https://github.com/HamidrezaTg/budget-planner/releases) and sideload it.
-  On first launch it asks for the server's address — use the **IP form**
-  (`http://192.168.x.x:2026`; computer names rarely resolve on phones), it verifies
-  reachability, remembers it, and auto-connects from then on. If the server is
+  On first launch it asks for the server's **HTTPS** address (an HTTPS Tailscale
+  hostname is recommended), verifies reachability, remembers it, and auto-connects
+  from then on. If the server is
   unreachable, the app offers **Try again** and **Change server address**.
   (A PWA install via "Add to Home Screen" works too.)
 - **Linux desktop (Tauri v2)** — download `budget-planner-client_<version>_amd64.deb`
@@ -180,13 +180,14 @@ to the Prometheus network at the reverse proxy or firewall; it is intentionally
 not protected by a Budget Planner session cookie.
 
 **Tailscale phone setup.** Install Tailscale on both the server machine and the
-phone, then enter the server's Tailscale IP (`100.x.y.z`) or MagicDNS hostname in
-the Android app. Keep the planner port in the address, for example
-`http://100.x.y.z:2026`. The Android shell remembers up to ten server addresses,
-so LAN and Tailscale endpoints can coexist.
+phone, then enter an HTTPS Tailscale hostname in the native app. Native clients
+reject plain HTTP because it would expose session credentials; use Tailscale HTTPS
+or an HTTPS reverse proxy reachable only through the tailnet. The Android shell
+remembers up to ten server addresses, so multiple HTTPS endpoints can coexist.
 
 ## Documentation
 
+- [`docs/MOBILE_CLIENTS.md`](docs/MOBILE_CLIENTS.md) — native network policy and build/signing workflow
 - [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — every page, button and section explained
 - [`docs/MATH.md`](docs/MATH.md) — the exact formulas behind every number, so you can trust them
 - [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — service won't start, devices can't connect, odd totals

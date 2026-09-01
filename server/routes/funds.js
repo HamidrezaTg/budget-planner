@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { fundBalanceAt, currentMonth, monthsBetween, monthsLeftTo } from '../services/model.js';
+import { fundCashFlowsAt, currentMonth, monthsLeftTo } from '../services/model.js';
 
 const router = Router();
 
@@ -8,9 +8,30 @@ const router = Router();
 // string comparisons but feeds monthsBetween() → NaN balances and progress.
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+function isMonth(value) {
+  return typeof value === 'string' && MONTH_RE.test(value);
+}
+
+function parseAmount(value, field, { defaultValue, min = -Infinity } = {}) {
+  const raw = value === undefined || value === null ? defaultValue : value;
+  const amount = Number(raw);
+  if (raw === '' || typeof raw === 'boolean' || !Number.isFinite(amount) || amount < min)
+    return { error: `${field} must be ${min === 0 ? 'a non-negative' : 'a'} finite number` };
+  return { value: amount };
+}
+
+function parseTargetAmount(value) {
+  if (value === null) return { value: null };
+  const parsed = parseAmount(value, 'target_amount', { min: 0 });
+  if (parsed.error) return parsed;
+  return { value: parsed.value || null };
+}
+
 // Funds with balances, goals and recent movements. `month` = balance reference.
 router.get('/', (req, res) => {
-  const month = /^\d{4}-\d{2}$/.test(req.query.month ?? '') ? req.query.month : currentMonth();
+  if (req.query.month !== undefined && !isMonth(req.query.month))
+    return res.status(400).json({ error: 'month must be YYYY-MM' });
+  const month = req.query.month ?? currentMonth();
   const funds = db
     .prepare(
       `SELECT f.*, c.name AS category_name FROM funds f
@@ -18,16 +39,8 @@ router.get('/', (req, res) => {
     )
     .all()
     .map((f) => {
-      const scheduled =
-        month >= f.start_month
-          ? Math.max(0, monthsBetween(f.start_month, month) + 1) * f.monthly_contribution
-          : 0;
-      const withdrawn = db
-        .prepare(
-          `SELECT COALESCE(SUM(amount),0) AS s FROM fund_movements WHERE fund_id=? AND kind='withdrawal' AND month<=?`,
-        )
-        .get(f.id, month).s;
-      const balance = Math.round(fundBalanceAt(f, month) * 100) / 100;
+      const cashFlows = fundCashFlowsAt(f, month);
+      const balance = Math.round(cashFlows.balance * 100) / 100;
 
       // goal math: how much per month is still needed to hit the target on time?
       let goal = null;
@@ -56,8 +69,8 @@ router.get('/', (req, res) => {
       return {
         ...f,
         balance,
-        contributed_so_far: Math.round((scheduled + f.opening_balance) * 100) / 100,
-        withdrawn_so_far: Math.round(-withdrawn * 100) / 100,
+        contributed_so_far: Math.round(cashFlows.contributed * 100) / 100,
+        withdrawn_so_far: Math.round(cashFlows.withdrawn * 100) / 100,
         negative: balance < 0,
         goal,
       };
@@ -79,9 +92,12 @@ router.post('/:id/movement', (req, res) => {
   const { kind, amount, month, note } = req.body ?? {};
   if (!['contribution', 'withdrawal'].includes(kind))
     return res.status(400).json({ error: "kind must be 'contribution' or 'withdrawal'" });
-  const amt = Number(amount);
-  if (!amt || amt <= 0) return res.status(400).json({ error: 'amount must be positive' });
-  const m = /^\d{4}-\d{2}$/.test(month ?? '') ? month : currentMonth();
+  const parsedAmount = parseAmount(amount, 'amount', { min: 0 });
+  if (parsedAmount.error || parsedAmount.value === 0)
+    return res.status(400).json({ error: 'amount must be a positive finite number' });
+  const amt = parsedAmount.value;
+  const m = month === undefined ? currentMonth() : month;
+  if (!isMonth(m)) return res.status(400).json({ error: 'month must be YYYY-MM' });
   db.prepare(
     'INSERT INTO fund_movements (fund_id, month, amount, kind, note) VALUES (?, ?, ?, ?, ?)',
   ).run(fund.id, m, kind === 'contribution' ? amt : -amt, kind, note ?? null);
@@ -95,34 +111,41 @@ router.patch('/:id', (req, res) => {
   const b = req.body ?? {};
   let contribution = row.monthly_contribution;
   if (b.monthly_contribution !== undefined) {
-    contribution = Number(b.monthly_contribution ?? 0);
     // A negative contribution would be summed as reducing outgoings and
     // silently inflate projected savings.
-    if (!Number.isFinite(contribution) || contribution < 0)
-      return res.status(400).json({ error: 'monthly_contribution must be a non-negative number' });
+    const parsed = parseAmount(b.monthly_contribution, 'monthly_contribution', {
+      defaultValue: 0,
+      min: 0,
+    });
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    contribution = parsed.value;
   }
   let opening = row.opening_balance;
   if (b.opening_balance !== undefined) {
-    opening = Number(b.opening_balance ?? 0);
-    if (!Number.isFinite(opening))
-      return res.status(400).json({ error: 'opening_balance must be a number' });
+    const parsed = parseAmount(b.opening_balance, 'opening_balance', { defaultValue: 0 });
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    opening = parsed.value;
   }
-  if (b.start_month != null && b.start_month !== '' && !MONTH_RE.test(String(b.start_month)))
+  if (b.start_month !== undefined && !isMonth(b.start_month))
     return res.status(400).json({ error: 'start_month must be YYYY-MM' });
+  if (b.target_date !== undefined && b.target_date !== null && !isMonth(b.target_date))
+    return res.status(400).json({ error: 'target_date must be YYYY-MM or null' });
+  let targetAmount = row.target_amount;
+  if (b.target_amount !== undefined) {
+    const parsed = parseTargetAmount(b.target_amount);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    targetAmount = parsed.value;
+  }
   db.prepare(
     'UPDATE funds SET name=?, monthly_contribution=?, start_month=?, opening_balance=?, category_id=?, target_amount=?, target_date=? WHERE id=?',
   ).run(
     b.name ?? row.name,
     contribution,
-    b.start_month ?? row.start_month,
+    b.start_month !== undefined ? b.start_month : row.start_month,
     opening,
     b.category_id ?? row.category_id,
-    b.target_amount !== undefined
-      ? b.target_amount === null
-        ? null
-        : Number(b.target_amount) || null
-      : row.target_amount,
-    b.target_date !== undefined ? b.target_date || null : row.target_date,
+    targetAmount,
+    b.target_date !== undefined ? b.target_date : row.target_date,
     req.params.id,
   );
   res.json(db.prepare('SELECT * FROM funds WHERE id = ?').get(row.id));
@@ -135,23 +158,39 @@ router.post('/', (req, res) => {
     start_month,
     opening_balance = 0,
     category_id = null,
+    target_amount = null,
+    target_date = null,
   } = req.body ?? {};
   if (!name?.trim() || !start_month)
     return res.status(400).json({ error: 'name and start_month required' });
-  if (!MONTH_RE.test(start_month))
-    return res.status(400).json({ error: 'start_month must be YYYY-MM' });
-  const contribution = Number(monthly_contribution ?? 0);
-  if (!Number.isFinite(contribution) || contribution < 0)
-    return res.status(400).json({ error: 'monthly_contribution must be a non-negative number' });
-  const opening = Number(opening_balance ?? 0);
-  if (!Number.isFinite(opening))
-    return res.status(400).json({ error: 'opening_balance must be a number' });
+  if (!isMonth(start_month)) return res.status(400).json({ error: 'start_month must be YYYY-MM' });
+  const parsedContribution = parseAmount(monthly_contribution, 'monthly_contribution', {
+    defaultValue: 0,
+    min: 0,
+  });
+  if (parsedContribution.error) return res.status(400).json({ error: parsedContribution.error });
+  const parsedOpening = parseAmount(opening_balance, 'opening_balance', { defaultValue: 0 });
+  if (parsedOpening.error) return res.status(400).json({ error: parsedOpening.error });
+  const parsedTarget = parseTargetAmount(target_amount);
+  if (parsedTarget.error) return res.status(400).json({ error: parsedTarget.error });
+  if (target_date !== null && !isMonth(target_date))
+    return res.status(400).json({ error: 'target_date must be YYYY-MM or null' });
+  const contributionValue = parsedContribution.value;
+  const opening = parsedOpening.value;
   try {
     const r = db
       .prepare(
-        'INSERT INTO funds (name, monthly_contribution, start_month, opening_balance, category_id) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO funds (name, monthly_contribution, start_month, opening_balance, category_id, target_amount, target_date) VALUES (?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(name.trim(), contribution, start_month, opening, category_id);
+      .run(
+        name.trim(),
+        contributionValue,
+        start_month,
+        opening,
+        category_id,
+        parsedTarget.value,
+        target_date,
+      );
     res.json(db.prepare('SELECT * FROM funds WHERE id = ?').get(r.lastInsertRowid));
   } catch {
     res.status(400).json({ error: 'Fund name already exists' });

@@ -10,6 +10,11 @@ const MAX_IMPORT_COLUMNS = 256;
 const MAX_IMPORT_SHEETS = 10;
 const MAX_IMPORT_CELLS = 5_000_000;
 const MAX_IMPORT_FILE_BYTES = 64 * 1024 * 1024;
+const MAX_XLSX_ZIP_ENTRIES = 2_000;
+const MAX_XLSX_ZIP_ENTRY_BYTES = 64 * 1024 * 1024;
+const MAX_XLSX_ZIP_UNCOMPRESSED_BYTES = 256 * 1024 * 1024;
+const MAX_XLSX_ZIP_COMPRESSION_RATIO = 1_000;
+const MAX_XLSX_ZIP_CENTRAL_DIRECTORY_BYTES = 4 * 1024 * 1024;
 
 const REVOLUT_COLUMNS = {
   date: ['Started Date', 'started date'],
@@ -25,9 +30,15 @@ const REVOLUT_COLUMNS = {
 function detectFormat(filePath) {
   const fd = fs.openSync(filePath, 'r');
   const buf = Buffer.alloc(4);
-  fs.readSync(fd, buf, 0, 4, 0);
-  fs.closeSync(fd);
-  return buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04 ? 'xlsx' : 'csv';
+  try {
+    fs.readSync(fd, buf, 0, 4, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  const signature = buf.readUInt32LE(0);
+  return signature === 0x04034b50 || signature === 0x06054b50 || signature === 0x02014b50
+    ? 'xlsx'
+    : 'csv';
 }
 
 function parseSheetRows(rows) {
@@ -67,6 +78,7 @@ const EXCEL_EPOCH = Date.UTC(1899, 11, 30);
 function readWorkbook(filePath) {
   const buffer = fs.readFileSync(filePath);
   if (buffer.length > MAX_IMPORT_FILE_BYTES) throw new Error(`Import file exceeds the 64 MB limit`);
+  preflightXlsxZip(buffer);
   const wb = XLSX.read(buffer, {
     type: 'buffer',
     // Avoid materializing unbounded row counts before the range checks below.
@@ -91,6 +103,86 @@ function readWorkbook(filePath) {
       throw new Error(`Workbook exceeds the ${MAX_IMPORT_CELLS}-cell limit`);
   }
   return wb;
+}
+
+// SheetJS must not be allowed to inspect an untrusted ZIP before its archive
+// metadata has been bounded. This catches malformed central directories and
+// compressed entries whose expansion would otherwise exhaust memory.
+function preflightXlsxZip(buffer) {
+  const minEocd = 22;
+  const eocdStart = Math.max(0, buffer.length - minEocd - 0xffff);
+  let eocd = -1;
+  for (let i = buffer.length - minEocd; i >= eocdStart; i--) {
+    if (buffer.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) throw new Error('Malformed XLSX archive: missing ZIP end record');
+
+  const commentLength = buffer.readUInt16LE(eocd + 20);
+  if (eocd + minEocd + commentLength !== buffer.length)
+    throw new Error('Malformed XLSX archive: invalid ZIP comment or trailing data');
+  if (buffer.readUInt16LE(eocd + 4) !== 0 || buffer.readUInt16LE(eocd + 6) !== 0)
+    throw new Error('Malformed XLSX archive: multi-disk ZIP is not supported');
+
+  const entries = buffer.readUInt16LE(eocd + 10);
+  const centralSize = buffer.readUInt32LE(eocd + 12);
+  const centralOffset = buffer.readUInt32LE(eocd + 16);
+  if (entries === 0xffff || centralSize === 0xffffffff || centralOffset === 0xffffffff)
+    throw new Error('XLSX ZIP64 archives are not supported');
+  if (entries > MAX_XLSX_ZIP_ENTRIES)
+    throw new Error(`XLSX archive has too many ZIP entries (maximum ${MAX_XLSX_ZIP_ENTRIES})`);
+  if (centralSize > MAX_XLSX_ZIP_CENTRAL_DIRECTORY_BYTES)
+    throw new Error('XLSX archive central directory is too large');
+  if (
+    centralOffset > eocd ||
+    centralSize > eocd - centralOffset ||
+    centralOffset + centralSize !== eocd
+  )
+    throw new Error('Malformed XLSX archive: invalid central directory bounds');
+
+  let totalUncompressed = 0;
+  let cursor = centralOffset;
+  for (let i = 0; i < entries; i++) {
+    if (cursor > eocd - 46 || buffer.readUInt32LE(cursor) !== 0x02014b50)
+      throw new Error('Malformed XLSX archive: invalid central directory entry');
+    const flags = buffer.readUInt16LE(cursor + 8);
+    const compressed = buffer.readUInt32LE(cursor + 20);
+    const uncompressed = buffer.readUInt32LE(cursor + 24);
+    const nameLength = buffer.readUInt16LE(cursor + 28);
+    const extraLength = buffer.readUInt16LE(cursor + 30);
+    const entryCommentLength = buffer.readUInt16LE(cursor + 32);
+    const localOffset = buffer.readUInt32LE(cursor + 42);
+    const recordLength = 46 + nameLength + extraLength + entryCommentLength;
+    if (cursor + recordLength > eocd)
+      throw new Error('Malformed XLSX archive: truncated directory entry');
+    if (compressed === 0xffffffff || uncompressed === 0xffffffff || localOffset === 0xffffffff)
+      throw new Error('XLSX ZIP64 entries are not supported');
+    if (flags & 0x1) throw new Error('Encrypted XLSX archives are not supported');
+    if (uncompressed > MAX_XLSX_ZIP_ENTRY_BYTES)
+      throw new Error(`XLSX ZIP entry exceeds the ${MAX_XLSX_ZIP_ENTRY_BYTES} byte limit`);
+    if (uncompressed > compressed * MAX_XLSX_ZIP_COMPRESSION_RATIO && uncompressed > 0)
+      throw new Error('XLSX ZIP entry has an unsafe compression ratio');
+    totalUncompressed += uncompressed;
+    if (totalUncompressed > MAX_XLSX_ZIP_UNCOMPRESSED_BYTES)
+      throw new Error('XLSX archive exceeds the uncompressed size limit');
+
+    const name = buffer.toString('utf8', cursor + 46, cursor + 46 + nameLength);
+    if (!name || name.includes('\0') || name.startsWith('/') || name.split('/').includes('..'))
+      throw new Error('Malformed XLSX archive: unsafe ZIP entry name');
+    if (localOffset > centralOffset || localOffset > buffer.length - 30)
+      throw new Error('Malformed XLSX archive: invalid local entry offset');
+    if (buffer.readUInt32LE(localOffset) !== 0x04034b50)
+      throw new Error('Malformed XLSX archive: invalid local entry header');
+    const localNameLength = buffer.readUInt16LE(localOffset + 26);
+    const localExtraLength = buffer.readUInt16LE(localOffset + 28);
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+    if (dataStart > centralOffset || compressed > centralOffset - dataStart)
+      throw new Error('Malformed XLSX archive: truncated ZIP entry');
+    cursor += recordLength;
+  }
+  if (cursor !== eocd) throw new Error('Malformed XLSX archive: central directory size mismatch');
 }
 
 export function parseStatement(filePath) {

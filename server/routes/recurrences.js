@@ -163,7 +163,6 @@ function post(r, month, day) {
 }
 
 router.get('/', (req, res) => {
-  const posted = autoPost();
   const rows = db
     .prepare(
       `SELECT r.*, a.name AS account_name, c.name AS category_name
@@ -175,7 +174,13 @@ router.get('/', (req, res) => {
     .all()
     .map(recurrenceWithParts);
   const up = upcoming(currentMonth(), new Date().getDate(), 12);
-  res.json({ recurrences: rows, upcoming: up, autoPosted: posted });
+  res.json({ recurrences: rows, upcoming: up, autoPosted: 0 });
+});
+
+// Posting due recurrences changes transactions and must never happen as a
+// side-effect of a read request.
+router.post('/auto-post', (_req, res) => {
+  res.json({ ok: true, autoPosted: autoPost() });
 });
 
 router.post('/', (req, res) => {

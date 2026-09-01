@@ -281,24 +281,50 @@ function totalPredictedAt(month) {
   return bank + committed;
 }
 
-export function fundBalanceAt(fund, month) {
-  let bal = fund.opening_balance;
-  if (month >= fund.start_month && fund.monthly_contribution) {
-    bal += fund.monthly_contribution * (monthsBetween(fund.start_month, month) + 1);
-  }
-  const moved = db
+export function fundCashFlowsAt(fund, month) {
+  const opening = fund.opening_balance;
+  const scheduled =
+    month >= fund.start_month
+      ? Math.max(0, monthsBetween(fund.start_month, month) + 1) * fund.monthly_contribution
+      : 0;
+  const movements = db
     .prepare(
-      'SELECT COALESCE(SUM(amount),0) AS s FROM fund_movements WHERE fund_id = ? AND month <= ?',
+      `SELECT
+         COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS contributions,
+         COALESCE(SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END), 0) AS withdrawals
+       FROM fund_movements
+       WHERE fund_id = ? AND month <= ?`,
     )
-    .get(fund.id, month).s;
-  const txLinked = db
+    .get(fund.id, month);
+  const linked = db
     .prepare(
-      `SELECT COALESCE(SUM(${FX_MULT} * t.amount),0) AS s
+      `SELECT
+         COALESCE(SUM(CASE WHEN ${FX_MULT} * t.amount > 0 THEN ${FX_MULT} * t.amount ELSE 0 END), 0) AS contributions,
+         COALESCE(SUM(CASE WHEN ${FX_MULT} * t.amount < 0 THEN -(${FX_MULT} * t.amount) ELSE 0 END), 0) AS withdrawals
        FROM transactions t ${FX_JOIN}
        WHERE t.fund_id = ? AND substr(t.date,1,7) <= ? AND ${NOT_TRANSFER()} AND ${NOT_PARENT()}`,
     )
-    .get(fund.id, month).s;
-  return bal + moved + txLinked;
+    .get(fund.id, month);
+
+  const contributed = opening + scheduled + movements.contributions + linked.contributions;
+  const withdrawn = movements.withdrawals + linked.withdrawals;
+  return {
+    opening,
+    scheduled,
+    manual_contributions: movements.contributions,
+    manual_withdrawals: movements.withdrawals,
+    linked_contributions: linked.contributions,
+    linked_withdrawals: linked.withdrawals,
+    contributed,
+    withdrawn,
+    balance: contributed - withdrawn,
+  };
+}
+
+// Keep the balance and the displayed contribution/withdrawal totals on one
+// calculation so they cannot drift as new cash-flow sources are added.
+export function fundBalanceAt(fund, month) {
+  return fundCashFlowsAt(fund, month).balance;
 }
 
 export function committedSavingsAt(month) {

@@ -24,7 +24,14 @@ import {
   PASSWORD_MIN,
 } from '../auth.js';
 import { getSetting, setSetting, db } from '../db.js';
-import { rateLimit, consume, clear } from '../rate-limit.js';
+import {
+  rateLimit,
+  consume,
+  clear,
+  loginCooldownRemaining,
+  recordLoginFailure,
+  clearLoginFailures,
+} from '../rate-limit.js';
 import { pauseRequests, resumeRequests } from '../request-gate.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -114,11 +121,20 @@ router.post('/login', async (req, res) => {
   const ip = rateLimitIp(req);
   const key = `${ip}|${username}`;
   const ipKey = `ip|${ip}`;
+  const cooldown = loginCooldownRemaining(key);
+  if (cooldown > 0) {
+    res.setHeader('Retry-After', Math.ceil(cooldown / 1000));
+    return res.status(429).json({ error: 'Too many attempts — try again later' });
+  }
   if (consume(ipKey, 60 * 1000, 30) || consume(key, 60 * 1000, 10))
     return res.status(429).json({ error: 'Too many attempts — try again in a minute' });
   const user = await verifyLogin(username, req.body?.password);
-  if (!user) return res.status(401).json({ error: 'Wrong username or password' });
+  if (!user) {
+    recordLoginFailure(key);
+    return res.status(401).json({ error: 'Wrong username or password' });
+  }
   clear(key);
+  clearLoginFailures(key);
   createSession(res, user);
   res.json({ ok: true });
 });

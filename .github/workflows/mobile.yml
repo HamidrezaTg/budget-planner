@@ -1,0 +1,126 @@
+name: Mobile validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android build and native tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+
+      - name: Install mobile dependencies
+        run: npm --prefix mobile ci
+
+      - name: Run mobile configuration tests
+        run: npm --prefix mobile test
+
+      - name: Sync Capacitor Android project
+        working-directory: mobile
+        run: npx cap sync android
+
+      - name: Run Android unit tests and build debug APK
+        working-directory: mobile/android
+        run: ./gradlew testDebugUnitTest assembleDebug --no-daemon
+
+      - name: Validate Android APK
+        run: |
+          test -s mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          mobile/android/gradlew -p mobile/android :app:validateSigningDebug --no-daemon
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify mobile/android/app/build/outputs/apk/debug/app-debug.apk
+
+  ios-scaffold:
+    name: iOS scaffold validation
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        run: npm --prefix mobile ci
+
+      - name: Sync Capacitor iOS project
+        working-directory: mobile
+        run: npx cap sync ios
+
+      - name: Check committed iOS scaffold
+        run: |
+          test -f mobile/ios/App/App.xcodeproj/project.pbxproj
+          test -f mobile/ios/App/App/PrivacyInfo.xcprivacy
+          test -f mobile/ios/App/App/Info.plist
+          test -f mobile/ios/App/CapApp-SPM/Package.swift
+          grep -q '<false/>' mobile/ios/App/App/Info.plist
+
+  ios-archive:
+    name: iOS unsigned archive
+    runs-on: macos-14
+    needs: ios-scaffold
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        run: npm --prefix mobile ci
+
+      - name: Sync Capacitor iOS project
+        working-directory: mobile
+        run: npx cap sync ios
+
+      - name: Resolve Swift packages
+        run: xcodebuild -project mobile/ios/App/App.xcodeproj -scheme App -resolvePackageDependencies
+
+      - name: Build unsigned archive
+        run: |
+          xcodebuild archive \
+            -project mobile/ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/BudgetPlanner.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Upload iOS archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: budget-planner-ios-unsigned-archive
+          if-no-files-found: error
+          path: ${{ runner.temp }}/BudgetPlanner.xcarchive
+          retention-days: 14

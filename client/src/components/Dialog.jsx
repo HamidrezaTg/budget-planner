@@ -201,10 +201,11 @@ export function useDialogs() {
 // guarantees as the provider's dialog: aria-labelledby/describedby wiring,
 // initial focus, Tab trapping, Escape to close, focus restore on unmount.
 // Children receive no special props — render form content freely inside.
-export function Modal({ title, onClose, children, width }) {
+export function Modal({ title, description, onClose, children, width }) {
   const panelRef = useRef(null);
   const lastFocus = useRef(null);
   const titleId = useRef(`modal-title-${++idCounter}`);
+  const descriptionId = useRef(`modal-description-${++idCounter}`);
 
   useEffect(() => {
     lastFocus.current = document.activeElement;
@@ -251,6 +252,7 @@ export function Modal({ title, onClose, children, width }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId.current}
+        aria-describedby={description != null ? descriptionId.current : undefined}
         style={width ? { width } : undefined}
         tabIndex={-1}
         onKeyDown={onKeyDown}
@@ -258,6 +260,11 @@ export function Modal({ title, onClose, children, width }) {
         <h3 className="modal-title" id={titleId.current}>
           {title}
         </h3>
+        {description != null && (
+          <p className="modal-message" id={descriptionId.current}>
+            {description}
+          </p>
+        )}
         {children}
       </div>
     </div>
