@@ -195,7 +195,7 @@ export function schemaContext() {
   const funds = db.prepare('SELECT id, name, monthly_contribution, start_month FROM funds').all();
   const sources = db
     .prepare(
-      `SELECT s.id, s.name, s.current_amount, p.name AS person FROM income_sources s
+      `SELECT s.id, s.name, s.current_amount, s.start_month, s.end_month, p.name AS person FROM income_sources s
        LEFT JOIN persons p ON p.id = s.person_id`,
     )
     .all();
@@ -214,7 +214,7 @@ export function schemaContext() {
     '- commitments(name, monthly_amount, start_month, end_month NULL=open, account_id, category_id)',
     '- funds(id, name, monthly_contribution, start_month, opening_balance)',
     '- fund_movements(fund_id, month, amount (+contribution/-withdrawal), kind, note)',
-    '- income_sources(id, name, person_id, current_amount (usual monthly), recurring)',
+    '- income_sources(id, name, person_id, current_amount (usual monthly), recurring, start_month, end_month)',
     '- income_entries(source_id, month TEXT YYYY-MM, amount REAL)',
     '- balance_observations(account_id, month TEXT YYYY-MM, balance REAL)',
     '- category_rules(keyword, category_id)',

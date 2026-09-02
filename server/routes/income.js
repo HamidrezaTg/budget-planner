@@ -5,7 +5,7 @@ import { incomeForMonth, currentMonth } from '../services/model.js';
 const router = Router();
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
-function validateSource(body, { partial = false } = {}) {
+function validateSource(body, { partial = false, existing = null } = {}) {
   if (!partial || body.name !== undefined) {
     if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 80)
       return 'name must be 1-80 characters';
@@ -14,6 +14,20 @@ function validateSource(body, { partial = false } = {}) {
     return 'current_amount must be a number';
   if (body.recurring !== undefined && typeof body.recurring !== 'boolean')
     return 'recurring must be a boolean';
+  for (const field of ['start_month', 'end_month']) {
+    const value = body[field];
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== '' &&
+      (typeof value !== 'string' || !MONTH_RE.test(value))
+    )
+      return `${field} must be YYYY-MM or empty`;
+  }
+  const start =
+    body.start_month === undefined ? existing?.start_month || null : body.start_month || null;
+  const end = body.end_month === undefined ? existing?.end_month || null : body.end_month || null;
+  if (start && end && start > end) return 'start_month must not be after end_month';
   if (body.person_id !== undefined && body.person_id !== null && body.person_id !== '') {
     const person = db.prepare('SELECT id FROM persons WHERE id = ?').get(body.person_id);
     if (!person) return 'Person not found';
@@ -47,13 +61,17 @@ router.post('/sources', (req, res) => {
   if (error) return res.status(400).json({ error });
   const result = db
     .prepare(
-      'INSERT INTO income_sources (name, person_id, current_amount, recurring) VALUES (?, ?, ?, ?)',
+      `INSERT INTO income_sources
+       (name, person_id, current_amount, recurring, start_month, end_month)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
     .run(
       body.name.trim(),
       body.person_id ? Number(body.person_id) : null,
       Number(body.current_amount ?? 0),
       body.recurring === false ? 0 : 1,
+      body.start_month || null,
+      body.end_month || null,
     );
   res.json(db.prepare('SELECT * FROM income_sources WHERE id = ?').get(result.lastInsertRowid));
 });
@@ -62,7 +80,7 @@ router.patch('/sources/:id', (req, res) => {
   const source = db.prepare('SELECT * FROM income_sources WHERE id = ?').get(req.params.id);
   if (!source) return res.status(404).json({ error: 'Source not found' });
   const body = req.body ?? {};
-  const error = validateSource(body, { partial: true });
+  const error = validateSource(body, { partial: true, existing: source });
   if (error) return res.status(400).json({ error });
   const fields = [];
   const values = [];
@@ -81,6 +99,14 @@ router.patch('/sources/:id', (req, res) => {
   if (body.recurring !== undefined) {
     fields.push('recurring = ?');
     values.push(body.recurring ? 1 : 0);
+  }
+  if (body.start_month !== undefined) {
+    fields.push('start_month = ?');
+    values.push(body.start_month || null);
+  }
+  if (body.end_month !== undefined) {
+    fields.push('end_month = ?');
+    values.push(body.end_month || null);
   }
   if (!fields.length) return res.status(400).json({ error: 'No editable fields provided' });
   values.push(req.params.id);

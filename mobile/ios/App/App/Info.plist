@@ -26,7 +26,9 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- Native connections are HTTPS, including HTTPS over Tailscale. -->
+		<!-- Permit trusted local/VPN HTTP; the shell warns before connecting over HTTP. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 	</dict>

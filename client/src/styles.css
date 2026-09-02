@@ -1971,7 +1971,9 @@ select.missing {
 .income-source-form,
 .income-source-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1.5fr) minmax(120px, 1fr) minmax(120px, 1fr) auto auto;
+  grid-template-columns:
+    minmax(150px, 1.5fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)
+    minmax(120px, 1fr) auto auto;
   gap: 8px;
   align-items: center;
 }
@@ -1980,7 +1982,9 @@ select.missing {
   border-bottom: 1px solid var(--line-soft);
 }
 .income-source-row {
-  grid-template-columns: minmax(140px, 1.5fr) minmax(110px, 1fr) minmax(120px, 1fr) auto auto auto;
+  grid-template-columns:
+    minmax(140px, 1.5fr) minmax(110px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)
+    minmax(120px, 1fr) auto auto auto;
   padding: 8px 0;
   border-bottom: 1px solid var(--line-soft);
 }

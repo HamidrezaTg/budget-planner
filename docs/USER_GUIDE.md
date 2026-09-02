@@ -65,12 +65,12 @@ is remembered in the browser.
 
 Keyboard shortcuts are available when focus is not inside a form:
 
-| Shortcut | Destination |
-|---|---|
-| `?` | Help |
-| `g`, then `d` | Dashboard |
+| Shortcut      | Destination  |
+| ------------- | ------------ |
+| `?`           | Help         |
+| `g`, then `d` | Dashboard    |
 | `g`, then `t` | Transactions |
-| `g`, then `r` | Reports |
+| `g`, then `r` | Reports      |
 
 The sidebar also provides collapse, mobile menu, theme, privacy blur, logout, and
 native-client server switching controls.
@@ -171,9 +171,14 @@ qualifying activity for unused plan to be carried forward.
 
 ## Income
 
-An income source can have a name, person, usual amount, and monthly actual.
+An income source can have a name, person, usual amount, active start month, active
+end month, and monthly actual. Dates apply to the recurring projection; leave the
+end month blank for ongoing income.
 
 - **Usual** is the recurring amount used when a month has no actual entry.
+- **Start month** is the first month in which the usual recurring amount is projected.
+- **End month** is the last month in which it is projected. This lets an old salary
+  end while a separate future salary source starts later.
 - **Actual** is the amount that really arrived in that month and overrides usual.
 
 Enter refunds as transactions according to their actual account movement; do not

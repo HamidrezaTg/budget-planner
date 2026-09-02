@@ -28,7 +28,8 @@ desktop clients are user interfaces that connect to the server.
   and explicit, reviewable change proposals.
 - Provides per-user backups, restore validation, read-only sharing links, ntfy
   warning notifications, account-synchronized themes, privacy mode, and
-  administrator user management.
+  administrator user management. Native mobile clients support trusted local/VPN HTTP
+  with an explicit warning; HTTPS remains recommended outside private networks.
 
 ## Install the Server
 
@@ -142,18 +143,18 @@ are processed and removed after import.
 Packaged installs read `/etc/default/budget-planner`. Source installs can use shell
 environment variables.
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `PORT` | `2026` | HTTP listening port |
-| `DATA_DIR` | `./data` | Database and upload directory |
-| `BIND_IP` | all interfaces | Use `127.0.0.1` for localhost-only binding |
-| `SECURE_COOKIE` | off | Set to `1` behind HTTPS |
-| `TRUST_PROXY` | off | Set to `1` behind a trusted reverse proxy |
-| `METRICS_ENABLED` | off | Expose unauthenticated `/metrics` counters |
-| `SETUP_TOKEN` | unset | `X-Setup-Token` required for remote first-run setup |
-| `AI_BASE_URL` | unset | Optional server-level AI fallback URL |
-| `AI_API_KEY` | unset | Optional server-level AI fallback key |
-| `AI_MODEL` | `gpt-4o-mini` | Optional server-level AI fallback model |
+| Variable          | Default        | Purpose                                             |
+| ----------------- | -------------- | --------------------------------------------------- |
+| `PORT`            | `2026`         | HTTP listening port                                 |
+| `DATA_DIR`        | `./data`       | Database and upload directory                       |
+| `BIND_IP`         | all interfaces | Use `127.0.0.1` for localhost-only binding          |
+| `SECURE_COOKIE`   | off            | Set to `1` behind HTTPS                             |
+| `TRUST_PROXY`     | off            | Set to `1` behind a trusted reverse proxy           |
+| `METRICS_ENABLED` | off            | Expose unauthenticated `/metrics` counters          |
+| `SETUP_TOKEN`     | unset          | `X-Setup-Token` required for remote first-run setup |
+| `AI_BASE_URL`     | unset          | Optional server-level AI fallback URL               |
+| `AI_API_KEY`      | unset          | Optional server-level AI fallback key               |
+| `AI_MODEL`        | `gpt-4o-mini`  | Optional server-level AI fallback model             |
 
 For public or untrusted networks, bind the server locally and use Caddy or another
 HTTPS reverse proxy. Follow [HTTPS With Caddy](docs/HTTPS_CADDY.md). Do not expose

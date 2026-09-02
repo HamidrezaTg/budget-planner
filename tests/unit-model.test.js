@@ -18,6 +18,7 @@ const {
   convertCurrency,
   transferToRevolut,
   completedTransferToRevolut,
+  incomeForMonth,
 } = await import('../server/services/model.js');
 after(() => {
   cleanup(dir);
@@ -66,6 +67,33 @@ test('projection rolls forward when the latest observation predates the start mo
   assert.equal(scenario.anchored_at, out.anchored_at);
   assert.equal(scenario.months[0].total_predicted - first.total_predicted, 100);
   dbm.closeUserDb('proj-user');
+});
+
+test('recurring income follows its start and end months while actual entries remain historical', () => {
+  const username = 'income-schedule-user';
+  const db = dbm.getUserDb(username);
+  const start = addMonths(currentMonth(), 1);
+  const end = addMonths(currentMonth(), 2);
+  const after = addMonths(currentMonth(), 3);
+  const sourceId = db
+    .prepare(
+      `INSERT INTO income_sources (name, current_amount, recurring, start_month, end_month)
+     VALUES ('Future salary', 2500, 1, ?, ?)`,
+    )
+    .run(start, end).lastInsertRowid;
+
+  assert.equal(dbm.als.run(db, () => incomeForMonth(currentMonth())).total, 0);
+  assert.equal(dbm.als.run(db, () => incomeForMonth(start)).total, 2500);
+  assert.equal(dbm.als.run(db, () => incomeForMonth(end)).total, 2500);
+  assert.equal(dbm.als.run(db, () => incomeForMonth(after)).total, 0);
+
+  db.prepare('INSERT INTO income_entries (source_id, month, amount) VALUES (?, ?, ?)').run(
+    sourceId,
+    after,
+    900,
+  );
+  assert.equal(dbm.als.run(db, () => incomeForMonth(after)).total, 900);
+  dbm.closeUserDb(username);
 });
 
 test('account balances remain in account currency while aggregate conversion uses FX rates', () => {

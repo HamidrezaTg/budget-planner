@@ -1,28 +1,29 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { api } from './api.js';
 import Layout from './components/Layout.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { DialogProvider } from './components/Dialog.jsx';
 import Login from './pages/Login.jsx';
-import Dashboard from './pages/Dashboard.jsx';
-import Budgets from './pages/Budgets.jsx';
-import ImportPage from './pages/ImportPage.jsx';
-import Transactions from './pages/Transactions.jsx';
-import Funds from './pages/Funds.jsx';
-import Commitments from './pages/Commitments.jsx';
-import Income from './pages/Income.jsx';
-import Balances from './pages/Balances.jsx';
-import Projection from './pages/Projection.jsx';
-import Reports from './pages/Reports.jsx';
-import Categories from './pages/Categories.jsx';
-import Chat from './pages/Chat.jsx';
-import Settings from './pages/Settings.jsx';
 import Help from './pages/Help.jsx';
-import Users from './pages/Users.jsx';
-import Recurring from './pages/Recurring.jsx';
-import Accounts from './pages/Accounts.jsx';
-import Shared from './pages/Shared.jsx';
+
+const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
+const Budgets = lazy(() => import('./pages/Budgets.jsx'));
+const ImportPage = lazy(() => import('./pages/ImportPage.jsx'));
+const Transactions = lazy(() => import('./pages/Transactions.jsx'));
+const Funds = lazy(() => import('./pages/Funds.jsx'));
+const Commitments = lazy(() => import('./pages/Commitments.jsx'));
+const Income = lazy(() => import('./pages/Income.jsx'));
+const Balances = lazy(() => import('./pages/Balances.jsx'));
+const Projection = lazy(() => import('./pages/Projection.jsx'));
+const Reports = lazy(() => import('./pages/Reports.jsx'));
+const Categories = lazy(() => import('./pages/Categories.jsx'));
+const Chat = lazy(() => import('./pages/Chat.jsx'));
+const Settings = lazy(() => import('./pages/Settings.jsx'));
+const Users = lazy(() => import('./pages/Users.jsx'));
+const Recurring = lazy(() => import('./pages/Recurring.jsx'));
+const Accounts = lazy(() => import('./pages/Accounts.jsx'));
+const Shared = lazy(() => import('./pages/Shared.jsx'));
 
 export default function App() {
   const [status, setStatus] = useState(null);
@@ -97,29 +98,31 @@ export default function App() {
   return (
     <DialogProvider>
       <ErrorBoundary>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/share/:token" element={<Shared />} />
-          <Route element={<Layout me={me} />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/budgets" element={<Budgets />} />
-            <Route path="/categories" element={<Categories />} />
-            <Route path="/import" element={<ImportPage />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/recurring" element={<Recurring />} />
-            <Route path="/funds" element={<Funds />} />
-            <Route path="/commitments" element={<Commitments />} />
-            <Route path="/income" element={<Income />} />
-            <Route path="/accounts" element={<Accounts />} />
-            <Route path="/balances" element={<Balances />} />
-            <Route path="/projection" element={<Projection />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/settings" element={<Settings me={me} />} />
-            {me?.admin && <Route path="/users" element={<Users admin me={me.username} />} />}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
+        <Suspense fallback={<div className="loading">Loading…</div>}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/share/:token" element={<Shared />} />
+            <Route element={<Layout me={me} />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/budgets" element={<Budgets />} />
+              <Route path="/categories" element={<Categories />} />
+              <Route path="/import" element={<ImportPage />} />
+              <Route path="/transactions" element={<Transactions />} />
+              <Route path="/recurring" element={<Recurring />} />
+              <Route path="/funds" element={<Funds />} />
+              <Route path="/commitments" element={<Commitments />} />
+              <Route path="/income" element={<Income />} />
+              <Route path="/accounts" element={<Accounts />} />
+              <Route path="/balances" element={<Balances />} />
+              <Route path="/projection" element={<Projection />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/chat" element={<Chat />} />
+              <Route path="/settings" element={<Settings me={me} />} />
+              {me?.admin && <Route path="/users" element={<Users admin me={me.username} />} />}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </ErrorBoundary>
     </DialogProvider>
   );

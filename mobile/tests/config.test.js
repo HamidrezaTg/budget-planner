@@ -9,6 +9,7 @@ test('Capacitor identity and LAN/VPN navigation policy are configured', () => {
   const config = JSON.parse(fs.readFileSync(path.join(root, 'capacitor.config.json'), 'utf8'));
   assert.equal(config.appId, 'com.hamidreza.budgetplanner');
   assert.deepEqual(config.server.allowNavigation, ['*']);
+  assert.equal(config.android.allowMixedContent, true);
   const androidManifest = fs.readFileSync(
     path.join(root, 'android/app/src/main/AndroidManifest.xml'),
     'utf8',
@@ -28,6 +29,10 @@ test('iOS privacy manifest declares no tracking or collected data', () => {
   assert.match(manifest, /<false\s*\/>/);
   assert.match(manifest, /NSPrivacyCollectedDataTypes/);
   assert.match(manifest, /NSPrivacyAccessedAPITypes/);
+  assert.match(
+    fs.readFileSync(path.join(root, 'ios/App/App/Info.plist'), 'utf8'),
+    /NSAllowsLocalNetworking[\s\S]*<true\s*\/>/,
+  );
   assert.match(
     fs.readFileSync(path.join(root, 'ios/App/App/Info.plist'), 'utf8'),
     /NSAllowsArbitraryLoads[\s\S]*<false\s*\/>/,

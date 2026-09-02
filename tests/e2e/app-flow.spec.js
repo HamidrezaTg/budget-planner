@@ -93,4 +93,13 @@ test('themes, responsive settings, and projection controls work', async ({ page 
   await expect(page.getByRole('button', { name: 'Compare scenarios' })).toBeDisabled();
   await page.getByRole('button', { name: '+ Add scenario' }).click();
   await expect(page.getByRole('button', { name: 'Remove' })).toBeVisible();
+
+  await page.goto('/income');
+  await expect(page.getByRole('heading', { name: 'Income sources' })).toBeVisible();
+  await page.getByPlaceholder('Source name, e.g. Salary').fill('Future salary');
+  await page.getByLabel('Income source start month').fill('2099-01');
+  await page.getByLabel('Income source end month').fill('2099-12');
+  await page.getByRole('button', { name: 'Add source' }).click();
+  await expect(page.getByLabel('Future salary start month')).toHaveValue('2099-01');
+  await expect(page.getByLabel('Future salary end month')).toHaveValue('2099-12');
 });

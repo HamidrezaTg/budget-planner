@@ -17,19 +17,19 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       - name: Install Android SDK components
         run: sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
@@ -113,7 +113,7 @@ jobs:
           BP_ANDROID_KEY_PASSWORD: ${{ secrets.BP_ANDROID_KEY_PASSWORD }}
 
       - name: Upload Android GitHub build artifacts
-        uses: actions/upload-artifact@v4
+          uses: actions/upload-artifact@v7
         with:
           name: budget-planner-android-github-builds
           if-no-files-found: error
@@ -162,9 +162,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -206,9 +206,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm

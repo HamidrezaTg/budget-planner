@@ -428,6 +428,13 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
       'ALTER TABLE transactions ADD COLUMN commitment_id INTEGER REFERENCES commitments(id) ON DELETE SET NULL',
     );
   } catch {}
+  // v3.20 — recurring income source schedules. Nullable dates preserve the
+  // original always-active behavior for existing sources.
+  for (const col of ['start_month TEXT', 'end_month TEXT']) {
+    try {
+      db.exec(`ALTER TABLE income_sources ADD COLUMN ${col}`);
+    } catch {}
+  }
 
   // These columns were added to older databases by the migrations above. Do
   // not create their indexes in the initial schema batch, or a legacy database

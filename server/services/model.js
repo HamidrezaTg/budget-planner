@@ -215,7 +215,11 @@ export function incomeForMonth(month) {
     const entry = db
       .prepare('SELECT amount FROM income_entries WHERE source_id = ? AND month = ?')
       .get(s.id, month);
-    const amount = entry ? entry.amount : s.recurring ? s.current_amount : 0;
+    const scheduled =
+      (!s.start_month || s.start_month <= month) && (!s.end_month || s.end_month >= month);
+    // Actual entries represent money that arrived, even when outside an old
+    // schedule. Date limits apply to recurring projections only.
+    const amount = entry ? entry.amount : s.recurring && scheduled ? s.current_amount : 0;
     total += amount;
     return { source: s, amount };
   });

@@ -41,8 +41,8 @@ phones, and desktop applications connect to it as clients.
 
 - Treat the public `/help` page and `USER_GUIDE.md` as end-user documentation.
 - Treat README and deployment documents as operator documentation.
-- Document Android HTTP only as a trusted-LAN/VPN option with its security warning;
-  the iOS shell remains HTTPS-only.
+- Document mobile HTTP only as a trusted-LAN/VPN option with its security warning;
+  iOS keeps App Transport Security enabled for arbitrary public HTTP.
 - A SQLite backup does not include transaction attachments. Copy the corresponding
   uploads directory separately for a complete migration.
 - Do not put passwords, API keys, keystores, database files, or private server URLs

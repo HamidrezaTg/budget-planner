@@ -35,7 +35,7 @@ const SECTIONS = [
       'On mobile, open the menu from the top bar. On desktop, collapse the sidebar from the Budget Planner mark.',
       'Use the eye control to blur financial values in the current browser. Use the theme control to switch appearance; your selected theme is saved to your user account and follows you to other devices.',
       'Press ? for Help, or press g then d, t, or r for Dashboard, Transactions, or Reports. Shortcuts are disabled while typing.',
-      'In a native client, use Switch server to change between saved HTTPS endpoints.',
+      'In a native client, use Switch server to change between saved server endpoints. HTTP is intended only for trusted LAN/VPN connections.',
     ],
     notes: [
       'Logging out ends the server session. It does not remove the local database or saved native server addresses.',
@@ -257,7 +257,7 @@ const SECTIONS = [
       'When a device cannot connect, first open the same URL in its browser, then check the server bind address, firewall, Wi-Fi client isolation, Tailscale membership, and HTTPS certificate.',
     ],
     notes: [
-      'Android HTTP is intended only for trusted LAN/VPN use because session credentials and application traffic can be observed or modified on an untrusted network. HTTPS is recommended outside private networks; the iOS shell retains its HTTPS policy.',
+      'Mobile HTTP is intended only for trusted LAN/VPN use because session credentials and application traffic can be observed or modified on an untrusted network. HTTPS is recommended outside private networks; iOS still blocks arbitrary public HTTP through App Transport Security.',
       'Never expose the raw server port to the public internet without HTTPS and appropriate firewall controls.',
     ],
   },

@@ -34,9 +34,9 @@ Phones rarely resolve hostnames like `lenovo`. Use:
 - `http://lenovo.local:2026` — mDNS name, when supported by the local network
 - an HTTPS Tailscale hostname or HTTPS reverse-proxy URL — recommended outside trusted networks
 
-The Android client accepts HTTP on a trusted LAN or VPN and warns before saving the
-address. iOS remains HTTPS-only. Use HTTPS Tailscale or a certificate-backed reverse
-proxy on public or untrusted networks.
+The Android and iOS clients accept HTTP on a trusted LAN or VPN and warn before saving
+the address. iOS still blocks arbitrary public HTTP through App Transport Security. Use
+HTTPS Tailscale or a certificate-backed reverse proxy on public or untrusted networks.
 
 Beware the reverse trap on desktop machines: some routers/DNS setups resolve the
 *server's own hostname* to `127.0.0.1`, which silently opens a **different app on the

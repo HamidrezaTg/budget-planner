@@ -3,6 +3,16 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.19.2] — 2026-09-02
+
+### Added
+- Salary and recurring income start/end month scheduling for future income changes.
+- Explicit Capacitor mixed-content support for trusted HTTP LAN/VPN connections.
+
+### Fixed
+- Android discovery no longer fails when the app's HTTPS WebView origin connects to
+  a trusted HTTP server.
+
 ## [3.19.1] — 2026-09-02
 
 ### Added

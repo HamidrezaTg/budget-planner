@@ -18,8 +18,9 @@ Tailscale HTTPS DNS hostname (for example `https://server.example.ts.net:2026`) 
 certificate-backed reverse proxy provides HTTPS while keeping Budget Planner on port
 2026. A raw Tailscale IP cannot have a normal DNS certificate.
 
-The iOS shell retains its platform HTTPS policy until its native transport is released
-with equivalent explicit HTTP confirmation and cleartext configuration.
+The iOS shell also permits HTTP only for local/VPN networking and uses the same explicit
+confirmation before saving an HTTP address. Arbitrary public HTTP remains blocked by
+App Transport Security. HTTPS is still recommended outside trusted networks.
 
 The web server can run over HTTP for localhost and private networks. Use Caddy or
 another reverse proxy for an HTTPS deployment and enable `SECURE_COOKIE=1` and

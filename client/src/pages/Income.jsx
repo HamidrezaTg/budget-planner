@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, eur, monthLabel } from '../api.js';
+import { api, currentMonth, eur, monthLabel } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
 import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
@@ -15,6 +15,8 @@ export default function Income() {
     current_amount: '',
     person_id: '',
     recurring: true,
+    start_month: currentMonth(),
+    end_month: '',
   });
   const [sourceEdits, setSourceEdits] = useState({});
 
@@ -33,6 +35,8 @@ export default function Income() {
                 current_amount: String(source.current_amount ?? 0),
                 person_id: source.person_id ?? '',
                 recurring: !!source.recurring,
+                start_month: source.start_month ?? '',
+                end_month: source.end_month ?? '',
               },
             ]),
           ),
@@ -58,8 +62,17 @@ export default function Income() {
         name: sourceForm.name.trim(),
         current_amount: Number(sourceForm.current_amount) || 0,
         person_id: sourceForm.person_id || null,
+        start_month: sourceForm.start_month || null,
+        end_month: sourceForm.end_month || null,
       });
-      setSourceForm({ name: '', current_amount: '', person_id: '', recurring: true });
+      setSourceForm({
+        name: '',
+        current_amount: '',
+        person_id: '',
+        recurring: true,
+        start_month: currentMonth(),
+        end_month: '',
+      });
       toast(`Income source "${sourceForm.name.trim()}" added.`);
       load();
     } catch (err) {
@@ -76,6 +89,8 @@ export default function Income() {
         name: edit.name.trim(),
         current_amount: Number(edit.current_amount) || 0,
         person_id: edit.person_id || null,
+        start_month: edit.start_month || null,
+        end_month: edit.end_month || null,
       });
       toast(`Income source "${edit.name.trim()}" saved.`);
       load();
@@ -127,7 +142,7 @@ export default function Income() {
       </div>
       <p className="muted">
         Actual income must be entered, not assumed. The “usual” amount is used by the projection
-        unless a month has its own entry.
+        only during the configured start and end months, unless a month has its own entry.
       </p>
 
       {error && <div className="error">{error}</div>}
@@ -138,7 +153,10 @@ export default function Income() {
             <p className="eyebrow">Income setup</p>
             <h2>Income sources</h2>
           </div>
-          <span className="muted tiny">Add each salary or recurring income separately.</span>
+          <span className="muted tiny">
+            Add each salary or recurring income separately. Leave the end month blank for ongoing
+            income.
+          </span>
         </div>
         <form className="income-source-form" onSubmit={addSource}>
           <input
@@ -166,6 +184,20 @@ export default function Income() {
               </option>
             ))}
           </select>
+          <input
+            aria-label="Income source start month"
+            type="month"
+            value={sourceForm.start_month}
+            onChange={(e) => setSourceForm({ ...sourceForm, start_month: e.target.value })}
+            title="First month included in the projection"
+          />
+          <input
+            aria-label="Income source end month"
+            type="month"
+            value={sourceForm.end_month}
+            onChange={(e) => setSourceForm({ ...sourceForm, end_month: e.target.value })}
+            title="Last month included in the projection"
+          />
           <label className="check-label">
             <input
               type="checkbox"
@@ -222,6 +254,30 @@ export default function Income() {
                     </option>
                   ))}
                 </select>
+                <input
+                  aria-label={`${source.name} start month`}
+                  type="month"
+                  value={edit.start_month ?? ''}
+                  onChange={(e) =>
+                    setSourceEdits((p) => ({
+                      ...p,
+                      [source.id]: { ...edit, start_month: e.target.value },
+                    }))
+                  }
+                  title="First month included in the projection"
+                />
+                <input
+                  aria-label={`${source.name} end month`}
+                  type="month"
+                  value={edit.end_month ?? ''}
+                  onChange={(e) =>
+                    setSourceEdits((p) => ({
+                      ...p,
+                      [source.id]: { ...edit, end_month: e.target.value },
+                    }))
+                  }
+                  title="Last month included in the projection"
+                />
                 <label className="check-label">
                   <input
                     type="checkbox"

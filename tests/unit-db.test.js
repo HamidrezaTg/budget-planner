@@ -156,6 +156,30 @@ test('legacy transaction tables migrate before dependent indexes are created', (
   dbm.closeUserDb(username);
 });
 
+test('legacy income sources receive nullable schedule columns', () => {
+  const username = 'legacy-income-user';
+  const raw = new DatabaseSync(`${dir}/users/${username}.db`);
+  raw.exec(`
+    CREATE TABLE income_sources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      person_id INTEGER,
+      current_amount REAL NOT NULL DEFAULT 0,
+      recurring INTEGER NOT NULL DEFAULT 1
+    );
+  `);
+  raw.close();
+
+  const db = dbm.getUserDb(username);
+  const columns = db
+    .prepare('PRAGMA table_info(income_sources)')
+    .all()
+    .map((c) => c.name);
+  assert.ok(columns.includes('start_month'));
+  assert.ok(columns.includes('end_month'));
+  dbm.closeUserDb(username);
+});
+
 test('usernames that collided under the legacy sanitizer get distinct databases', () => {
   // Legacy mapping collapsed "user.1" onto "user_1"'s file. Now they must be
   // separate files with separate data.
