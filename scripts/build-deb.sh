@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build a Debian package: budget-planner_<version>_all.deb
-# Result: dist/budget-planner_<version>_all.deb
+# Build a Debian package: budget-planner-server_<version>_all.deb
+# Result: dist/budget-planner-server_<version>_all.deb
 # The package ships server + built client + production node_modules and a
 # systemd service running as the system user 'budget' with data in
 # /var/lib/budget-planner.
@@ -33,6 +33,8 @@ for f in control postinst prerm postrm; do
   cp "packaging/$f" "$STAGE/DEBIAN/$f"
   chmod 755 "$STAGE/DEBIAN/$f"
 done
+cp packaging/conffiles "$STAGE/DEBIAN/conffiles"
+chmod 644 "$STAGE/DEBIAN/conffiles"
 sed -i "s/^Version: .*/Version: $VERSION/" "$STAGE/DEBIAN/control"
 cp packaging/budget-planner.service "$STAGE/lib/systemd/system/"
 cp packaging/budget-planner.default "$STAGE/etc/default/budget-planner"
@@ -40,6 +42,6 @@ chmod 644 "$STAGE/etc/default/budget-planner"
 
 mkdir -p dist
 echo "==> dpkg-deb --build"
-dpkg-deb --root-owner-group --build "$STAGE" "dist/budget-planner_${VERSION}_all.deb"
-ls -lh "dist/budget-planner_${VERSION}_all.deb"
-echo "==> install with:  sudo apt install ./dist/budget-planner_${VERSION}_all.deb"
+dpkg-deb --root-owner-group --build "$STAGE" "dist/budget-planner-server_${VERSION}_all.deb"
+ls -lh "dist/budget-planner-server_${VERSION}_all.deb"
+echo "==> install with:  sudo apt install ./dist/budget-planner-server_${VERSION}_all.deb"

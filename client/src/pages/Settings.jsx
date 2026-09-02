@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, currentMonth, setCurrency } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
+import { useTheme } from '../components/Theme.jsx';
 
 export default function Settings({ me }) {
   const { confirm, toast } = useDialogs();
@@ -20,7 +21,7 @@ export default function Settings({ me }) {
   const [pw, setPw] = useState({ current: '', next: '', repeat: '' });
   const [pwMsg, setPwMsg] = useState(null);
   const [dataMsg, setDataMsg] = useState(null);
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'light');
+  const { theme, setTheme } = useTheme();
   const [rename, setRename] = useState({ username: me?.username || '', current_password: '' });
   const [renameMsg, setRenameMsg] = useState(null);
   const [shares, setShares] = useState([]);
@@ -141,12 +142,6 @@ export default function Settings({ me }) {
     } catch (err) {
       setMsg({ ok: false, text: err.message });
     }
-  };
-
-  const pickTheme = (t) => {
-    setTheme(t);
-    document.documentElement.dataset.theme = t;
-    localStorage.setItem('bp-theme', t);
   };
 
   const loadFx = () =>
@@ -405,7 +400,7 @@ export default function Settings({ me }) {
               <button
                 key={value}
                 className={`btn ${theme === value ? 'primary' : 'ghost'}`}
-                onClick={() => pickTheme(value)}
+                onClick={() => setTheme(value)}
                 aria-pressed={theme === value}
                 title={`Use the ${label.toLowerCase()} theme`}
               >
@@ -496,8 +491,8 @@ export default function Settings({ me }) {
         <form onSubmit={changePassword}>
           <div className="settings-section">
             <p className="muted tiny">
-              Change your password. You'll stay logged in on this device but be signed out
-              elsewhere.
+              Change your password. All existing sessions, including this device, will be signed out
+              after the change.
             </p>
           </div>
           <div className="form-grid">

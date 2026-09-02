@@ -41,19 +41,34 @@ export default function Projection() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [horizon, setHorizon] = useState('96');
+  const [horizonDraft, setHorizonDraft] = useState('96');
+  const [scenarioHorizon, setScenarioHorizon] = useState('96');
   const [scenarioForms, setScenarioForms] = useState(() => [blankScenario()]);
   const [scenarioData, setScenarioData] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    setScenarioData(null);
     api
-      .get(`/projection?months=96&from=${month}`)
+      .get(`/projection?months=${horizon}&from=${month}`)
       .then((projection) => {
         setData(projection);
-        setHorizon(String(projection.horizon));
       })
       .catch((e) => setError(e.message));
-  }, [month]);
+  }, [month, horizon]);
+
+  const applyHorizon = () => {
+    const numericHorizon = Number(horizonDraft);
+    if (!Number.isInteger(numericHorizon) || numericHorizon < 1 || numericHorizon > 240) {
+      setError('Projection horizon must be a whole number from 1 to 240.');
+      return;
+    }
+    setError('');
+    setData(null);
+    setScenarioData(null);
+    setHorizon(String(numericHorizon));
+    setHorizonDraft(String(numericHorizon));
+  };
 
   const updateScenario = (index, patch) => {
     setScenarioForms((previous) =>
@@ -80,7 +95,7 @@ export default function Projection() {
 
   const submitScenarios = async (event) => {
     event.preventDefault();
-    const numericHorizon = Number(horizon);
+    const numericHorizon = Number(scenarioHorizon);
     if (!Number.isInteger(numericHorizon) || numericHorizon < 1 || numericHorizon > 240) {
       setError('Horizon must be a whole number from 1 to 240.');
       return;
@@ -135,6 +150,11 @@ export default function Projection() {
     }
   };
 
+  const removeScenario = (index) => {
+    setScenarioForms((previous) => previous.filter((_, item) => item !== index));
+    setScenarioData(null);
+  };
+
   if (!data)
     return <div className="loading">{error ? `Failed to load: ${error}` : 'Loading…'}</div>;
 
@@ -166,6 +186,36 @@ export default function Projection() {
           : ' Enter real balances on the Balances page to anchor it to reality.'}
       </p>
 
+      <div className="card projection-controls">
+        <div>
+          <p className="eyebrow">Baseline forecast</p>
+          <h2>Projection horizon</h2>
+          <p className="muted">
+            Choose how many months the normal forecast should show. This does not create or save a
+            scenario.
+          </p>
+        </div>
+        <div className="projection-horizon-actions">
+          <label className="scenario-horizon">
+            Months
+            <input
+              type="number"
+              min="1"
+              max="240"
+              step="1"
+              value={horizonDraft}
+              onChange={(event) => setHorizonDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') applyHorizon();
+              }}
+            />
+          </label>
+          <button type="button" className="btn primary" onClick={applyHorizon}>
+            Update projection
+          </button>
+        </div>
+      </div>
+
       <div className="card scenario-builder">
         <div className="panel-head">
           <div>
@@ -183,116 +233,121 @@ export default function Projection() {
               min="1"
               max="240"
               step="1"
-              value={horizon}
-              onChange={(event) => setHorizon(event.target.value)}
+              value={scenarioHorizon}
+              onChange={(event) => setScenarioHorizon(event.target.value)}
             />
           </label>
         </div>
         <form onSubmit={submitScenarios}>
-          <div className="scenario-grid">
-            {scenarioForms.map((scenario, index) => (
-              <div className="scenario-card" key={index}>
-                <div className="scenario-card-head">
-                  <strong style={{ borderColor: scenarioColors[index] }}>
-                    Scenario {index + 1}
-                  </strong>
-                  {scenarioForms.length > 1 && (
+          {scenarioForms.length > 0 ? (
+            <div className="scenario-grid">
+              {scenarioForms.map((scenario, index) => (
+                <div className="scenario-card" key={index}>
+                  <div className="scenario-card-head">
+                    <strong style={{ borderColor: scenarioColors[index] }}>
+                      Scenario {index + 1}
+                    </strong>
                     <button
                       type="button"
                       className="btn ghost small"
-                      onClick={() =>
-                        setScenarioForms((previous) => previous.filter((_, item) => item !== index))
-                      }
+                      onClick={() => removeScenario(index)}
                     >
                       Remove
                     </button>
-                  )}
-                </div>
-                <input
-                  required
-                  aria-label={`Scenario ${index + 1} name`}
-                  placeholder="Name, e.g. New job"
-                  value={scenario.name}
-                  onChange={(event) => updateScenario(index, { name: event.target.value })}
-                />
-                <div className="scenario-deltas">
-                  <label>
-                    Monthly income change
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={scenario.monthly_income_delta}
-                      onChange={(event) =>
-                        updateScenario(index, { monthly_income_delta: event.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Monthly outgoings change
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={scenario.monthly_outgoings_delta}
-                      onChange={(event) =>
-                        updateScenario(index, { monthly_outgoings_delta: event.target.value })
-                      }
-                    />
-                  </label>
-                </div>
-                <div className="one-off-head">
-                  <span>One-off outgoings</span>
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() =>
-                      updateScenario(index, {
-                        one_offs: [
-                          ...scenario.one_offs,
-                          { month: data.from || currentMonth(), amount: '' },
-                        ],
-                      })
-                    }
-                  >
-                    + Add one-off
-                  </button>
-                </div>
-                {scenario.one_offs.map((oneOff, oneOffIndex) => (
-                  <div className="one-off-row" key={oneOffIndex}>
-                    <input
-                      type="month"
-                      aria-label="One-off month"
-                      value={oneOff.month}
-                      onChange={(event) =>
-                        updateOneOff(index, oneOffIndex, { month: event.target.value })
-                      }
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="Amount"
-                      aria-label="One-off amount"
-                      value={oneOff.amount}
-                      onChange={(event) =>
-                        updateOneOff(index, oneOffIndex, { amount: event.target.value })
-                      }
-                    />
+                  </div>
+                  <input
+                    required
+                    aria-label={`Scenario ${index + 1} name`}
+                    placeholder="Name, e.g. New job"
+                    value={scenario.name}
+                    onChange={(event) => updateScenario(index, { name: event.target.value })}
+                  />
+                  <div className="scenario-deltas">
+                    <label>
+                      Monthly income change
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={scenario.monthly_income_delta}
+                        onChange={(event) =>
+                          updateScenario(index, { monthly_income_delta: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Monthly outgoings change
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={scenario.monthly_outgoings_delta}
+                        onChange={(event) =>
+                          updateScenario(index, { monthly_outgoings_delta: event.target.value })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="one-off-head">
+                    <span>One-off outgoings</span>
                     <button
                       type="button"
-                      className="btn ghost small"
-                      aria-label="Remove one-off"
+                      className="text-button"
                       onClick={() =>
                         updateScenario(index, {
-                          one_offs: scenario.one_offs.filter((_, item) => item !== oneOffIndex),
+                          one_offs: [
+                            ...scenario.one_offs,
+                            { month: data.from || currentMonth(), amount: '' },
+                          ],
                         })
                       }
                     >
-                      x
+                      + Add one-off
                     </button>
                   </div>
-                ))}
-              </div>
-            ))}
-          </div>
+                  {scenario.one_offs.map((oneOff, oneOffIndex) => (
+                    <div className="one-off-row" key={oneOffIndex}>
+                      <input
+                        type="month"
+                        aria-label="One-off month"
+                        value={oneOff.month}
+                        onChange={(event) =>
+                          updateOneOff(index, oneOffIndex, { month: event.target.value })
+                        }
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Amount"
+                        aria-label="One-off amount"
+                        value={oneOff.amount}
+                        onChange={(event) =>
+                          updateOneOff(index, oneOffIndex, { amount: event.target.value })
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="btn ghost small"
+                        aria-label="Remove one-off"
+                        onClick={() =>
+                          updateScenario(index, {
+                            one_offs: scenario.one_offs.filter((_, item) => item !== oneOffIndex),
+                          })
+                        }
+                      >
+                        x
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="scenario-empty">
+              <strong>No scenarios configured</strong>
+              <span className="muted">
+                Add a scenario when you want to compare a temporary alternative.
+              </span>
+            </div>
+          )}
           <div className="scenario-actions">
             <button
               type="button"
@@ -302,7 +357,11 @@ export default function Projection() {
             >
               + Add scenario
             </button>
-            <button type="submit" className="btn primary" disabled={submitting}>
+            <button
+              type="submit"
+              className="btn primary"
+              disabled={submitting || scenarioForms.length === 0}
+            >
               {submitting ? 'Comparing…' : 'Compare scenarios'}
             </button>
           </div>

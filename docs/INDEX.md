@@ -1,0 +1,49 @@
+# Documentation
+
+Budget Planner is a self-hosted application. The server owns the data; browsers,
+phones, and desktop applications connect to it as clients.
+
+## Start Using Budget Planner
+
+- [User Guide](USER_GUIDE.md) - complete end-user reference for setup, budgeting,
+  imports, transactions, forecasting, reports, backups, sharing, and administration.
+- [In-app Help](../client/src/pages/Help.jsx) - the same task-oriented guidance is
+  available publicly at `/help`, before login and while the server is unavailable.
+- [Math and definitions](MATH.md) - formulas and terminology behind dashboard,
+  balance, fund, projection, and report values.
+- [Troubleshooting](TROUBLESHOOTING.md) - connection, service, import, currency,
+  backup, and migration fixes.
+
+## Install and Operate the Server
+
+- [README](../README.md) - recommended installation, source development, features,
+  configuration, privacy, and security overview.
+- [HTTPS with Caddy](HTTPS_CADDY.md) - put the HTTP server behind HTTPS for public
+  or untrusted networks.
+- [Security policy](../SECURITY.md) - security model and responsible disclosure.
+
+## Connect Clients
+
+- [Mobile clients](MOBILE_CLIENTS.md) - Android/iOS network policy, release signing,
+  and iOS archive limitations.
+- [Desktop client](DESKTOP_CLIENT.md) - Tauri client architecture and operation.
+- [Arch Linux installation](INSTALL_ARCH.md) - AUR and AppImage installation.
+- [macOS installation](INSTALL_MAC.md) - DMG installation and Gatekeeper guidance.
+
+## Develop and Integrate
+
+- [OpenAPI contract](openapi.json) - authenticated API schema.
+- [OS test matrix](OS_TEST_MATRIX.md) - platform validation notes.
+- [Changelog](../CHANGELOG.md) - release history.
+- [Roadmap](../ROADMAP.md) - planned work.
+
+## Documentation Rules
+
+- Treat the public `/help` page and `USER_GUIDE.md` as end-user documentation.
+- Treat README and deployment documents as operator documentation.
+- Document Android HTTP only as a trusted-LAN/VPN option with its security warning;
+  the iOS shell remains HTTPS-only.
+- A SQLite backup does not include transaction attachments. Copy the corresponding
+  uploads directory separately for a complete migration.
+- Do not put passwords, API keys, keystores, database files, or private server URLs
+  in issues, screenshots, examples, or commits.

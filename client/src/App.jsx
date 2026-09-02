@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import Layout from './components/Layout.jsx';
@@ -29,6 +29,8 @@ export default function App() {
   const [me, setMe] = useState(null);
   const [offline, setOffline] = useState(false);
   const [retry, setRetry] = useState(0);
+  const { pathname } = useLocation();
+  const publicHelp = pathname === '/help' || pathname === '/help/';
 
   useEffect(() => {
     setOffline(false);
@@ -55,6 +57,10 @@ export default function App() {
         .catch(() => {});
     }
   }, [status?.passwordSet]);
+
+  // Help is deliberately available before login and while the server is down.
+  // It is a static guide, so it can explain recovery without depending on API state.
+  if (publicHelp) return <Help public />;
 
   if (offline) {
     return (
@@ -110,7 +116,6 @@ export default function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/settings" element={<Settings me={me} />} />
-            <Route path="/help" element={<Help />} />
             {me?.admin && <Route path="/users" element={<Users admin me={me.username} />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

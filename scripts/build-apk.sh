@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the Android APK — a pure CLIENT for your self-hosted Budget Planner.
 # The app contains no backend: on first launch it asks for the server address
-# (e.g. https://budget.example.ts.net), remembers it, and
+# (e.g. http://192.168.1.20:2026 or https://budget.example.ts.net), remembers it, and
 # loads the planner from there.
 #
 # Output: dist/budget-planner-android.apk
@@ -30,12 +30,12 @@ grep -q "versionCode ${VERSION_CODE}" android/app/build.gradle || { echo "ERROR:
 grep -q "versionName \"${ROOT_VERSION}\"" android/app/build.gradle || { echo "ERROR: versionName stamping failed" >&2; exit 1; }
 echo "==> stamped version ${ROOT_VERSION} (code ${VERSION_CODE})"
 
-grep -q 'android:usesCleartextTraffic="false"' android/app/src/main/AndroidManifest.xml || {
-  echo "ERROR: AndroidManifest.xml must disable cleartext traffic for native HTTPS policy" >&2
+grep -q 'android:usesCleartextTraffic="true"' android/app/src/main/AndroidManifest.xml || {
+  echo "ERROR: AndroidManifest.xml must allow cleartext traffic for supported LAN HTTP URLs" >&2
   exit 1
 }
 grep -q 'android:networkSecurityConfig="@xml/network_security_config"' android/app/src/main/AndroidManifest.xml || {
-  echo "ERROR: AndroidManifest.xml is missing the HTTPS network security policy" >&2
+  echo "ERROR: AndroidManifest.xml is missing the Android network security policy" >&2
   exit 1
 }
 npx cap sync android > /dev/null

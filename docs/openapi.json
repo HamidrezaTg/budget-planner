@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Budget Planner API",
-    "version": "3.18.0",
+    "version": "3.19.1",
     "description": "Static contract for the Budget Planner HTTP API. JSON amounts are numbers and transaction expenses are negative. Unless an operation is marked public, send the bp_session cookie returned by login or setup."
   },
   "servers": [
@@ -2222,7 +2222,8 @@
           "api_key": { "type": "string", "format": "password" },
           "model": { "type": "string" },
           "base_url": { "type": "string", "format": "uri" },
-          "currency": { "type": "string", "enum": ["EUR", "USD", "GBP", "CHF"] }
+          "currency": { "type": "string", "enum": ["EUR", "USD", "GBP", "CHF"] },
+          "theme": { "type": "string", "enum": ["system", "light", "dark", "midnight", "forest"] }
         }
       },
       "ExchangeRate": {

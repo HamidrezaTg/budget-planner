@@ -30,9 +30,13 @@ Another classic: the service was installed before v3.8.2 — those units didn't 
 ### Use an IP address, not the computer's name
 Phones rarely resolve hostnames like `lenovo`. Use:
 
-- `http://192.168.0.174:2026` — the server's LAN IP (`ip -4 route get 1.1.1.1` shows it)
-- `http://lenovo.local:2026` — mDNS name, works from most phones/macOS/Linux
-- your **Tailscale** IP or MagicDNS name — works from anywhere
+- `http://192.168.0.174:2026` — the server's LAN IP for a trusted browser or desktop client
+- `http://lenovo.local:2026` — mDNS name, when supported by the local network
+- an HTTPS Tailscale hostname or HTTPS reverse-proxy URL — recommended outside trusted networks
+
+The Android client accepts HTTP on a trusted LAN or VPN and warns before saving the
+address. iOS remains HTTPS-only. Use HTTPS Tailscale or a certificate-backed reverse
+proxy on public or untrusted networks.
 
 Beware the reverse trap on desktop machines: some routers/DNS setups resolve the
 *server's own hostname* to `127.0.0.1`, which silently opens a **different app on the
@@ -46,17 +50,14 @@ using the numeric IP.
 
 ### Android app says "Can't reach your server"
 Checklist, in order:
-1. The same address opens in the phone's **browser**? Then the network is fine —
-   make sure you're on **budget-planner ≥ v3.8.3** (older APKs couldn't probe or
-   navigate cross-origin).
-2. Use the **IP address** form (`http://192.168.x.x:2026`), not the computer name.
-3. To change the server later: Android Settings → Apps → Budget Planner →
-   Use **Change server address** on the recovery screen (the address is
-   remembered on first successful connect).
+1. Does the same HTTP or HTTPS address open in the phone's browser? Then the network
+   path and server are reachable. For HTTPS, also check the certificate on the device.
+2. Use the server's numeric LAN IP or HTTPS Tailscale hostname instead of a bare computer name.
+3. To change the server later, use **Change server address** on the recovery
+   screen. The address is remembered after a successful connection.
 
-### Linux desktop client shows the Electron welcome page
-You have the v3.8.0 client — its app files were packaged in the wrong directory.
-Upgrade to ≥ v3.8.3. The server address lives in
+### Linux desktop client shows the wrong welcome page
+Upgrade to the current Tauri desktop client from GitHub Releases. The server address lives in
 `~/.config/budget-planner-client/config.json`; delete that file to get the
 first-launch setup screen back.
 

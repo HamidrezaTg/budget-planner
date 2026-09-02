@@ -191,6 +191,21 @@ test('ntfy settings are authenticated and mask stored tokens', async () => {
   assert.equal('token' in current, false);
 });
 
+test('theme setting persists in the authenticated user database', async () => {
+  const saved = await api('/settings', 'PUT', { theme: 'midnight' }, cookies);
+  assert.equal(saved.theme, 'midnight');
+  const current = await api('/settings', 'GET', null, cookies);
+  assert.equal(current.theme, 'midnight');
+
+  const invalid = await fetch(`${srv.url}/api/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ theme: 'neon' }),
+  });
+  assert.equal(invalid.status, 400);
+  assert.equal((await api('/settings', 'GET', null, cookies)).theme, 'midnight');
+});
+
 test('settings reports the installed server version', async () => {
   const version = await api('/settings/version', 'GET', null, cookies);
   assert.match(version.server_version, /^\d+\.\d+\.\d+$/);

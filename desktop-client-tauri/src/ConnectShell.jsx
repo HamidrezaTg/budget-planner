@@ -13,7 +13,43 @@ const KEY = 'bp-server-urls';
 const LEGACY_KEY = 'bp-server-url';
 
 function normalizeUrl(url) {
-  return String(url || '').trim().replace(/\/+$/, '');
+  return String(url || '')
+    .trim()
+    .replace(/\/+$/, '');
+}
+
+function parseUrl(url) {
+  const cleaned = normalizeUrl(url);
+  let parsed;
+  try {
+    parsed = new URL(cleaned);
+  } catch {
+    throw new Error('Enter a complete server URL');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) {
+    throw new Error('Server URL must start with http:// or https://');
+  }
+  if (parsed.username || parsed.password || parsed.hash) {
+    throw new Error('Server URL cannot contain credentials or a fragment');
+  }
+  return parsed;
+}
+
+function isSupportedUrl(url) {
+  try {
+    parseUrl(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isHttpUrl(url) {
+  try {
+    return parseUrl(url).protocol === 'http:';
+  } catch {
+    return false;
+  }
 }
 
 function readSavedUrls() {
@@ -107,8 +143,16 @@ export default function ConnectShell() {
   const connect = useCallback(
     async (url) => {
       const cleaned = normalizeUrl(url);
-      if (!/^https?:\/\/.+/i.test(cleaned)) {
-        setError('Enter a full address starting with http:// or https://');
+      if (!isSupportedUrl(cleaned)) {
+        setError('Enter a complete server address starting with http:// or https://');
+        return;
+      }
+      if (
+        isHttpUrl(cleaned) &&
+        !window.confirm(
+          'This server uses HTTP. Only continue on a trusted LAN or VPN. HTTP can expose your login and budget session on an untrusted network. Connect anyway?',
+        )
+      ) {
         return;
       }
       setBusy(true);
@@ -123,13 +167,13 @@ export default function ConnectShell() {
       } catch (e) {
         setError(
           `Could not reach ${cleaned}. Check the address and that this ` +
-            'computer is on the same network (or VPN) as the server.'
+            'computer is on the same network (or VPN) as the server.',
         );
       } finally {
         setBusy(false);
       }
     },
-    [urls]
+    [urls],
   );
 
   const useUrl = useCallback(
@@ -138,7 +182,7 @@ export default function ConnectShell() {
       setInput(url);
       connect(url);
     },
-    [connect]
+    [connect],
   );
 
   const remove = useCallback(
@@ -148,7 +192,7 @@ export default function ConnectShell() {
       saveUrls(next);
       if (active === url) setActive(next[0] || '');
     },
-    [urls, active]
+    [urls, active],
   );
 
   const savedList = useMemo(() => urls, [urls]);
@@ -163,10 +207,9 @@ export default function ConnectShell() {
         </span>
         <h1>Budget Planner</h1>
         <p>
-          This app is a client for your self-hosted planner. Enter the address
-          of the machine running the server — for example
-          {' '}<b>http://192.168.1.10:2026</b> (home network) or your Tailscale
-          address. No backend runs inside this app.
+          This app is a client for your self-hosted planner. Enter the address of the machine
+          running the server — for example <b>http://192.168.1.10:2026</b> (home network) or your
+          Tailscale address. No backend runs inside this app.
         </p>
         {savedList.length > 0 && (
           <div className="saved">
@@ -193,7 +236,9 @@ export default function ConnectShell() {
             ))}
           </div>
         )}
-        <label htmlFor="server" className="field-label">Server address</label>
+        <label htmlFor="server" className="field-label">
+          Server address
+        </label>
         <input
           id="server"
           type="url"
@@ -205,7 +250,11 @@ export default function ConnectShell() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && connect(input)}
         />
-        {error && <div className="err" role="alert">{error}</div>}
+        {error && (
+          <div className="err" role="alert">
+            {error}
+          </div>
+        )}
         <button
           type="button"
           className="primary"

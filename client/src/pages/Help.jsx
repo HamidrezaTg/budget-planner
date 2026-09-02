@@ -1,349 +1,477 @@
-const PAGES = [
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+
+const GITHUB = 'https://github.com/HamidrezaTg/budget-planner';
+
+const SECTIONS = [
   {
-    title: 'Dashboard',
-    items: [
-      [
-        'Transfer to Revolut',
-        'The amount that should move from your bank account(s) to your spending card this month — the sum of every budget line tagged to the card account. This is your main operational number.',
-      ],
-      [
-        'Income (actual)',
-        'Real income for the month, from the Income page. The projection uses these figures, not assumptions.',
-      ],
-      [
-        'Planned / Actual spend',
-        'What you budgeted vs. what actually happened. Actual is net of refunds — a return reduces the spend of its category.',
-      ],
-      [
-        'Month result',
-        'One figure for the whole month: planned minus actual, covering all seven groups including Savings.',
-      ],
-      [
-        'Warnings',
-        'Untagged categories (spending on them reaches no account total) and transactions that still need a category.',
-      ],
-      [
-        'Insights',
-        'Generated cards: review backlog, categories over budget, spending ahead of the month\u2019s pace, fund goals behind or overdue, and recurring items due within seven days. They never change your data — the link opens the relevant page.',
-      ],
-      [
-        'Alerts pill',
-        'The count beside the month selector is the number of current insight cards.',
-      ],
-      [
-        'Category tables',
-        'Grouped by block (Housing, Food, …). Difference = planned − actual. Positive means under budget.',
-      ],
-      ['← / Today / →', 'Move between months. All figures on the page follow the selected month.'],
+    id: 'start',
+    title: 'Start here',
+    eyebrow: 'A reliable first setup',
+    route: '/',
+    summary:
+      'Build the model before importing data. This prevents confusing totals and makes later automation useful.',
+    steps: [
+      'Create the first account on the server. The first account is the administrator; every later user receives a separate private budget database.',
+      'Add the real bank, card, cash, and spending-pot accounts. Enter each opening balance and currency as of the date you begin tracking.',
+      'Create budget groups and categories. Give spending categories a paying account and a standing monthly plan where appropriate.',
+      'Add income sources, usual amounts, people, recurring items, funds, and commitments that affect your normal month.',
+      'Import a statement, review unknown transactions, and reconcile observed account balances.',
+      'Use Dashboard for the monthly check-in, then Projection and Reports for longer-term decisions.',
+    ],
+    notes: [
+      'The server is the source of truth. Browsers, mobile apps, and desktop apps are clients that connect to it.',
+      'The offline cache stores the application shell, not your financial data. A server outage does not delete your data.',
     ],
   },
   {
-    title: 'Import',
-    items: [
-      [
-        'Choose CSV / XLSX file',
-        'Standard import for Revolut-style exports. Handles the ".csv that is really Excel" quirk, keeps only COMPLETED rows, treats pendings from previous months as completed, skips current-month pendings and REVERTED rows, and blocks duplicates (same date + amount + description).',
-      ],
-      [
-        'Analyze format with AI',
-        'For any other bank export: the AI inspects the raw file, detects columns, date format and decimal style, and converts it to the standard schema. You always see a full preview before anything is saved.',
-      ],
-      ['Import into account', 'Pick which account the statement belongs to (usually Revolut).'],
-      [
-        'Confirm import',
-        'Writes the previewed transactions to your database. Nothing is saved before this.',
-      ],
+    id: 'navigation',
+    title: 'Navigation and working month',
+    eyebrow: 'Controls you use everywhere',
+    route: '/',
+    summary: 'The selected working month controls the period shown by most pages.',
+    steps: [
+      'Use the Working month selector in the sidebar to move through months. Dashboard, budgets, transactions, income, balances, and reports follow that selection.',
+      'On mobile, open the menu from the top bar. On desktop, collapse the sidebar from the Budget Planner mark.',
+      'Use the eye control to blur financial values in the current browser. Use the theme control to switch appearance; your selected theme is saved to your user account and follows you to other devices.',
+      'Press ? for Help, or press g then d, t, or r for Dashboard, Transactions, or Reports. Shortcuts are disabled while typing.',
+      'In a native client, use Switch server to change between saved HTTPS endpoints.',
+    ],
+    notes: [
+      'Logging out ends the server session. It does not remove the local database or saved native server addresses.',
     ],
   },
   {
-    title: 'Transactions',
-    items: [
-      ['Month filter', 'Show only one month.'],
-      ['Show needs-review only', 'Unknown merchants that the rules could not categorize.'],
-      [
-        'Assign category…',
-        'Pick a category for an unknown transaction — choosing one automatically creates a keyword rule, so the same merchant is categorized instantly next time (and old unmatched rows with the same name are fixed retroactively).',
-      ],
-      [
-        'Suggest categories with AI',
-        'The AI proposes a category + confidence for every pending transaction.',
-      ],
-      [
-        'Apply all / Apply ≥80%',
-        'Accept all suggestions, or only confident ones (80%+). Applied suggestions become learned rules too.',
-      ],
-      [
-        'Split',
-        'Divide one purchase across two or more categories (e.g. groceries + household). Parts must add up to the original. The original stops counting anywhere; only the parts do. Unsplit restores it.',
-      ],
-      [
-        'Paperclip / attachments',
-        'Attach receipts and documents to any transaction (PDF, PNG, JPEG, WebP, CSV; max 10 MB). Files live in data/uploads and stay on this machine.',
-      ],
+    id: 'accounts-categories',
+    title: 'Accounts, people, and categories',
+    eyebrow: 'Model your real money',
+    route: '/accounts',
+    summary:
+      'Accounts say where money lives; categories say why it moves; people identify income sources.',
+    steps: [
+      'In Accounts, create bank, card, cash, or other accounts. Mark a spending pot when the account is used for day-to-day spending.',
+      'Set the opening balance and account currency at the point tracking begins. Change it only when correcting the starting point, not to hide a later discrepancy.',
+      'In Categories, organize categories into groups, choose a paying account, and add a standing plan. Categories may be left ungrouped or without an account, but the Dashboard will warn about missing account assignments.',
+      'Retire a category when it should stop receiving new plans or rules. Its transaction history remains; its plan and categorization rules are cleared. Reactivate it when needed.',
+      'Use People to connect an income source to a household member or other payer. Removing a person clears only that link.',
+    ],
+    notes: [
+      'An account cannot be deleted while transactions or balance observations still reference it.',
     ],
   },
   {
-    title: 'Budgets',
-    items: [
-      [
-        'Standing plan',
-        'The normal monthly amount for a category. Used by every month unless overridden.',
-      ],
-      [
-        'Plan for <month>',
-        'A one-month override. The ↺ button removes it and falls back to the standing plan.',
-      ],
-      [
-        'Account column',
-        'Which account the category is paid from. Every category should have one — untagged spending disappears from account totals (the dashboard warns you).',
-      ],
-      [
-        'Roll over underspend',
-        'When enabled for a category, last month\u2019s unused plan carries into this month — but only if that month had actual activity in the category. Overspend never carries negative.',
-      ],
+    id: 'budgets-income',
+    title: 'Budgets and income',
+    eyebrow: 'Plan the month',
+    route: '/budgets',
+    summary:
+      'Standing plans define normal spending; monthly overrides handle exceptions without changing the normal plan.',
+    steps: [
+      'Set a standing plan for each category that normally receives money.',
+      'Use Plan for <month> for a one-month exception. The reset control removes the override and returns to the standing plan.',
+      'Enable rollover when unused planned money should carry into a later month. Only qualifying underspend carries forward; overspend never becomes a negative rollover.',
+      'On Income, set usual amounts for projection and enter actual income when it arrives. An actual monthly entry takes precedence over the usual amount.',
+      'Review the Dashboard after changing plans. Positive planned-minus-actual difference means the category is under its plan.',
+    ],
+    notes: [
+      'Budget, fund, commitment, and income planning figures use the global display currency.',
     ],
   },
   {
-    title: 'Income',
-    items: [
-      ['Usual', 'The recurring amount used by the projection for months without an actual entry.'],
-      [
-        'Enter actual',
-        'The real income for that month. Actual income must be entered, never assumed — this is a deliberate rule of the system.',
-      ],
+    id: 'import',
+    title: 'Import a bank statement',
+    eyebrow: 'Bring in data safely',
+    route: '/import',
+    summary:
+      'Import is a preview-first workflow. Nothing is written until you explicitly confirm it.',
+    steps: [
+      'Choose a CSV, XLS, or XLSX statement and select the account it belongs to. Revolut exports and CSV files containing Excel data are supported.',
+      'For an unfamiliar bank format, use Analyze format with AI. It detects columns, dates, decimal style, and cancellation/status rows; review the detected mapping.',
+      'Inspect the preview. Invalid rows show their source row and reason. Duplicates, pending/reverted rows, and candidate transfer pairs are identified before saving.',
+      'Confirm only after checking dates, signed amounts, currency, account, and duplicate counts. Confirmation is the only write step.',
+      'Open Transactions and filter Needs review. Assign categories and resolve transfer candidates after import.',
+    ],
+    notes: [
+      'Completed rows are imported. Current-month pending and reverted rows are skipped; settled older pending rows can be treated as completed.',
+      'Duplicate fingerprints use date, amount, description, and an occurrence index for legitimate identical same-day transactions. Changed merchant wording can still require manual review.',
+      'Uploaded statement files are processed and removed. AI format analysis sends the file only to the provider configured by you.',
     ],
   },
   {
-    title: 'Recurring',
-    items: [
-      [
-        'What they are',
-        'Expected monthly transactions — rent, subscriptions, salary. Define them once with name, signed amount, day of month (1–28), account and category.',
-      ],
-      [
-        'Upcoming panel',
-        'Shows the next occurrences for this and next month; post one early with "Post now", or let it auto-post on its day. Duplicate posts are blocked automatically.',
-      ],
-      [
-        'Auto / manual toggle',
-        'Auto items post themselves when due. Pause hides an item from upcoming without deleting it.',
-      ],
-      [
-        'Split template',
-        'Enable split template when one recurring payment belongs to multiple categories. The part amounts must add up to the signed total; posting creates a split transaction automatically.',
-      ],
+    id: 'transactions',
+    title: 'Transactions, review, and attachments',
+    eyebrow: 'Keep actuals accurate',
+    route: '/transactions',
+    summary:
+      'Transactions are the actual record. Review unknown rows promptly so learned rules improve future imports.',
+    steps: [
+      'Filter by month or show only Needs review. Assigning a category can learn a keyword rule and retroactively fix matching unknown rows.',
+      'Use advanced categorization rules for description, absolute amount range, account, transaction type, and priority. The rule tester never changes data.',
+      'Add a transaction manually when a statement is unavailable. Negative amounts normally represent spending; positive amounts represent income or refunds.',
+      'Edit account, category, fund, commitment, description, or amount when a transaction needs correction. Delete only when the row is genuinely unwanted.',
+      'Split a purchase across categories. Split amounts must equal the original signed amount; Unsplit restores the original transaction.',
+      'Attach a PDF, PNG, JPEG, WebP, or CSV receipt/document up to 10 MB. Download or remove attachments from the transaction row.',
+      'Use AI suggestions only as proposals. Apply all suggestions or only suggestions at least 80% confident, then review the result.',
+    ],
+    notes: [
+      'Attachments are stored outside SQLite under the server data directory. A database backup alone does not include them.',
     ],
   },
   {
-    title: 'Funds (sinking funds)',
-    items: [
-      [
-        'Balance',
-        'Opening balance + monthly contributions since the start month + recorded movements. Contributions accrue automatically every month; you only record withdrawals when a bill lands.',
-      ],
-      ['Monthly contribution', 'How much accrues each month. Edit inline with the check button.'],
-      [
-        'In / Out',
-        'Record a one-off deposit or a withdrawal (the actual bill). A fund may go negative — that is a warning signal, never hidden.',
-      ],
+    id: 'transfers',
+    title: 'Transfers',
+    eyebrow: 'Move money without inflating spending',
+    route: '/transactions',
+    summary:
+      'A paired transfer moves money between accounts and is excluded from income and spending totals.',
+    steps: [
+      'Create a paired transfer manually when both sides of the movement are known.',
+      'During import, inspect candidate pairs and choose the matches that represent the same movement between accounts.',
+      'From Transactions, pair existing equal-and-opposite rows when the bank statements were imported separately.',
+      'Unpair when a match was wrong. Delete a paired transfer together only when both rows should truly be removed.',
+      'Check the Dashboard transfer guidance after categorizing spending-pot budget lines. It indicates the planned amount to move, not an additional expense.',
+    ],
+    notes: [
+      'Transfers must use different accounts. Do not categorize an internal transfer as ordinary spending.',
     ],
   },
   {
-    title: 'Commitments',
-    items: [
-      [
-        'What they are',
-        'Fixed dated obligations: loans, instalments, kindergarten. Name, monthly amount, start month, end month.',
-      ],
-      [
-        'End column',
-        'The whole point: when a commitment ends, the projection automatically stops charging it, so you see the relief arrive. Edit the end month inline.',
-      ],
+    id: 'recurring-funds-commitments',
+    title: 'Recurring items, funds, and commitments',
+    eyebrow: 'Automate predictable money',
+    route: '/recurring',
+    summary:
+      'Use these tools for predictable events, irregular bills, and obligations with an end date.',
+    steps: [
+      'Create recurring income or expenses with a signed amount, day 1–28, account, category, and optional auto-post. Post now creates the current occurrence.',
+      'Pause a recurrence without deleting it. Posting is idempotent, so repeating the same action does not create duplicates. Split templates divide one recurring item across categories.',
+      'Create a fund for irregular bills. Set its start month, opening balance, monthly contribution, and optional target amount/date. Record deposits, withdrawals, and linked bills.',
+      'Use Commitments for dated obligations such as loans or instalments. Set start/end month, monthly amount, account, and optional category/fund links.',
+      'Review warnings for negative or underfunded funds and the Dashboard for recurring items due soon.',
+    ],
+    notes: [
+      'Commitments stop contributing after their end month. A fund balance can be negative temporarily; that is a visible warning, not hidden debt.',
     ],
   },
   {
-    title: 'Balances',
-    items: [
-      ['Record', 'Type in the real bank balance for an account and month.'],
-      [
-        'Reconciliation',
-        'The projection compares its prediction against your entry and shows the variance — then re-anchors to reality instead of letting drift compound silently.',
-      ],
+    id: 'dashboard-balances',
+    title: 'Dashboard and balance reconciliation',
+    eyebrow: 'Compare the plan with reality',
+    route: '/balances',
+    summary: 'Reconciliation is how the forecast stays anchored to real account balances.',
+    steps: [
+      'Read Dashboard planned versus actual spend, income, month result, warnings, insights, and upcoming recurring items.',
+      'Record the real closing or observed balance for each account and month on Balances.',
+      'Use the variance to investigate missing imports, incorrect opening balances, uncategorized transactions, or unpaired transfers.',
+      'Keep the observation when it is correct. Future projection months re-anchor from reality instead of compounding the discrepancy.',
+      'Remove an observation only when it was entered incorrectly or is no longer useful.',
+    ],
+    notes: [
+      'Positive budget difference means under plan. Account balance variance is a reconciliation signal, not automatically an error in the budget.',
     ],
   },
   {
-    title: 'Projection',
-    items: [
-      [
-        'How it works',
-        'Income minus outgoings rolled forward month by month. Outgoings = active commitments + category plans not already covered by a commitment (no double counting). Commitments drop out at their end dates.',
-      ],
-      [
-        'Free vs committed savings',
-        'Free = accumulated surplus, spendable. Committed = sitting in sinking funds, already spoken for by future bills.',
-      ],
+    id: 'projection-reports',
+    title: 'Projection and reports',
+    eyebrow: 'Look ahead and explain the past',
+    route: '/projection',
+    summary: 'Projection models the future; Reports exports and compares what happened.',
+    steps: [
+      'Use Projection to inspect the 96-month baseline: income, commitments, category plans, free savings, committed fund savings, and total balance.',
+      'Create up to three temporary scenarios with monthly income/outgoing changes and dated one-offs. Scenarios do not modify saved budgets.',
+      'Use Reports for monthly/yearly totals, category breakdowns, account filters, month-over-month comparison, category trends, and charts.',
+      'Export CSV/XLSX when you need data outside the app. Exports preserve original statement amounts and currency codes; Print/PDF uses the browser print dialog.',
+      'Use month-end history to compare the plan with the frozen state captured after a month closes. Only months with activity appear.',
+    ],
+    notes: [
+      'Projection avoids double-counting a category plan already covered by a commitment. Actual income replaces usual income only when entered for that month.',
     ],
   },
   {
-    title: 'Reports',
-    items: [
-      [
-        'Exports',
-        'Download any month or year as CSV or Excel (.xlsx). Excel workbooks include a transactions sheet plus summaries. Exports always show original statement amounts and currencies.',
-      ],
-      [
-        'Category trend / MoM',
-        'Reports show spending history for a selected category and compare each category with the previous month. Negative MoM means spending decreased.',
-      ],
-      [
-        'Print / PDF',
-        'Use Print / PDF on the Reports page, then choose Save as PDF in the browser or system print dialog.',
-      ],
-      [
-        'Month-end history',
-        'When a month closes, it is snapshotted automatically — frozen forever, even if you later edit or delete its transactions. The chart tracks how your plan versus reality looked at each month\u2019s end.',
-      ],
+    id: 'currency',
+    title: 'Multi-currency',
+    eyebrow: 'Keep source amounts intact',
+    route: '/settings',
+    summary:
+      'Transactions retain their statement currency while planning and aggregate reporting use the global display currency.',
+    steps: [
+      'Choose the global display currency in Settings. Budgets, funds, commitments, and income use this currency.',
+      'Set each account currency for opening balances, observations, and running account balances.',
+      'Add monthly foreign-exchange rates manually or fetch missing ECB reference data. A rate means display-currency units per one foreign unit.',
+      'Resolve the Exchange rates missing warning. Until a rate exists, the app counts that foreign amount 1:1 and labels the limitation.',
+      'After changing the global display currency, refetch or re-enter rates because existing rates were relative to the previous base.',
+    ],
+    notes: [
+      'CSV/XLSX exports preserve original amounts and currency codes even when summaries are converted.',
     ],
   },
   {
-    title: 'Connecting from other devices',
-    items: [
-      [
-        'Server address',
-        'Always the machine running the server, e.g. http://192.168.0.174:2026. Use the IP address or the .local name (lenovo.local) \u2014 phones usually cannot resolve bare computer names like \u201clenovo\u201d.',
-      ],
-      [
-        'Android app',
-        'A pure client: on first launch it asks for the server address, verifies the Budget Planner discovery endpoint, and remembers up to ten servers. If the server is unreachable, the recovery screen offers \u201cTry again\u201d and \u201cChange server address\u201d.',
-      ],
-      [
-        'Switch the server (Android)',
-        'Use the server switch action in the app or press the system Back button. The address screen lists saved servers; choose one, enter a new address, or forget an old one.',
-      ],
-      [
-        'Tailscale',
-        'Install Tailscale on the server and phone, then enter the server’s Tailscale IP or MagicDNS hostname plus the planner port, for example http://100.x.y.z:2026. The server must bind to that interface.',
-      ],
-      [
-        'Linux desktop client',
-        'Also a pure client. Its server address lives in ~/.config/budget-planner-client/config.json \u2014 delete that file to see the setup screen again.',
-      ],
-      [
-        'Phone can\u2019t connect',
-        'Same Wi-Fi (or Tailscale on both)? Some routers isolate clients from each other. Firewall: allow the server port (sudo ufw allow 2026/tcp).',
-      ],
-      [
-        'Two different account lists?',
-        'You are talking to two different servers \u2014 compare with the numeric IP. See docs/TROUBLESHOOTING.md for the full checklist.',
-      ],
+    id: 'settings-data',
+    title: 'Settings, backups, sharing, and notifications',
+    eyebrow: 'Protect and share deliberately',
+    route: '/settings',
+    summary:
+      'Settings contains account identity, data safety, sharing, display, and optional integrations.',
+    steps: [
+      'Download a backup before upgrades or migrations. It contains the user SQLite database; copy the matching uploads directory separately for transaction attachments.',
+      'Restore only a trusted backup. The app validates SQLite integrity and required references, creates a pre-restore copy, and rolls back a failed restore.',
+      'Use the reset spending action only when you want to remove transactions and attachments while keeping planning configuration.',
+      'Create a read-only share link for a selected month. It shows planned category/group totals, expires, and can be revoked; it does not expose transactions, balances, accounts, or settings.',
+      'Configure ntfy only if you want daily warning/danger summaries. The configured ntfy server receives those notifications.',
+      'Change username or password from Identity. Changing a password invalidates existing sessions; renaming moves the user database and uploads.',
+    ],
+    notes: [
+      'A complete migration backup includes both the SQLite backup and the user uploads directory. Keep backups private because they contain financial data.',
     ],
   },
   {
-    title: 'AI Chat',
-    items: [
-      [
-        'Finance tab (read-only)',
-        'Ask about your data. The AI can only run read-only SELECT queries — it cannot change anything.',
-      ],
-      [
-        'Dev mode tab',
-        'The AI proposes changes (budgets, rules, commitments, funds, income, balances) from a fixed whitelist. Nothing is applied until you press Apply. No raw SQL, no deletions, everything logged in an audit trail.',
-      ],
-      ['Requirements', 'Configure a provider + key + model on the Settings page first.'],
+    id: 'ai',
+    title: 'AI assistant',
+    eyebrow: 'Optional and user-controlled',
+    route: '/chat',
+    summary:
+      'AI is optional. The planner works without it, and every write-capable action requires explicit confirmation.',
+    steps: [
+      'Configure a provider, API key, and model in Settings. Local providers such as Ollama and LM Studio can avoid sending data to a hosted service.',
+      'Use Finance chat for read-only questions. It can query permitted budget data but cannot change your budget.',
+      'Use format analysis on Import to understand unfamiliar statement columns, then verify the preview yourself.',
+      'Use category suggestions as proposals. Apply them individually, all at once, or only at 80% confidence after reviewing the results.',
+      'Dev mode creates a fixed-whitelist proposal for budgets, rules, commitments, funds, income, or balance anchors. Nothing changes until Apply is pressed; raw SQL, deletions, and authentication changes are not allowed.',
+    ],
+    notes: [
+      'Configured AI providers receive the prompts or files needed for the selected operation. Read the provider privacy policy before using hosted AI with financial data.',
     ],
   },
   {
-    title: 'Settings',
-    items: [
-      [
-        'Provider / API key / Model',
-        'Choose an AI provider, enter your key, load the models available to your key, pick one. Stored in your own database only.',
-      ],
-      ['Test connection', 'Sends a trivial request to verify the setup works.'],
-      [
-        'Exchange rates',
-        'Monthly conversion rates from foreign currencies into your display currency. Fetch them from the ECB with one click or type any rate manually. Transactions without a rate count 1:1 and show a dashboard warning.',
-      ],
-      [
-        'Privacy mode',
-        'Use the eye button in the sidebar to blur financial values while keeping navigation and labels visible. The choice is remembered in this browser.',
-      ],
+    id: 'clients',
+    title: 'Web, Android, desktop, and HTTPS',
+    eyebrow: 'Connect your devices safely',
+    route: '/settings',
+    summary:
+      'Install the server once, then connect clients to it. Android accepts HTTP or HTTPS; HTTPS is recommended outside a trusted private network.',
+    steps: [
+      'For a browser on the same machine or trusted LAN, open the server URL and port shown during installation. For public or hostile networks, put Caddy or another reverse proxy in front of it.',
+      'For Android, download the signed APK from GitHub Releases. Enter a LAN/Tailscale HTTP address such as http://192.168.x.x:2026 or an HTTPS endpoint. The app warns before saving HTTP.',
+      'For Linux, install the `.deb`, AUR package, or AppImage. The desktop client is a client only and remembers up to ten server addresses.',
+      'For macOS, install the unsigned DMG from Releases and allow it under System Settings → Privacy & Security if Gatekeeper blocks it. The macOS client also contains no server.',
+      'When a device cannot connect, first open the same URL in its browser, then check the server bind address, firewall, Wi-Fi client isolation, Tailscale membership, and HTTPS certificate.',
+    ],
+    notes: [
+      'Android HTTP is intended only for trusted LAN/VPN use because session credentials and application traffic can be observed or modified on an untrusted network. HTTPS is recommended outside private networks; the iOS shell retains its HTTPS policy.',
+      'Never expose the raw server port to the public internet without HTTPS and appropriate firewall controls.',
     ],
   },
   {
-    title: 'Categories',
-    items: [
-      ['Account & group', 'Every category belongs to one group (budget block) and one account.'],
-      [
-        'Retire',
-        'Retiring a category clears its plan and rules so nothing phantom survives. Reactivate any time.',
-      ],
-      [
-        'Categorization rules',
-        'Learned automatically when you assign categories; you can also add keyword rules manually.',
-      ],
-      [
-        'Advanced rules',
-        'Combine conditions: description contains, absolute amount range, account, transaction type, priority. Higher priority wins. Retiring a category removes its rules too.',
-      ],
-      [
-        'Rule tester',
-        'Type a sample description/amount/type and see which rule would fire. Testing never writes anything.',
-      ],
+    id: 'admin',
+    title: 'Administration and privacy',
+    eyebrow: 'For server owners',
+    route: '/users',
+    summary:
+      'The first account is an administrator. Administration is separate from the private budget data of each user.',
+    steps: [
+      'Create the first account only from localhost unless a SETUP_TOKEN was deliberately configured for remote setup.',
+      'Use Admin → Users to create users, reset passwords, rename users, or delete another user and that user’s private database.',
+      'Store the server data directory securely. It contains the master database, user databases, and uploads; filesystem access is equivalent to access to the data.',
+      'Use a strong password, HTTPS for untrusted networks, regular backups, and a restricted firewall. Set SECURE_COOKIE=1 and TRUST_PROXY=1 behind an HTTPS reverse proxy.',
+      'Optional outbound connections are limited to providers you configure, ECB/Frankfurter exchange-rate data, ntfy if configured, and the GitHub release check shown in Settings.',
+    ],
+    notes: [
+      'Budget Planner has no third-party account, advertising, or telemetry service. It is self-hosted, but server and backup security remain your responsibility.',
     ],
   },
   {
-    title: 'Accounts & users',
-    items: [
-      [
-        'Accounts',
-        'You define your own accounts (e.g. a main bank account and a daily-spending card). Salaries land in the bank account; one monthly transfer funds the card — the Dashboard shows the exact amount.',
-      ],
-      [
-        'Add user',
-        'Each user gets a completely separate database. Admins manage users under Admin → Users in the sidebar.',
-      ],
+    id: 'troubleshooting',
+    title: 'Troubleshooting',
+    eyebrow: 'When something looks wrong',
+    route: '/settings',
+    summary:
+      'Most issues are either a server connection problem, an incorrect working month, or an unreviewed data row.',
+    steps: [
+      'If the app says the server is unreachable, start or restart the server and press Retry. The offline screen does not mean accounts were deleted.',
+      'If two devices show different accounts, compare the complete server URL and numeric IP. They are connected to different servers.',
+      'If totals are unexpected, check the working month, category/account assignments, duplicate preview, pending/reverted rows, transfers, refunds, and exchange-rate warnings.',
+      'If an import row is missing, inspect the preview reason. Invalid dates, amounts, descriptions, current pending rows, and reverted rows are intentionally reported or skipped.',
+      'For a server error, record the X-Request-Id response header and match it to the service logs. Do not post database files, passwords, or API keys in support requests.',
+    ],
+    notes: [
+      'The full operational checklist is in the GitHub documentation, including service logs, firewall checks, migration, and reverse-proxy setup.',
     ],
   },
 ];
 
-export default function Help() {
+function matches(section, query) {
+  if (!query.trim()) return true;
+  const text = [
+    section.title,
+    section.eyebrow,
+    section.summary,
+    ...section.steps,
+    ...section.notes,
+  ].join(' ');
+  return text.toLowerCase().includes(query.trim().toLowerCase());
+}
+
+function PageLink({ to, children }) {
   return (
-    <div>
-      <h1>Help</h1>
-      <p className="muted">
-        Short guide to every page and button. The full manual and the math behind the numbers live
-        in <code>README.md</code> and <code>docs/</code> in the project folder.
-      </p>
-      <div className="card shortcut-card">
-        <h2>Keyboard shortcuts</h2>
-        <div className="shortcut-list">
-          <span>
-            <kbd>g</kbd> then <kbd>d</kbd> Dashboard
+    <Link className="help-open-link" to={to}>
+      {children}
+    </Link>
+  );
+}
+
+export default function Help() {
+  const [query, setQuery] = useState('');
+  const visible = SECTIONS.filter((section) => matches(section, query));
+
+  return (
+    <div className="public-help">
+      <header className="help-header">
+        <Link className="help-brand" to="/" aria-label="Budget Planner home">
+          <span className="brand-mark">
+            <i></i>
+            <i></i>
+            <i></i>
           </span>
-          <span>
-            <kbd>g</kbd> then <kbd>t</kbd> Transactions
-          </span>
-          <span>
-            <kbd>g</kbd> then <kbd>r</kbd> Reports
-          </span>
-          <span>
-            <kbd>?</kbd> Help
+          <span>Budget Planner</span>
+        </Link>
+        <nav className="help-header-nav" aria-label="Help navigation">
+          <a href={`${GITHUB}/releases`} target="_blank" rel="noreferrer">
+            Downloads
+          </a>
+          <a href={`${GITHUB}/tree/main/docs`} target="_blank" rel="noreferrer">
+            Documentation
+          </a>
+          <Link className="btn primary" to="/">
+            Open app
+          </Link>
+        </nav>
+      </header>
+
+      <main className="help-layout">
+        <section className="help-intro">
+          <p className="eyebrow">Complete user guide</p>
+          <h1>Make every number explainable.</h1>
+          <p className="help-lede">
+            Budget Planner is a self-hosted planner: your server stores the data, clients connect to
+            it, and every import, forecast, and automation can be reviewed. Use this guide to set up
+            the model, maintain actuals, and understand what the app is telling you.
+          </p>
+          <div className="help-intro-actions">
+            <PageLink to="/accounts">Set up accounts</PageLink>
+            <a
+              className="btn subtle"
+              href={`${GITHUB}/blob/main/docs/USER_GUIDE.md`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Read the manual on GitHub
+            </a>
+          </div>
+        </section>
+
+        <div className="help-toolbar">
+          <label className="help-search">
+            <span>Search help</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Try “backup”, “transfer”, or “currency”"
+              aria-label="Search help"
+            />
+          </label>
+          <span className="muted tiny">
+            {visible.length} of {SECTIONS.length} topics
           </span>
         </div>
-        <p className="muted tiny">Shortcuts are inactive while typing in a form field.</p>
-      </div>
-      {PAGES.map((p) => (
-        <div key={p.title} className="help-section card" style={{ marginBottom: 14 }}>
-          <h2>{p.title}</h2>
-          {p.items.map(([name, desc]) => (
-            <div key={name} className="help-item">
-              <b>{name}</b>
-              <span className="muted">{desc}</span>
+
+        <div className="help-body">
+          <aside className="help-toc card" aria-label="Help topics">
+            <strong>Topics</strong>
+            {SECTIONS.map((section) => (
+              <a
+                key={section.id}
+                className={visible.includes(section) ? '' : 'is-hidden'}
+                href={`#${section.id}`}
+              >
+                {section.title}
+              </a>
+            ))}
+            <a href={`${GITHUB}/issues`} target="_blank" rel="noreferrer">
+              Report a problem
+            </a>
+          </aside>
+
+          <div className="help-content">
+            <div className="card shortcut-card">
+              <p className="eyebrow">Quick reference</p>
+              <h2>Keyboard shortcuts</h2>
+              <div className="shortcut-list">
+                <span>
+                  <kbd>g</kbd> then <kbd>d</kbd> Dashboard
+                </span>
+                <span>
+                  <kbd>g</kbd> then <kbd>t</kbd> Transactions
+                </span>
+                <span>
+                  <kbd>g</kbd> then <kbd>r</kbd> Reports
+                </span>
+                <span>
+                  <kbd>?</kbd> Help
+                </span>
+              </div>
+              <p className="muted tiny">Shortcuts are inactive while typing in a form field.</p>
             </div>
-          ))}
+
+            {visible.length === 0 && (
+              <div className="card help-empty">
+                <h2>No matching help topics</h2>
+                <p className="muted">
+                  Try a shorter phrase, or clear the search to browse every workflow.
+                </p>
+              </div>
+            )}
+
+            {visible.map((section) => (
+              <section id={section.id} key={section.id} className="help-section card">
+                <div className="help-section-heading">
+                  <div>
+                    <p className="eyebrow">{section.eyebrow}</p>
+                    <h2>{section.title}</h2>
+                  </div>
+                  <PageLink to={section.route}>Open page</PageLink>
+                </div>
+                <p className="help-summary">{section.summary}</p>
+                <ol className="help-steps">
+                  {section.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+                <div className="help-notes">
+                  {section.notes.map((note) => (
+                    <p key={note}>
+                      <strong>Important:</strong> {note}
+                    </p>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
-      ))}
+      </main>
+
+      <footer className="help-footer">
+        <span>Budget Planner · Self-hosted help</span>
+        <a href={`${GITHUB}/blob/main/SECURITY.md`} target="_blank" rel="noreferrer">
+          Security
+        </a>
+        <a href={`${GITHUB}/blob/main/docs/TROUBLESHOOTING.md`} target="_blank" rel="noreferrer">
+          Troubleshooting
+        </a>
+        <a href={`${GITHUB}/blob/main/LICENSE`} target="_blank" rel="noreferrer">
+          MIT License
+        </a>
+      </footer>
     </div>
   );
 }

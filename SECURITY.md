@@ -35,9 +35,12 @@ Please include:
 
 ## Transport
 
-The server runs plain HTTP for home LAN / Tailscale use. Over untrusted networks
-(public Wi-Fi, the open internet) this exposes credentials — use an HTTPS reverse
-proxy (`SECURE_COOKIE=1`, `TRUST_PROXY=1`), Tailscale, or bind to `127.0.0.1`.
+The server runs plain HTTP for home LAN / Tailscale use. The Android client supports
+that mode after an explicit warning; use it only on a trusted private network.
+Over untrusted networks (public Wi-Fi, the open internet) HTTP exposes credentials
+and permits application tampering. Use an HTTPS reverse proxy
+(`SECURE_COOKIE=1`, `TRUST_PROXY=1`) or Tailscale HTTPS. A raw encrypted Tailscale
+tunnel does not make the HTTP URL itself safe from all endpoint/network risks.
 
 ## Spreadsheet dependency
 

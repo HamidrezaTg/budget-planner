@@ -66,3 +66,30 @@ client; otherwise browsers and native clients will reject the certificate.
 Do not expose port `2026` directly once Caddy is serving the site. Back up the
 Budget Planner data directory separately; Caddy only handles transport and
 does not protect or store budget data.
+
+## Tailscale HTTPS on Port 2026
+
+If port `443` is already used by another service, Tailscale Serve can terminate
+HTTPS on Budget Planner's existing port instead. First make Budget Planner listen
+only on localhost in `/etc/default/budget-planner`:
+
+```ini
+PORT=2026
+BIND_IP=127.0.0.1
+SECURE_COOKIE=1
+TRUST_PROXY=1
+```
+
+Restart Budget Planner, then configure Tailscale Serve:
+
+```bash
+sudo systemctl restart budget-planner
+sudo tailscale serve --https=2026 --bg http://127.0.0.1:2026
+tailscale serve status
+```
+
+After enabling HTTPS certificates for the tailnet, use the machine's Tailscale DNS
+name with port 2026, for example `https://server.example.ts.net:2026`. A raw
+`100.x.y.z` Tailscale IP does not have a DNS name to which a normal certificate can
+be issued. For a trusted private network, Android can instead use
+`http://100.x.y.z:2026` after confirming its HTTP warning.

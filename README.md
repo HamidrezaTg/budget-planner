@@ -1,206 +1,198 @@
 # Budget Planner
 
-A self-hosted, local-first budget planner. Your financial data lives in plain SQLite
-files on **your** machine — no cloud, no accounts with third parties, no telemetry.
-Multi-user: every account gets its own private database. The web UI works on any
-device, and native Android/Linux clients are available.
+Budget Planner is a self-hosted, local-first budget planner for people who want
+their financial data on their own server. It stores each user's budget in a
+private SQLite database and has no required cloud account, advertising, or
+telemetry service.
 
-**Highlights:** bank-statement import with bulletproof duplicate protection · learning
-categorization · budgets with rollover · sinking funds · a 96-month projection that
-re-anchors to reality · multi-currency reporting · automatic month-end snapshots ·
-optional AI assistant (works with local models too).
+The server is the source of truth. The browser, Android app, iOS shell, and Tauri
+desktop clients are user interfaces that connect to the server.
 
-## Install
+## What It Does
 
-**Recommended — one line on any Debian/Ubuntu machine:**
+- Imports CSV, XLS, and XLSX bank statements with preview-first confirmation and
+  database-level duplicate protection.
+- Learns merchant categorization rules and supports advanced rules, rule testing,
+  AI category suggestions, splits, attachments, and transfer pairing.
+- Plans monthly budgets with standing plans, one-month overrides, account
+  assignments, and optional underspend rollover.
+- Tracks recurring income/expenses, sinking funds with goals, dated commitments,
+  actual income, and account balance observations.
+- Shows a 96-month projection that re-anchors from observed bank balances and
+  avoids double-counting commitments.
+- Reports monthly/yearly totals, category trends, account-filtered views, charts,
+  browser PDF printing, CSV/XLSX exports, and frozen month-end history.
+- Supports multi-currency transactions with monthly reference rates and preserved
+  original statement amounts.
+- Offers optional local or hosted AI for format analysis, read-only finance chat,
+  and explicit, reviewable change proposals.
+- Provides per-user backups, restore validation, read-only sharing links, ntfy
+  warning notifications, account-synchronized themes, privacy mode, and
+  administrator user management.
+
+## Install the Server
+
+### Debian or Ubuntu: recommended installer
+
+Requires Node.js 22 or newer. The installer downloads the latest release, verifies
+the release checksum, installs the server and systemd service, and stores data in
+`/var/lib/budget-planner`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HamidrezaTg/budget-planner/main/scripts/install.sh -o /tmp/bp-install.sh && bash /tmp/bp-install.sh
+curl -fsSL https://raw.githubusercontent.com/HamidrezaTg/budget-planner/main/scripts/install.sh \
+  -o /tmp/budget-planner-install.sh
+bash /tmp/budget-planner-install.sh
 ```
 
-The installer downloads the latest release, checks Node.js ≥ 22 (and offers to set it
-up if missing), and installs a systemd service running as the unprivileged system user
-`budget` with data in `/var/lib/budget-planner` (port 2026, configurable via
-`/etc/default/budget-planner`).
+The default port is `2026`. Open `http://<server-ip>:2026` in a browser, create the
+first account, and follow the setup path in the [User Guide](docs/USER_GUIDE.md).
+The first account becomes the administrator.
 
-**Prefer not to pipe scripts?** Download `budget-planner_<version>_all.deb` from
-[Releases](https://github.com/HamidrezaTg/budget-planner/releases) and run:
+### Install a release package manually
+
+Download `budget-planner-server_<version>_all.deb` from
+[GitHub Releases](https://github.com/HamidrezaTg/budget-planner/releases), then run:
 
 ```bash
-sudo apt install ./budget-planner_<version>_all.deb
+sudo apt install ./budget-planner-server_<version>_all.deb
 ```
 
-Then open `http://<server-ip>:2026`, create your account (the first account becomes
-the admin), and you're in. `sudo apt remove budget-planner` keeps your data;
-`purge` deletes it.
+Removing the package keeps data. Purging the package deletes packaged application
+data; make a backup first.
 
-### Clients (optional)
+### Run from source
 
-The server is the only component with a backend. Phones, tablets and desktops connect
-to it as clients — over your LAN or a VPN such as Tailscale:
-
-- **Android** — download `budget-planner-android.apk` from
-  [Releases](https://github.com/HamidrezaTg/budget-planner/releases) and sideload it.
-  On first launch it asks for the server's **HTTPS** address (an HTTPS Tailscale
-  hostname is recommended), verifies reachability, remembers it, and auto-connects
-  from then on. If the server is
-  unreachable, the app offers **Try again** and **Change server address**.
-  (A PWA install via "Add to Home Screen" works too.)
-- **Linux desktop (Tauri v2)** — download `budget-planner-client_<version>_amd64.deb`
-  or the matching `.AppImage` from Releases. On first launch it asks for the server
-  address, verifies the `/.well-known/budget-planner` discovery endpoint, and
-  remembers it (up to ten servers, switchable from the picker). The package
-  contains no backend.
-- **Arch Linux / Manjaro / Omarchy** — install the AUR package with `yay`, or use
-  the AppImage fallback described in [`docs/INSTALL_ARCH.md`](docs/INSTALL_ARCH.md).
-- **macOS desktop (Tauri v2)** — download the matching unsigned
-  `budget-planner-client_<version>_<arch>.dmg`, drag Budget Planner to
-  Applications, and follow [`docs/INSTALL_MAC.md`](docs/INSTALL_MAC.md) if
-  Gatekeeper blocks the first launch.
-- **Build the clients yourself** with `scripts/build-apk.sh` (Android, needs a JDK),
-  `scripts/build-tauri-client.sh` (Linux), or `npm run tauri:build` inside
-  `desktop-client-tauri/` (macOS/Windows; needs Rust + Node.js ≥ 22).
-
-Connection problems (phone can't reach the server, wrong account list, hostname
-traps): see [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
-
-## Running from source
-
-Requires Node.js ≥ 22 (for the built-in `node:sqlite`).
+Node.js 22 or newer is required because the server uses built-in `node:sqlite`.
 
 ```bash
 npm install
-npm run build     # builds the web client into client/dist
-npm start         # serves everything at http://localhost:2026
-npm run dev       # development mode with hot reload
+npm run build
+npm start                 # http://localhost:2026
+npm run dev               # server plus Vite hot reload
 ```
 
-## The one-minute workflow
+Useful checks:
 
-1. **Import** a bank statement (Revolut exports work out of the box; any other format
-   via "Analyze format with AI"). Re-importing or overlapping files never creates
-   duplicates.
-2. **Transactions → needs review**: assign a category to each unknown merchant once —
-   the app learns the rule, retro-fixes old rows, and never asks again.
-3. The **Dashboard** tells you the amount to move to your spending account and how the
-   month compares to plan.
-4. Occasionally: enter real bank balances on **Balances**, actual income on **Income**,
-   and glance at the **Projection**.
+```bash
+npm test
+npm run test:e2e
+npm run lint
+npm run format:check
+```
 
-## Features
+## Connect Other Devices
 
-- **Import engine** — CSV/XLSX (including Revolut's ".csv that is really Excel");
-  only COMPLETED rows import; pendings and REVERTED rows handled; duplicates blocked
-  by fingerprint at the database level
-- **Learning categorization** — keyword rules learned from assignments, plus advanced
-  rules (amount range, account, type, priority) and a read-only rule tester
-- **Budgets** — standing monthly plan per category, per-month overrides, optional
-  rollover of underspend
-- **Sinking funds** — monthly accrual, goal targets with on-track/overdue tracking,
-  movement ledger
-- **Commitments** — dated obligations (loans, instalments) that drop out of the
-  projection at their end month
-- **Projection** — 96 months forward, free vs committed savings, re-anchored to real
-  bank balances you enter so drift never compounds silently
-- **Multi-currency** — transactions keep their statement currency; monthly reference
-  rates convert reporting to your display currency (manual rates or one-click ECB data)
-- **Scheduled month-end reports** — closed months are snapshotted automatically and
-  frozen forever, plus CSV and Excel exports with raw statement values
-- **Attachments** — receipts and documents per transaction, stored locally
-- **AI assistant (optional)** — category suggestions, a file-format doctor for
-  arbitrary bank exports, read-only chat over your data, and dev-mode change
-  proposals that apply only on your explicit confirmation — fully audit-logged;
-  works with local models (Ollama, LM Studio)
-- **Accounts & people** — manage bank accounts, cards, cash, spending pots, opening
-  balances, and the people attached to income sources
-- **Multi-user** — username + password, one private SQLite database per user,
-  admin user management, and safe username changes
+Clients contain no backend and do not copy the database. They connect to the
+server address entered on first launch.
 
-## Privacy & data ownership
+- **Browser/PWA:** use the server URL in a trusted LAN, localhost, VPN, or HTTPS
+  reverse proxy. A PWA caches the application shell, not financial API data.
+- **Android:** download `budget-planner-android.apk` from
+  [Releases](https://github.com/HamidrezaTg/budget-planner/releases) and sideload it.
+  Enter `http://192.168.x.x:2026` for a trusted LAN, `http://100.x.y.z:2026` for a
+  trusted Tailscale network, or an `https://` endpoint. The app warns before saving
+  HTTP because it is unsafe on untrusted networks. It remembers up to ten server
+  addresses.
+- **Linux desktop:** download the matching `.deb` or `.AppImage`, or install the
+  AUR package. The Tauri client remembers up to ten servers and contains no backend.
+- **macOS desktop:** download the matching unsigned arm64 DMG, drag the app to
+  Applications, and use [macOS installation](docs/INSTALL_MAC.md) if Gatekeeper
+  blocks the first launch.
+- **iOS:** the Capacitor shell is scaffolded and validated in CI; App Store
+  distribution still requires Apple signing and provisioning.
 
-- Everything lives in `data/` on your machine: `data/master.db` (accounts, sessions)
-  and `data/users/<username>.db` (that user's entire budget). Plain SQLite — copy the
-  files to back up, or use **Settings → Download full backup**.
-- The app phones home to nobody. The only optional outbound requests are AI providers
-  *you* configure, the ECB exchange-rate service (dates and currency codes only), and
-  your own banks' statement files.
-- Backups restore cleanly onto a fresh install — that's the migration path to a new
-  server.
+See [Mobile Clients](docs/MOBILE_CLIENTS.md), [Desktop Client](docs/DESKTOP_CLIENT.md),
+and [Troubleshooting](docs/TROUBLESHOOTING.md) for client-specific details.
+
+## Recommended First Setup
+
+1. Create the first user and sign in.
+2. Add real accounts, currencies, and opening balances in **Accounts**.
+3. Create groups and categories, assign paying accounts, and set standing plans.
+4. Add income sources, usual amounts, recurring items, funds, and commitments.
+5. Import a statement and inspect the full preview before confirming it.
+6. Review unknown transactions, transfers, duplicates, and attachments.
+7. Enter actual income and observed balances as the month progresses.
+8. Use Dashboard for the monthly check-in, then Projection and Reports for planning.
+
+The complete, searchable guide is available publicly at `/help`, including before
+login, and in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md).
+
+## Data, Privacy, and Backups
+
+The default source-install data directory is `data/`; the packaged service uses
+`/var/lib/budget-planner`:
+
+- `master.db` stores server-level users and sessions.
+- `users/<username>.db` stores that user's budget, settings, and planning data.
+- `uploads/<username>/` stores transaction attachments outside SQLite.
+
+Use **Settings → Download full backup** before upgrades. That download contains the
+user database only. For a complete migration, copy the matching uploads directory
+too. Restore validates the SQLite file, creates a pre-restore copy, and rolls back a
+failed restore.
+
+Budget Planner does not require outbound services. Optional outbound requests are
+limited to AI providers you configure, ECB/Frankfurter exchange-rate data, ntfy if
+you configure it, and the GitHub release check shown in Settings. Statement files
+are processed and removed after import.
 
 ## Configuration
 
-| Env var | Default | Purpose |
+Packaged installs read `/etc/default/budget-planner`. Source installs can use shell
+environment variables.
+
+| Variable | Default | Purpose |
 |---|---|---|
-| `PORT` | `2026` | HTTP port |
-| `DATA_DIR` | `./data` | Where databases and uploads live |
-| `BIND_IP` | all interfaces | Listen address (`127.0.0.1` for localhost-only) |
-| `SECURE_COOKIE` | off | Set to `1` when serving behind HTTPS so session cookies are marked `Secure` |
-| `TRUST_PROXY` | off | Set to `1` when behind a reverse proxy (for correct client IPs/rate limiting) |
-| `METRICS_ENABLED` | off | Set to `1` to expose request counters at `/metrics` for Prometheus |
-| `SETUP_TOKEN` | – | Optional token in `X-Setup-Token` for first-run setup from a non-localhost address |
-| `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | – | AI fallback if not set in Settings (`AI_MODEL` defaults to `gpt-4o-mini`) |
+| `PORT` | `2026` | HTTP listening port |
+| `DATA_DIR` | `./data` | Database and upload directory |
+| `BIND_IP` | all interfaces | Use `127.0.0.1` for localhost-only binding |
+| `SECURE_COOKIE` | off | Set to `1` behind HTTPS |
+| `TRUST_PROXY` | off | Set to `1` behind a trusted reverse proxy |
+| `METRICS_ENABLED` | off | Expose unauthenticated `/metrics` counters |
+| `SETUP_TOKEN` | unset | `X-Setup-Token` required for remote first-run setup |
+| `AI_BASE_URL` | unset | Optional server-level AI fallback URL |
+| `AI_API_KEY` | unset | Optional server-level AI fallback key |
+| `AI_MODEL` | `gpt-4o-mini` | Optional server-level AI fallback model |
 
-AI providers are configured per user in Settings: OpenAI, Anthropic, OpenRouter,
-Groq, DeepSeek, Mistral, Together, Ollama (local), LM Studio (local), or any custom
-OpenAI-compatible endpoint. Everything is optional — the planner is fully usable
-without any AI.
+For public or untrusted networks, bind the server locally and use Caddy or another
+HTTPS reverse proxy. Follow [HTTPS With Caddy](docs/HTTPS_CADDY.md). Do not expose
+plain port `2026` directly to the internet.
 
-## Security
+## Security Model
 
-- **Passwords**: at least **8 characters**; hashed with salted scrypt (async, so it
-  never blocks the server). All sessions are invalidated when you change your password.
-- **Login protection**: attempts are rate-limited per IP and username; setup is
-  rate-limited too and limited to localhost unless `SETUP_TOKEN` is supplied.
-  Session cookies are `HttpOnly` + `SameSite=Lax` and expire server-side after 30 days.
-- **Headers**: strict Content-Security-Policy (allows the app's inline theme
-  preloader via its hash), `X-Content-Type-Options`, `X-Frame-Options`,
-  `Referrer-Policy` and `Permissions-Policy`; `X-Powered-By` is disabled.
-  Production responses never leak stack traces; every response carries an
-  `X-Request-Id` for matching server log lines (see Troubleshooting).
-- **Liveness**: `GET /healthz` answers without authentication for systemd and
-  uptime monitors.
-- **Downloads**: the installer verifies artifacts against the release's
-  `SHA256SUMS.txt` before installing.
-- **AI safety**: the assistant's read-only SQL can only touch budget tables —
-  `settings` (your AI API key) and audit internals are unreachable.
-- **Import safety**: uploads are size-limited, dates are validated as real calendar
-  dates, and statement files are deleted after import.
-
-**Transport.** The server speaks plain HTTP by design (home LAN/Tailscale). On a
-hostile network (public Wi-Fi, the open internet) that exposes passwords and session
-cookies, so prefer one of:
-
-1. localhost-only (`BIND_IP=127.0.0.1`) for single-machine use;
-2. a private VPN such as Tailscale for devices anywhere;
-3. an HTTPS reverse proxy (e.g. Caddy) in front of the server — set
-   `SECURE_COOKIE=1` and `TRUST_PROXY=1` in `/etc/default/budget-planner`.
-
-The optional `/metrics` endpoint is disabled by default. If enabled, restrict it
-to the Prometheus network at the reverse proxy or firewall; it is intentionally
-not protected by a Budget Planner session cookie.
-
-**Tailscale phone setup.** Install Tailscale on both the server machine and the
-phone, then enter an HTTPS Tailscale hostname in the native app. Native clients
-reject plain HTTP because it would expose session credentials; use Tailscale HTTPS
-or an HTTPS reverse proxy reachable only through the tailnet. The Android shell
-remembers up to ten server addresses, so multiple HTTPS endpoints can coexist.
+- Passwords require at least eight characters and are hashed with salted scrypt.
+- Login and setup attempts are rate-limited. Sessions are HttpOnly, SameSite=Lax,
+  and expire server-side after 30 days.
+- Security headers include a strict Content-Security-Policy, frame and MIME
+  protection, Referrer-Policy, and Permissions-Policy.
+- Imports have size limits, real calendar-date validation, invalid-row reporting,
+  and database duplicate protection.
+- The AI read-only query path cannot access settings, API keys, authentication, or
+  audit internals. Dev-mode writes come from a fixed proposal whitelist and require
+  explicit Apply confirmation.
+- Health checks use `/healthz`. If metrics are enabled, restrict `/metrics` at the
+  firewall or reverse proxy because it is not protected by a session cookie.
 
 ## Documentation
 
-- [`docs/MOBILE_CLIENTS.md`](docs/MOBILE_CLIENTS.md) — native network policy and build/signing workflow
-- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — every page, button and section explained
-- [`docs/MATH.md`](docs/MATH.md) — the exact formulas behind every number, so you can trust them
-- [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — service won't start, devices can't connect, odd totals
-- [`docs/HTTPS_CADDY.md`](docs/HTTPS_CADDY.md) — optional HTTPS reverse proxy recipe
-- [`CHANGELOG.md`](CHANGELOG.md) — release history
+- [`docs/INDEX.md`](docs/INDEX.md) - documentation map and documentation rules
+- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) - complete end-user manual
+- [`docs/MATH.md`](docs/MATH.md) - financial formulas and definitions
+- [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) - operational fixes
+- [`docs/HTTPS_CADDY.md`](docs/HTTPS_CADDY.md) - HTTPS deployment
+- [`docs/MOBILE_CLIENTS.md`](docs/MOBILE_CLIENTS.md) - Android/iOS clients and network policy
+- [`docs/DESKTOP_CLIENT.md`](docs/DESKTOP_CLIENT.md) - desktop client
+- [`docs/openapi.json`](docs/openapi.json) - API schema
+- [`CHANGELOG.md`](CHANGELOG.md) - release history
 
 ## Roadmap
 
-- Bank synchronization via GoCardless Bank Account Data (PSD2) — optional alongside
-  the hardened manual import
-- macOS and Windows desktop clients
-- Ongoing: security hardening, performance, polish
+- Optional bank synchronization alongside the hardened manual import.
+- Further signed desktop auto-update support.
+- Apple distribution signing and store publication.
+- Ongoing security, performance, accessibility, and platform polish.
 
-## Contributing & license
+## Contributing and License
 
-Issues and pull requests are welcome. Licensed under [MIT](LICENSE).
+Issues and pull requests are welcome. Budget Planner is licensed under [MIT](LICENSE).

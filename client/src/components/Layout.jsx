@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { WorkingMonthProvider, useWorkingMonth } from './WorkingMonth.jsx';
+import { ThemeProvider, useTheme } from './Theme.jsx';
 
 const groups = [
   {
@@ -44,9 +45,11 @@ const groups = [
 
 export default function Layout({ me }) {
   return (
-    <WorkingMonthProvider>
-      <LayoutContent me={me} />
-    </WorkingMonthProvider>
+    <ThemeProvider username={me?.username}>
+      <WorkingMonthProvider>
+        <LayoutContent me={me} />
+      </WorkingMonthProvider>
+    </ThemeProvider>
   );
 }
 
@@ -54,15 +57,10 @@ function LayoutContent({ me }) {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('bp-collapsed') === '1');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'light');
   const [privacy, setPrivacy] = useState(() => localStorage.getItem('bp-privacy') === '1');
   const [nativeShell, setNativeShell] = useState(false);
   const { month, setMonth } = useWorkingMonth();
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('bp-theme', theme);
-  }, [theme]);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     document.body.classList.toggle('privacy-mode', privacy);

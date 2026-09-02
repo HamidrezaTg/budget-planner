@@ -39,9 +39,10 @@ Keep it in a stable location if you create your own desktop shortcut.
 
 ## First Launch
 
-Enter the server address when prompted, for example
-`http://192.168.1.20:2026`. The client verifies the
-`/.well-known/budget-planner` discovery endpoint and remembers the server.
+Enter the server address when prompted. A trusted LAN desktop can use an address
+such as `http://192.168.1.20:2026`; use an HTTPS URL when the network is not fully
+trusted. The client verifies the `/.well-known/budget-planner` discovery endpoint
+and remembers the server.
 
 If the address cannot be reached, check the server bind address and firewall,
 then see [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).

@@ -3,6 +3,21 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.19.1] — 2026-09-02
+
+### Added
+- Per-user synchronized themes: System, Light, Dark, Midnight, and Forest.
+- Projection baseline horizon controls and removable What-if scenarios.
+- Public Help documentation and expanded installation/troubleshooting guidance.
+
+### Changed
+- Android accepts trusted LAN/VPN HTTP with an explicit warning while retaining HTTPS support.
+- Debian server packages are named `budget-planner-server_<version>_all.deb`.
+- Server upgrades preserve `/etc/default/budget-planner` configuration.
+
+### Fixed
+- Settings fields and Projection controls now stack correctly on narrow screens.
+
 ## [3.19.0] — 2026-09-01
 
 ### Added
@@ -11,7 +26,8 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
 ### Changed
 - Fund balances now reconcile scheduled accruals, manual movements, and linked transactions.
-- Native clients require HTTPS server endpoints, including HTTPS Tailscale access.
+- Android supports trusted LAN/VPN HTTP with an explicit warning; HTTPS remains recommended,
+  including HTTPS Tailscale access.
 - Recurrence auto-posting and report snapshot capture are explicit POST operations.
 
 ### Security

@@ -72,8 +72,8 @@
     <div id="view-offline" class="hidden">
       <p style="color: #ef6b6e; font-weight: 600; margin-bottom: 4px;">Can't reach your server</p>
       <p class="saved-line" id="offline-url" style="margin-bottom: 10px;"></p>
-      <p id="offline-hint">
-        Check that the server machine is on and the phone is on the same Wi-Fi or VPN.
+       <p id="offline-hint">
+         Check that the server machine is on, the phone is on the same Wi-Fi or VPN, and the address uses the correct scheme.
       </p>
       <div class="actions">
         <button id="retry">Try again</button>
@@ -85,12 +85,12 @@
     <div id="view-setup" class="hidden">
       <p id="setup-intro">
         This app is a client for your self-hosted planner. Enter the address of the machine
-        running the server — e.g. <b>https://budget.example.ts.net</b> or another HTTPS
-        Tailscale endpoint. The server itself never runs on this device.
+        running the server — e.g. <b>http://192.168.1.20:2026</b> on a trusted LAN or
+        <b>https://budget.example.ts.net</b>. The server itself never runs on this device.
       </p>
       <label for="server">Server address</label>
       <input id="server" type="url" inputmode="url" autocomplete="off"
-             placeholder="https://budget.example.ts.net" />
+             placeholder="http://192.168.1.20:2026" />
       <div id="saved-list" class="hidden"></div>
       <div class="err" id="err"></div>
       <button id="go">Connect</button>
@@ -100,7 +100,7 @@
 
   <script src="shell-picker.js"></script>
   <script>
-    const { normalizeUrl, readSavedUrls, saveUrls, remember, forget, probe } = window.BudgetPlannerShell;
+    const { normalizeUrl, isSupportedUrl, isHttpUrl, readSavedUrls, saveUrls, remember, forget, probe } = window.BudgetPlannerShell;
     const KEY = window.BudgetPlannerShell.KEY;
     const LEGACY_KEY = window.BudgetPlannerShell.LEGACY_KEY;
 
@@ -128,6 +128,12 @@
       mark.classList.toggle('busy', on);
       goBtn.disabled = on;
       retryBtn.disabled = on;
+    }
+
+    function offlineHint(url) {
+      return isHttpUrl(url)
+        ? 'Check that the server is running, the phone is on the same trusted Wi-Fi or VPN, and the server firewall allows the port.'
+        : 'Check that the server is running, the phone is on the same Wi-Fi or VPN, and its HTTPS certificate is trusted.';
     }
 
     async function connectTo(url) {
@@ -207,8 +213,13 @@
     goBtn.addEventListener('click', async () => {
       let url = normalizeUrl(input.value);
       err.textContent = '';
-      if (!/^https:\/\/.+/i.test(url)) {
-        err.textContent = 'Enter a full HTTPS address (use an HTTPS Tailscale endpoint for private access)';
+      if (!isSupportedUrl(url)) {
+        err.textContent = 'Enter a complete server address starting with http:// or https://';
+        return;
+      }
+      if (isHttpUrl(url) && !window.confirm(
+        'This server uses HTTP. Only continue on a trusted LAN or VPN. HTTP can expose your login and budget session on an untrusted network. Connect anyway?'
+      )) {
         return;
       }
       busy(true);
@@ -217,10 +228,7 @@
       busy(false);
       goBtn.textContent = 'Connect';
       if (!ok) {
-        err.textContent =
-          'Could not reach ' + url + '. Check: the address is an IP like 192.168.x.x '
-          + '(a computer name like “lenovo” usually does not resolve on phones); '
-          + 'phone and server are on the same Wi-Fi or VPN; and the server is running.';
+        err.textContent = 'Could not reach ' + url + '. ' + offlineHint(url);
       }
     });
     document.getElementById('server').addEventListener('keydown', (e) => {

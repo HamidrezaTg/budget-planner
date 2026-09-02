@@ -20,9 +20,9 @@ once more.
 
 ## Connect
 
-On first launch enter the server address, for example
-`http://192.168.1.10:2026` or its Tailscale HTTPS address. The client verifies
-the `/.well-known/budget-planner` discovery endpoint, remembers up to ten
+On first launch enter the server address. A trusted LAN can use
+`http://192.168.1.10:2026`; use an HTTPS Tailscale or reverse-proxy address on
+untrusted networks. The client verifies the `/.well-known/budget-planner` discovery endpoint, remembers up to ten
 servers, and lets you switch between them from the connection screen.
 
 The macOS app uses the native **File**, **Edit**, **View**, and **Help** menus.
@@ -30,8 +30,9 @@ The macOS app uses the native **File**, **Edit**, **View**, and **Help** menus.
 
 ## Troubleshooting
 
-- A server on plain HTTP must be reachable from the Mac. Check the Mac's LAN or
-  Tailscale connection and confirm the server's firewall allows port `2026`.
+- A trusted-LAN HTTP server must be reachable from the Mac. For an untrusted
+  network, use HTTPS and check the certificate, LAN/Tailscale connection, and
+  firewall port.
 - If the server address is rejected, use a complete URL beginning with
   `http://` or `https://`.
 - To remove saved server addresses, use the **Forget** action on the connection

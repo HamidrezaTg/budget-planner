@@ -1,273 +1,432 @@
 # User Guide
 
-Every page, button and section explained. Open the in-app **Help** page for the
-same content while using the app.
+This is the complete end-user manual for Budget Planner. The same topics are
+available as a searchable, public webpage at `/help`, so Help can be opened before
+login and while the server is unavailable. Links below point to application pages
+and are useful after signing in.
 
----
+## How Budget Planner Works
 
-## First run
-On a fresh install, account creation is limited to the server's own machine
-(localhost) unless a `SETUP_TOKEN` was configured — see the README's
-Configuration table.
+Budget Planner has one server and many optional clients. The server stores the
+databases and attachments. A browser, Android app, iOS shell, or desktop app only
+connects to that server; it does not contain a second budget.
 
-1. Open http://localhost:2026
-2. Create the first account (username + password). Each account gets its own
-   private database, pre-seeded with the household structure.
-3. More accounts: log in as an admin and use **Admin → Users** in the sidebar.
+Each user has a separate SQLite database. The first account created during setup is
+the administrator. Administrators can manage users, but users cannot see each
+other's budgets.
 
-Passwords must be at least **8 characters**.
+The recommended operating loop is:
 
----
+1. Set up accounts, categories, plans, and income.
+2. Import statements or add transactions manually.
+3. Review unknown transactions and transfer candidates.
+4. Check Dashboard for variance, warnings, and upcoming events.
+5. Enter actual income and observed account balances.
+6. Use Projection and Reports to make decisions and preserve history.
 
-## Sidebar
+## First Run and Sign In
 
-| Section | Pages |
+On a fresh server, open the server URL in a browser. First-run setup is limited to
+the server machine unless an operator intentionally configured `SETUP_TOKEN` for
+remote setup.
+
+1. Create a username and password. Passwords must have at least eight characters.
+2. The first user becomes the administrator and receives a private database.
+3. Sign in and follow the setup order in [Start here](#start-here).
+4. To add other people, use **Admin → Users**. Each user receives an independent
+   database and login.
+
+If the server cannot be reached, the app shows a recovery screen. The offline cache
+contains only the interface shell; it does not cache financial API data and does not
+mean that accounts or data were deleted.
+
+## Navigation and Working Month
+
+The sidebar is grouped into Overview, Money in & out, Planning, Assistant, and,
+for administrators, Admin. The Working month selector is shared by most pages and
+is remembered in the browser.
+
+- **Dashboard**: monthly summary and check-in.
+- **Projection**: long-range forecast and temporary scenarios.
+- **Reports**: history, charts, exports, and frozen month-end snapshots.
+- **Import**: preview and confirm bank statements.
+- **Transactions**: actual rows, review, rules, transfers, splits, and attachments.
+- **Recurring**: expected monthly transactions.
+- **Budgets**: monthly category plans.
+- **Income**: income sources and monthly actuals.
+- **Accounts**: bank accounts, currencies, opening balances, and people.
+- **Funds**: sinking funds and goals.
+- **Commitments**: dated obligations.
+- **Balances**: observed account balances and reconciliation.
+- **Categories**: groups, categories, and categorization rules.
+- **AI Chat**: optional read-only questions and confirmed proposals.
+- **Settings**: identity, display, currency, backups, sharing, notifications, and AI.
+- **Help**: this guide.
+
+Keyboard shortcuts are available when focus is not inside a form:
+
+| Shortcut | Destination |
 |---|---|
-| Overview | Dashboard, Projection, Reports |
-| Money in & out | Import, Transactions, Recurring, Budgets, Income |
-| Planning | Accounts, Funds, Commitments, Balances, Categories |
-| Assistant | AI Chat, Settings, Help |
+| `?` | Help |
+| `g`, then `d` | Dashboard |
+| `g`, then `t` | Transactions |
+| `g`, then `r` | Reports |
 
----
+The sidebar also provides collapse, mobile menu, theme, privacy blur, logout, and
+native-client server switching controls.
+
+## Start Here
+
+### 1. Add accounts and opening balances
+
+Open **Accounts** and create every place where money lives: bank accounts, cards,
+cash, and other accounts. For each account:
+
+- choose its type and currency;
+- enter the real opening balance at the moment tracking starts;
+- mark a spending pot when it represents a daily-spending account.
+
+The opening balance is the starting point for account reconciliation and future
+projection totals. Do not change it to correct a later transaction; use the actual
+transaction or a balance observation instead.
+
+### 2. Create categories and plans
+
+Open **Categories** to create budget groups and categories. Assign a paying account
+and then set standing plans in **Budgets**. Categories may be ungrouped or lack an
+account, but the Dashboard warns because those rows cannot contribute to account
+totals correctly.
+
+Retiring a category stops it from receiving new plans or categorization rules and
+clears its existing plan/rules. Historical transactions remain. Reactivate it when
+it should be used again.
+
+### 3. Add income and scheduled items
+
+In **Income**, add income sources, usual amounts, and optional people. Enter actual
+income for a month when it arrives; actual income overrides the usual amount in that
+month's projection.
+
+Use **Recurring** for predictable monthly income or expenses. Use **Funds** for
+irregular bills that need money accrued over time. Use **Commitments** for fixed
+obligations with a start and end month.
 
 ## Dashboard
 
-The month at a glance. Use **← / Today / →** to change months — every figure follows.
+Dashboard follows the selected working month. Use the previous, Today, and next
+controls to move between months.
 
-- **Transfer to Revolut** — the amount to move from your bank account(s) to your spending card this month:
-  the sum of all budget lines tagged Revolut. This is the number the whole system
-  exists to produce.
-- **Income (actual)** — real income entered on the Income page.
-- **Planned / Actual spend** — budget vs. reality. Actual is *net of refunds*: a
-  refund reduces the spend of its own category instead of counting as income.
-- **Month result** — planned − actual across all seven groups (including Savings).
-  Positive = under budget overall.
-- **Warnings** — categories without an account (their spending vanishes from account
-  totals) and transactions still needing review.
-- **Insights** — generated cards flag transactions needing review, categories over plan,
-  spending ahead of the current month's pace, fund goals needing higher contributions,
-  and recurring items due within seven days. The action on each card opens the relevant
-  page; the alert count beside the month selector counts the current cards.
-- **Group tables** — one table per block (Housing, Food, …). *Difference* =
-  planned − actual per category.
+- **Transfer to Revolut**: the amount of budget lines assigned to a spending account
+  recognized as Revolut. It is a planning instruction, not an extra expense.
+- **Income**: actual monthly income when entered; otherwise the usual income amount
+  may be used as the projection fallback.
+- **Planned / Actual spend**: plan compared with actual category spending. Refunds
+  reduce the spending category rather than becoming unrelated income.
+- **Month result**: planned minus actual across all groups, including Savings.
+  Positive means actual spending is under plan.
+- **Warnings**: unresolved transaction review, missing category/account assignments,
+  missing exchange rates, and other data conditions that can affect totals.
+- **Insights**: review backlog, over-budget categories, pace, fund goals, and
+  recurring events due soon. Insight links open the relevant page and do not change
+  data.
+- **Group tables**: category totals grouped by budget block. Difference is planned
+  minus actual; positive means under plan.
 
-## Import
+## Accounts and People
 
-- **Choose CSV / XLSX file** — standard path for Revolut exports. Handles the
-  ".csv file that is secretly Excel" quirk. Only COMPLETED rows import; pendings
-  dated in previous months are treated as completed (they settled but the bank
-  didn't relabel them); current-month pendings and REVERTED rows are skipped.
-  Duplicates (same date + amount + description) are blocked — re-uploading
-  overlapping statements is safe.
-- **Analyze format with AI** — for exports from other banks. The AI reads the raw
-  file, detects the column layout, date format, decimal style and cancellation
-  rows, and converts everything to the standard schema. You see the full preview
-  (and what the AI detected) before anything is written.
-- **Import into account** — which account the statement belongs to.
-- **Confirm import** — the only step that writes to the database.
-- **Duplicate protection** — re-importing the same file, or any export with overlapping
-  date ranges, never creates a second copy: rows are fingerprinted by
-  date + amount + description (plus an occurrence index for legitimate same-day twins,
-  e.g. two identical coffees) and the database itself refuses duplicate fingerprints.
-  The preview shows exactly which rows count as duplicates before you confirm.
-- **Rows that cannot be read** (bad date, unparseable amount, missing description)
-  are listed in the preview with row number and reason instead of being silently
-  dropped — fix or ignore them deliberately.
-  Limitations: a bank that changes the merchant *wording* between statements can still
-  slip past the fingerprint; same-day twins split across two different exports may
-  occasionally collide.
+Accounts represent where money is held. An account has a name, type, currency,
+opening balance, and optional spending-pot flag. Its currency controls opening
+balances, observations, and running account balances.
 
-## Transactions
+Accounts cannot be deleted while transactions or balance observations reference
+them. This prevents history from becoming detached silently.
 
-- **Month filter** and **Show needs-review only**.
-- **Assign category…** — pick a category for an unknown merchant. This
-  automatically creates a *keyword rule*: future transactions containing that name
-  are categorized instantly, and older unmatched rows with the same name are fixed
-  retroactively.
-- **Suggest categories with AI** — the AI proposes a category + confidence for every
-  pending row.
-- **Apply all** / **Apply ≥80%** — accept every suggestion, or only confident ones.
-  Applied suggestions become learned rules too.
-- **Split** — divide one purchase across two or more categories. The parts must add up
-  to the original amount. **Unsplit** removes the parts and restores the original.
-- **Attachments** — attach receipts/documents (PDF, PNG, JPEG, WebP, CSV; max 10 MB) to
-  any transaction via the paperclip button. Files are stored under `data/uploads` on
-  this machine and deleted with their transaction or individually.
-  Note: the Settings **backup downloads the database only** — attachment files must be
-  copied from `data/uploads/<username>/` separately when migrating to a new server.
+People are names connected to income sources. Deleting a person preserves the income
+source and clears only that connection.
+
+## Categories and Rules
+
+Categories are organized into groups and can have a paying account and standing
+plan. Categorization rules determine how imported transactions are assigned.
+
+- Assigning a category to a review row can learn a keyword rule.
+- Learned rules can repair older matching rows retroactively.
+- Advanced rules can combine description text, absolute amount range, account,
+  transaction type, and priority.
+- Higher-priority rules are checked first.
+- The rule tester previews a result without writing data.
+- Retiring a category clears its plan and associated rules.
 
 ## Budgets
 
-- **Standing plan** — the normal monthly amount, used by every month.
-- **Plan for \<month\>** — a one-month override (row gets an amber marker; ↺ removes it).
-- **Account** — which account the category is paid from. Every category should have
-  one; untagged categories are flagged on the Dashboard.
+Budgets define planned spending in the global display currency.
 
-## Accounts
+- **Standing plan** is the normal amount used by every month.
+- **Plan for `<month>`** is a one-month override. Reset removes the override.
+- **Account** identifies the account expected to pay the category.
+- **Roll over underspend** carries qualifying unused plan into a later month.
 
-Manage the places where money lives: bank accounts, cards, cash, and spending pots.
-
-- **Opening balance** — the real balance when you start using the planner. It is the
-  starting point for per-account reconciliation and projection totals.
-- **Currency** — the currency used for this account's opening balance, observations,
-  and running balance. Choose EUR, USD, GBP, or CHF.
-- **Edit** — rename the account, change its type, update the opening balance, or mark
-  it as a spending pot.
-- **Delete** — only succeeds when no transactions or balance observations reference
-  the account; nothing is silently detached.
-- **People** — the same page manages names used by income sources. Deleting a person
-  leaves the income source and clears only its person link.
+Rollover does not create a negative amount for overspending. A category needs
+qualifying activity for unused plan to be carried forward.
 
 ## Income
 
-- **Usual** — the recurring amount the projection uses when a month has no actual entry.
-- **Enter actual** — the real figure for that month. Actual income is always entered,
-  never assumed.
+An income source can have a name, person, usual amount, and monthly actual.
 
-## Recurring
+- **Usual** is the recurring amount used when a month has no actual entry.
+- **Actual** is the amount that really arrived in that month and overrides usual.
 
-Expected monthly transactions — rent, subscriptions, salary. They appear in the
-Upcoming panel on the Dashboard.
+Enter refunds as transactions according to their actual account movement; do not
+inflate income just to make a spending category look correct.
 
-- **Post now** — creates the real transaction for a month. Posting is idempotent:
-  posting the same month twice creates nothing the second time.
-- **auto-post** — posts itself on its day each month.
-- **Pause** (edit) — keep the rule but stop it from posting.
-- **Split template** — divide one recurring payment across two or more categories.
-  The part amounts must add up to the signed recurrence amount; posting creates one
-  split transaction with those category allocations.
-- A future-month post never suppresses the current month's item, and the posting
-  pointer never moves backwards.
+## Importing Statements
 
-## Funds (sinking funds)
+Open **Import**, choose CSV/XLS/XLSX, and select the destination account. Import is
+always preview-first:
 
-For irregular bills: accrue monthly, withdraw when the bill lands.
+1. Select or drop the statement.
+2. For an unfamiliar format, optionally use **Analyze format with AI**.
+3. Inspect detected columns, dates, signed amounts, currencies, statuses, invalid
+   rows, duplicates, and transfer candidates.
+4. Correct the account choice if necessary.
+5. Press **Confirm import** only after reviewing the preview.
 
-- **Balance** = opening balance + monthly contribution × months since start +
-  recorded movements + linked transactions. Contributions accrue automatically;
-  manual deposits (**In**), withdrawals (**Out**), linked bills, and linked refunds
-  all affect the same balance.
-- A **negative balance is a warning, not an error** — the bill arrived early.
-- **Goals** — set a target amount and optional date; the page shows progress, what is
-  still needed per month, and whether you are on track. Overdue goals raise a danger
-  card on the Dashboard.
+Nothing is saved before confirmation. Standard handling includes:
+
+- CSV, XLS, XLSX, and CSV files whose contents are actually Excel;
+- real calendar-date and amount validation;
+- completed rows;
+- settled older pending rows treated as completed;
+- current-month pending rows skipped;
+- reverted rows skipped;
+- invalid rows displayed with source row and reason;
+- duplicate protection at the database level.
+
+Duplicate fingerprints use date, signed amount, description, and an occurrence index
+for legitimate identical same-day transactions. Re-importing an overlapping export
+is safe in normal cases, although a bank changing merchant wording can still require
+manual cleanup.
+
+AI format analysis sends the selected file to the AI provider configured by the
+user. Verify the preview even when the detected format looks correct.
+
+## Transactions
+
+Use **Transactions** to maintain actual rows. Filter by month, paginate, or show
+only transactions that need review.
+
+- Assign a category to learn a keyword rule.
+- Add, edit, or delete a manual transaction.
+- Change account, category, fund, or commitment links.
+- Request optional AI category suggestions and apply them individually, all at
+  once, or only at confidence of 80% or higher.
+- Split a purchase across multiple categories. Signed parts must sum to the parent;
+  Unsplit restores the original.
+- Attach PDF, PNG, JPEG, WebP, or CSV documents up to 10 MB.
+- Download or delete an attachment individually.
+
+Attachments live under the server uploads directory, outside the SQLite database.
+Deleting a transaction deletes its attachments. See [Backups and restore](#backups-and-restore)
+before migrating.
+
+## Transfers
+
+Transfers represent money moving between two accounts. They should not become income
+or spending.
+
+- Create a paired transfer manually.
+- Choose candidate pairs during import.
+- Pair equal-and-opposite existing transactions from different accounts.
+- Unpair a wrong match.
+- Delete both sides together only when the movement should be removed entirely.
+
+After review, the Dashboard's spending-account transfer guidance should reflect the
+planned move without inflating the month's expenses.
+
+## Recurring Transactions
+
+Create expected monthly income or expenses with a signed amount, day 1–28, account,
+category, and optional auto-post.
+
+- **Post now** creates the selected occurrence.
+- **Auto-post** posts on the scheduled day.
+- **Pause** retains the rule but stops posting.
+- **Split template** posts one split transaction across multiple categories.
+- Posting is idempotent; repeating the same month does not create duplicates.
+
+The Dashboard shows upcoming occurrences. A future-month post does not suppress the
+current-month occurrence.
+
+## Funds
+
+Funds are sinking funds for irregular bills. A fund can have a start month, opening
+balance, monthly contribution, goal amount, goal date, and linked transactions.
+
+The balance combines the opening balance, contributions since the start month,
+manual deposits, withdrawals, linked bills, and linked refunds. Use **In** for a
+deposit and **Out** for a withdrawal. A negative fund balance is a warning that the
+bill arrived before enough money was accrued.
+
+Goals show progress, remaining amount per month, and whether the contribution is on
+track. Overdue or underfunded goals can raise Dashboard warnings.
 
 ## Commitments
 
-Fixed dated obligations (loans, instalments, kindergarten). Name, monthly amount,
-start month, end month. When a commitment passes its end month the projection stops
-charging it — you watch the burden decrease over time. Edit end months inline.
+Commitments model fixed dated obligations such as loans, instalments, or childcare.
+Set a name, monthly amount, start month, end month, account, and optional category
+or fund links.
 
-## Balances
+The projection includes an active commitment and stops charging it after its end
+month. This makes the future relief from a finished obligation visible.
 
-- **Record** — type the real bank balance for an account and month.
-- The projection compares its prediction with your entry, shows the **variance**
-  as a discrete explained figure, then **re-anchors**: future months continue from
-  reality, so errors never compound silently.
+## Balances and Reconciliation
+
+Open **Balances** and record the real observed balance for an account and month.
+The app compares the observation with its model and shows a variance.
+
+Use the variance to investigate missing imports, incorrect opening balances,
+uncategorized rows, unpaired transfers, or currency rates. A correct observation
+re-anchors future projections so a one-time discrepancy does not compound silently.
+
+Remove an observation only when it was entered incorrectly or is no longer useful.
 
 ## Projection
 
-96 months forward. Outgoings each month = active commitments + category plans not
-already covered by a commitment (no double counting). Income = usual amounts unless
-a month has an actual entry. Shows free vs committed savings and predicted total
-balance per month.
+Projection shows a default 96-month forecast. Each month combines income, active
+commitments, category plans not already covered by commitments, fund effects, free
+savings, committed savings, and total balance.
 
-- **Scenarios** — compare up to three transient alternatives with monthly income or
-  outgoing changes and dated one-off amounts. Scenarios never change your saved budget.
+Use the **Projection horizon** control above the What-if builder to change the
+baseline forecast to any whole number from 1 to 240 months. Press **Update
+projection**; this changes only the baseline and does not create a scenario.
+
+- **Free savings** is accumulated surplus not assigned to future fund obligations.
+- **Committed savings** is money already spoken for by sinking funds.
+- Commitment end months stop future commitment charges.
+- Actual income replaces usual income only for months with an actual entry.
+- Balance observations anchor future totals to reality.
+
+Create up to three temporary scenarios with monthly income/outgoing changes and
+dated one-off amounts. Scenarios are comparisons only and never change saved plans.
+
+## Reports and Month-End History
+
+Reports includes monthly and yearly totals, category breakdowns, account filters,
+month-over-month comparisons, category trends, charts, and browser Print/PDF.
+
+CSV and XLSX exports preserve original statement amounts and currency codes. Summary
+workbooks include transaction and summary/month/category sheets as appropriate.
+
+When the app is opened after a month closes, an active month with activity can be
+captured as a frozen month-end snapshot. This is triggered by app use, not a separate
+background scheduler. A snapshot is not rewritten by later edits or deletions, so it
+shows what the plan-versus-reality comparison looked like at that time.
+
+## Multi-Currency
+
+Transactions retain their statement currency. The global display currency is used
+for budgets, funds, commitments, income, and aggregate reports. Each account keeps
+its own currency for balances and observations.
+
+Exchange rates are monthly and mean display-currency units per one foreign unit.
+Enter rates manually or fetch missing ECB reference data through Frankfurter.
+Missing rates count as 1:1 and produce a Dashboard warning. Changing the global
+display currency clears rates relative to the old base; refetch afterwards.
+
+Exports retain original amounts and currency codes.
 
 ## AI Chat
 
-- **Finance (read-only)** — ask anything about your data. The AI can only run
-  strictly read-only SELECT queries; it cannot change anything.
-- **Dev mode** — proposes changes from a fixed whitelist (budgets, rules, categories,
-  commitments, funds, income, balance anchors). Each proposal is shown as a plain
-  sentence; **nothing is applied until you press Apply**. No raw SQL, no deletions,
-  no auth changes — by construction. Every proposal and application is audit-logged.
+AI is optional and can use OpenAI-compatible hosted or local providers, including
+Ollama and LM Studio.
+
+- **Finance** is read-only. It can answer questions using permitted budget data but
+  cannot alter the database.
+- **Import analysis** proposes a file mapping that must still be reviewed.
+- **Category suggestions** propose categories and confidence values.
+- **Dev mode** creates changes from a fixed whitelist. Nothing is applied until the
+  user presses Apply. It cannot execute raw SQL, delete data, or change authentication.
+
+Configured providers receive only the data needed for the selected request. Review
+provider privacy policies before using hosted AI with financial data.
 
 ## Settings
 
-### AI assistant
-Provider → API key → **Load models** → pick a model → Save → Test connection.
-Supported: OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, Mistral, Together AI,
-Ollama (local, no key), LM Studio (local, no key), Custom.
+### Appearance and privacy
 
-### Backup & restore
-- **Download full backup** — one SQLite file containing this user's entire budget.
-  Do it before upgrades; it is your migration path to a new server.
-- **Restore backup** — upload a downloaded backup. It is validated (SQLite
-  integrity, required tables, broken references) and the current database is
-  snapshotted before the swap; a failed restore rolls back automatically.
-- **Danger zone: reset** — deletes all transactions and attachments, keeps
-  budgets, rules, funds and income sources.
+Choose `System`, `Light`, `Dark`, `Midnight`, or `Forest`, plus the global display
+currency and privacy blur. The theme is saved per user on the server and follows
+you to other signed-in devices. Privacy mode blurs values in the current browser;
+it is not encryption and does not alter stored data.
+
+### Identity
+
+Change username with the current password. The private database, uploads, and active
+session move with the account. Change password to invalidate existing sessions.
+
+### Backups and restore
+
+**Download full backup** downloads the user's SQLite database. It includes budget
+data, settings, plans, and transactions, but not attachment files.
+
+**Restore backup** validates SQLite integrity, required tables, and references. A
+pre-restore copy is created and a failed restore rolls back. For a complete migration,
+restore the database and copy the matching `uploads/<username>/` directory separately.
+
+**Reset spending data** removes transactions and attachments while retaining planning
+configuration. Treat it as destructive and back up first.
 
 ### Read-only sharing
 
-Create a month-specific link in the Data section. The link shows planned category
-amounts only, expires automatically, and can be revoked at any time. The raw token
-is shown only when it is created; the server stores only its hash.
+Create a month-specific, expiring share link. A recipient sees planned category/group
+totals only. Transactions, balances, accounts, settings, and private identity are
+not exposed. The token is shown when created, stored as a hash, and can be revoked.
 
-### Android notifications
+### Notifications
 
-Configure an ntfy server and topic in Settings, then subscribe to that topic in the
-ntfy Android app. When enabled, the server sends at most one daily summary of new
-warning or danger insights, and retries on a later sweep if delivery fails.
+Configure an ntfy server and topic, then subscribe to that topic in the ntfy app.
+The server sends at most one daily warning/danger summary and retries a failed
+delivery later. The configured ntfy server receives the notification content.
 
-### Username
-Change your username from the Identity section. The current password is required;
-the private database, uploads, and the active session move with the account. Admins
-can rename other users from **Admin → Users**.
+## Administration
 
-### Password & theme
-Change your password (invalidates all sessions) and switch light/dark.
+Administrators use **Admin → Users** to create users, reset passwords, rename users,
+and delete another user with that user's private database. Regular users do not see
+the Admin route.
 
-### Multi-currency
+Filesystem access to the server data directory is equivalent to access to the
+financial data. Protect the host, service account, backups, and reverse proxy.
 
-Transactions keep the currency they were recorded in (from your statements). Each account
-has its own display currency, while budgets and aggregate reports use the global currency
-chosen under Appearance:
+## Connecting Clients Safely
 
-- Budgets, funds, commitments and income are planning figures and always live in the global
-  display currency.
-- Account balances and observations stay in the account's display currency.
-- Actual spending converts per month via an **exchange rates** table: rate = display
-  units per 1 foreign unit, applied by transaction month. Aggregate balances convert each
-  account through the same monthly table.
-- **Fetch missing from ECB** imports monthly reference rates from frankfurter.app
-  (ECB data, keyless — requests contain only dates and currency codes).
-- You can also enter or correct any month/currency rate manually.
-- Foreign-currency transactions without a rate count 1:1 and raise an
-  "Exchange rates missing" warning on the Dashboard until you add one.
-- Changing the display currency clears all stored rates (they were relative to the
-  old base) — refetch afterwards.
-- CSV exports always contain the original statement amounts and currency codes.
+The web server speaks HTTP directly for localhost and trusted private networks. For
+public or untrusted networks, use HTTPS through Caddy or another reverse proxy and
+set `SECURE_COOKIE=1` and `TRUST_PROXY=1`.
 
-## Reports
+Native Android currently accepts both HTTP and HTTPS. Use HTTP only on a trusted
+LAN or trusted Tailscale network, for example `http://192.168.1.20:2026` or
+`http://100.x.y.z:2026`; the Android picker warns before saving an HTTP address.
+Use HTTPS on public Wi-Fi or any network where another device may inspect or alter
+traffic. An HTTPS Tailscale DNS hostname or HTTPS reverse proxy is recommended.
 
-Monthly and yearly overviews: totals, per-category breakdowns, income vs expenses
-chart, and CSV/XLSX downloads. Exports keep the original statement amounts and
-currency codes.
+Desktop clients may use trusted LAN HTTP, but HTTPS is recommended outside a private
+network. All native clients are clients only and do not contain the server database.
 
-- **Month-end history** — closed months are automatically snapshotted the first time
-  you open the app after they end. Snapshots are frozen forever: later edits or
-  deletions never rewrite them, so the chart shows budget accuracy as it actually was.
-  Months appear only if they had activity.
-- **Excel exports** — monthly workbook contains a Transactions sheet and a Summary
-  sheet; yearly workbook contains Months and By-category sheets.
+See [Mobile Clients](MOBILE_CLIENTS.md), [Desktop Client](DESKTOP_CLIENT.md),
+[HTTPS With Caddy](HTTPS_CADDY.md), and [Troubleshooting](TROUBLESHOOTING.md).
 
-### Scheduled reports
+## Troubleshooting Checklist
 
-The month-end snapshots above are the scheduler: nothing to configure, no external
-service, nothing leaves this machine. They exist so that restated numbers can never
-hide what actually happened.
+1. Confirm the device opens the complete server URL in its browser.
+2. Confirm the working month is the month you intended to inspect.
+3. Check server status, bind address, port, firewall, Wi-Fi client isolation, and
+   Tailscale membership.
+4. Check transaction review, duplicate/invalid import rows, transfer pairing,
+   account/category assignments, opening balances, and exchange-rate warnings.
+5. If two devices show different users or data, compare numeric server IPs; they are
+   likely connected to different servers.
+6. For server errors, keep the `X-Request-Id` response header and match it to the
+   service log. Never share passwords, API keys, database files, or private backups.
 
-## Categories
-
-- **Categorization rules** — keyword rules are learned from manual assignments.
-- **Advanced rule** — combine description, absolute amount range, account, transaction
-  type, and priority. Rules with higher priority are checked first.
-- **Rule tester** — preview the category for a sample transaction. Testing never writes
-  data.
-
-Group, account, standing plan, active/retired. **Retire** clears the plan and rules
-so retired categories can't silently collect money. Rules list shows learned keyword
-mappings; add or delete manually if needed.
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for commands and deployment-specific
+diagnosis.

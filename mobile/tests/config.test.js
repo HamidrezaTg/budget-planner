@@ -5,15 +5,21 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 
-test('Capacitor identity and navigation policy are configured', () => {
+test('Capacitor identity and LAN/VPN navigation policy are configured', () => {
   const config = JSON.parse(fs.readFileSync(path.join(root, 'capacitor.config.json'), 'utf8'));
   assert.equal(config.appId, 'com.hamidreza.budgetplanner');
   assert.deepEqual(config.server.allowNavigation, ['*']);
-  const androidManifest = fs.readFileSync(path.join(root, 'android/app/src/main/AndroidManifest.xml'), 'utf8');
-  const androidNetworkPolicy = fs.readFileSync(path.join(root, 'android/app/src/main/res/xml/network_security_config.xml'), 'utf8');
-  assert.match(androidManifest, /android:usesCleartextTraffic="false"/);
+  const androidManifest = fs.readFileSync(
+    path.join(root, 'android/app/src/main/AndroidManifest.xml'),
+    'utf8',
+  );
+  const androidNetworkPolicy = fs.readFileSync(
+    path.join(root, 'android/app/src/main/res/xml/network_security_config.xml'),
+    'utf8',
+  );
+  assert.match(androidManifest, /android:usesCleartextTraffic="true"/);
   assert.match(androidManifest, /android:networkSecurityConfig="@xml\/network_security_config"/);
-  assert.match(androidNetworkPolicy, /cleartextTrafficPermitted="false"/);
+  assert.match(androidNetworkPolicy, /cleartextTrafficPermitted="true"/);
 });
 
 test('iOS privacy manifest declares no tracking or collected data', () => {
@@ -22,6 +28,8 @@ test('iOS privacy manifest declares no tracking or collected data', () => {
   assert.match(manifest, /<false\s*\/>/);
   assert.match(manifest, /NSPrivacyCollectedDataTypes/);
   assert.match(manifest, /NSPrivacyAccessedAPITypes/);
-  assert.match(fs.readFileSync(path.join(root, 'ios/App/App/Info.plist'), 'utf8'),
-    /NSAllowsArbitraryLoads[\s\S]*<false\s*\/>/);
+  assert.match(
+    fs.readFileSync(path.join(root, 'ios/App/App/Info.plist'), 'utf8'),
+    /NSAllowsArbitraryLoads[\s\S]*<false\s*\/>/,
+  );
 });

@@ -86,10 +86,16 @@ if [ "$WANT_CLIENT" = "1" ]; then
   [ "$(dpkg --print-architecture)" = "amd64" ] || { echo "ERROR: the desktop client is amd64-only." >&2; exit 1; }
   PATTERN="budget-planner-client_.*_amd64\.deb"
 else
-  PATTERN="budget-planner_[0-9.]*_all\.deb"
+  PATTERN="budget-planner-server_[0-9.]*_all\.deb"
 fi
 
 ASSET_NAME=$(printf '%s' "$RELEASE_JSON" | grep -oE '"name"[[:space:]]*:[[:space:]]*"'"$PATTERN"'"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
+[ -n "$ASSET_NAME" ] || [ "$WANT_CLIENT" = "1" ] || {
+  # Keep old releases installable while all new releases use the explicit
+  # server name. The exact asset is still verified against its release checksum.
+  PATTERN="budget-planner_[0-9.]*_all\.deb"
+  ASSET_NAME=$(printf '%s' "$RELEASE_JSON" | grep -oE '"name"[[:space:]]*:[[:space:]]*"'"$PATTERN"'"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
+}
 [ -n "$ASSET_NAME" ] || { echo "ERROR: no matching .deb asset in release $TAG." >&2; exit 1; }
 echo "==> asset: $ASSET_NAME"
 

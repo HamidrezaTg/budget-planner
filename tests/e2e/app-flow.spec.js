@@ -1,5 +1,20 @@
 import { test, expect } from '@playwright/test';
 
+test('public help is available before login', async ({ page }) => {
+  await page.goto('/help');
+
+  await expect(page.getByRole('heading', { name: 'Make every number explainable.' })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Search help' })).toBeVisible();
+  await expect(page.locator('#start')).toBeVisible();
+  await expect(page.locator('a[href="#import"]')).toBeVisible();
+
+  await page.getByRole('searchbox', { name: 'Search help' }).fill('backup');
+  await expect(
+    page.getByRole('heading', { name: 'Settings, backups, sharing, and notifications' }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Import a bank statement' })).not.toBeVisible();
+});
+
 test('login, import, review, and dashboard flow', async ({ page }) => {
   const now = new Date();
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -40,4 +55,42 @@ test('login, import, review, and dashboard flow', async ({ page }) => {
   await page.getByRole('link', { name: /Dashboard$/ }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByText('Monthly check-in')).toBeVisible();
+});
+
+test('themes, responsive settings, and projection controls work', async ({ page }) => {
+  await page.setViewportSize({ width: 480, height: 900 });
+  await page.goto('/login');
+  await page.getByPlaceholder('Username').fill('e2e_user');
+  await page.getByPlaceholder('Password').fill('correct-horse-battery');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await expect(page).toHaveURL(/\/$/);
+
+  await page.goto('/settings');
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/settings') && response.request().method() === 'PUT',
+    ),
+    page.getByRole('button', { name: 'Midnight' }).click(),
+  ]);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight');
+  expect(
+    await page.evaluate(
+      () => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth,
+    ),
+  ).toBe(true);
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight');
+
+  await page.goto('/projection');
+  await expect(page.getByRole('heading', { name: 'Projection horizon' })).toBeVisible();
+  await page.getByRole('spinbutton', { name: 'Months', exact: true }).fill('12');
+  await page.getByRole('button', { name: 'Update projection' }).click();
+  await expect(page.getByRole('heading', { name: /Projection to/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Remove' }).click();
+  await expect(page.getByText('No scenarios configured')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Compare scenarios' })).toBeDisabled();
+  await page.getByRole('button', { name: '+ Add scenario' }).click();
+  await expect(page.getByRole('button', { name: 'Remove' })).toBeVisible();
 });

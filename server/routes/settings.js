@@ -24,6 +24,7 @@ const router = Router();
 router.use(requireAuth);
 
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
+const THEMES = ['system', 'light', 'dark', 'midnight', 'forest'];
 
 router.get('/version', async (req, res) => {
   res.json(await getVersionStatus({ refresh: req.query.refresh === '1' }));
@@ -87,7 +88,11 @@ function baseUrlFor(provider, customUrl) {
 
 router.get('/', (req, res) => {
   try {
-    res.json({ ...masked(getAiConfig()), currency: getSetting('currency') || 'EUR' });
+    res.json({
+      ...masked(getAiConfig()),
+      currency: getSetting('currency') || 'EUR',
+      theme: getSetting('theme') || 'system',
+    });
   } catch {
     res.json({
       provider: getSetting('ai_provider') || '',
@@ -96,13 +101,14 @@ router.get('/', (req, res) => {
       has_key: false,
       key_hint: '',
       currency: getSetting('currency') || 'EUR',
+      theme: getSetting('theme') || 'system',
       providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, ...p })),
     });
   }
 });
 
 router.put('/', (req, res) => {
-  const { provider, api_key, model, base_url, currency } = req.body ?? {};
+  const { provider, api_key, model, base_url, currency, theme } = req.body ?? {};
   // Validate EVERYTHING before mutating anything: the currency change wipes
   // all FX rates, and that must never happen when another field is invalid.
   if (currency !== undefined && !CURRENCIES.includes(currency))
@@ -111,6 +117,8 @@ router.put('/', (req, res) => {
     return res.status(400).json({ error: 'Unknown provider' });
   if (model !== undefined && typeof model !== 'string')
     return res.status(400).json({ error: 'model must be a string' });
+  if (theme !== undefined && !THEMES.includes(theme))
+    return res.status(400).json({ error: 'Unknown theme' });
 
   let ratesCleared = false;
   if (currency !== undefined) {
@@ -123,6 +131,7 @@ router.put('/', (req, res) => {
       ratesCleared = true;
     }
   }
+  if (theme !== undefined) setSetting('theme', theme);
   if (provider !== undefined) {
     let url;
     try {
@@ -147,7 +156,12 @@ router.put('/', (req, res) => {
       key_hint: '',
     };
   }
-  res.json({ ...ai, currency: getSetting('currency') || 'EUR', rates_cleared: ratesCleared });
+  res.json({
+    ...ai,
+    currency: getSetting('currency') || 'EUR',
+    theme: getSetting('theme') || 'system',
+    rates_cleared: ratesCleared,
+  });
 });
 
 function ntfyResponse() {

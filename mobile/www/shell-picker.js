@@ -19,15 +19,49 @@
     return String(url || '').trim().replace(/\/+$/, '');
   }
 
+  function parseUrl(url) {
+    const cleaned = normalizeUrl(url);
+    let parsed;
+    try {
+      parsed = new URL(cleaned);
+    } catch {
+      throw new Error('Enter a complete server URL');
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) {
+      throw new Error('Server URL must start with http:// or https://');
+    }
+    if (parsed.username || parsed.password || parsed.hash) {
+      throw new Error('Server URL cannot contain credentials or a fragment');
+    }
+    return parsed;
+  }
+
+  function isSupportedUrl(url) {
+    try {
+      parseUrl(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function isHttpUrl(url) {
+    try {
+      return parseUrl(url).protocol === 'http:';
+    } catch {
+      return false;
+    }
+  }
+
   function readSavedUrls() {
     const stored = localStorage.getItem(KEY);
     try {
       const parsed = JSON.parse(stored || '[]');
       if (stored !== null && Array.isArray(parsed))
-        return parsed.map(normalizeUrl).filter((url) => /^https:\/\/.+/i.test(url));
+        return parsed.map(normalizeUrl).filter(isSupportedUrl);
     } catch {}
     const legacy = normalizeUrl(localStorage.getItem(LEGACY_KEY));
-    return legacy && /^https:\/\/.+/i.test(legacy) ? [legacy] : [];
+    return legacy && isSupportedUrl(legacy) ? [legacy] : [];
   }
 
   function saveUrls(list) {
@@ -45,8 +79,9 @@
   }
 
   async function probe(url) {
-    if (!/^https:\/\/.+/i.test(url)) throw new Error('HTTPS is required');
-    const response = await fetch(url + '/.well-known/budget-planner', {
+    const parsed = parseUrl(url);
+    const cleaned = parsed.toString().replace(/\/+$/, '');
+    const response = await fetch(cleaned + '/.well-known/budget-planner', {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) throw new Error('Not a planner server');
@@ -61,6 +96,8 @@
     KEY,
     LEGACY_KEY,
     normalizeUrl,
+    isSupportedUrl,
+    isHttpUrl,
     readSavedUrls,
     saveUrls,
     remember,
