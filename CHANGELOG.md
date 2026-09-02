@@ -3,6 +3,17 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.20.1] — 2026-09-02
+
+### Added
+
+- Multiple private AI profiles with active-profile selection and admin-controlled sharing.
+- 9Router and OpenCode Zen provider presets.
+
+### Changed
+
+- PDF and image OCR packages are optional; CSV/XLSX imports do not require them.
+
 ## [3.20.0] — 2026-09-02
 
 ### Added

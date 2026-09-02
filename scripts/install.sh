@@ -3,9 +3,11 @@
 # Budget Planner — interactive installer (server .deb)
 #
 # Public repository: no authentication needed.
-#   curl -fsSL https://raw.githubusercontent.com/HamidrezaTg/budget-planner/main/scripts/install.sh -o /tmp/bp-install.sh && bash /tmp/bp-install.sh
+#   curl -fsSL https://github.com/HamidrezaTg/budget-planner/releases/latest/download/budget-planner-install.sh -o /tmp/bp-install.sh && bash /tmp/bp-install.sh
 #
-# Flags: --client (desktop client), --version X, --quiet (skip menu, defaults)
+# Flags: --client (desktop client), --version X, --quiet (skip menu, defaults),
+#        --ocr none|pdf|full, --data-dir /absolute/path,
+#        --restore-server-data /path/to/server-data
 # ============================================================
 set -euo pipefail
 
@@ -13,6 +15,10 @@ REPO="HamidrezaTg/budget-planner"
 WANT_CLIENT=0
 WANT_VERSION=""
 QUIET=0
+OCR_MODE=""
+DATA_DIR="/var/lib/budget-planner"
+DATA_DIR_SET=0
+RESTORE_DIR=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -20,10 +26,20 @@ while [ $# -gt 0 ]; do
     --quiet) QUIET=1 ;;
     --version) [ $# -ge 2 ] || { echo "ERROR: --version requires a value" >&2; exit 1; }; WANT_VERSION="$2"; shift ;;
     --version=*) WANT_VERSION="${1#*=}" ;;
+    --ocr) [ $# -ge 2 ] || { echo "ERROR: --ocr requires none, pdf, or full" >&2; exit 1; }; OCR_MODE="$2"; shift ;;
+    --ocr=*) OCR_MODE="${1#*=}" ;;
+    --data-dir) [ $# -ge 2 ] || { echo "ERROR: --data-dir requires an absolute path" >&2; exit 1; }; DATA_DIR="$2"; DATA_DIR_SET=1; shift ;;
+    --data-dir=*) DATA_DIR="${1#*=}"; DATA_DIR_SET=1 ;;
+    --restore-server-data) [ $# -ge 2 ] || { echo "ERROR: --restore-server-data requires a directory" >&2; exit 1; }; RESTORE_DIR="$2"; shift ;;
+    --restore-server-data=*) RESTORE_DIR="${1#*=}" ;;
     *) echo "Unknown flag: $1" >&2; exit 1 ;;
   esac
   shift
 done
+
+case "$OCR_MODE" in ''|none|pdf|full) ;; *) echo "ERROR: --ocr must be none, pdf, or full" >&2; exit 1 ;; esac
+case "$DATA_DIR" in /*) ;; *) echo "ERROR: --data-dir must be an absolute path" >&2; exit 1 ;; esac
+[ -z "$RESTORE_DIR" ] || case "$RESTORE_DIR" in /*) ;; *) echo "ERROR: --restore-server-data must be an absolute path" >&2; exit 1 ;; esac
 
 # if we are the buffered temp copy, remove it (safe: already loaded)
 case "${0:-}" in /tmp/budget-planner-install.sh) rm -f "$0" ;; esac
@@ -72,6 +88,9 @@ if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
   [ "$WANT_CLIENT" = "1" ] && REEXEC_ARGS+=(--client)
   [ "$QUIET" = "1" ] && REEXEC_ARGS+=(--quiet)
   [ -n "$WANT_VERSION" ] && REEXEC_ARGS+=(--version "$WANT_VERSION")
+  [ -n "$OCR_MODE" ] && REEXEC_ARGS+=(--ocr "$OCR_MODE")
+  [ "$DATA_DIR" != "/var/lib/budget-planner" ] && REEXEC_ARGS+=(--data-dir "$DATA_DIR")
+  [ -n "$RESTORE_DIR" ] && REEXEC_ARGS+=(--restore-server-data "$RESTORE_DIR")
   exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$SELF" "${REEXEC_ARGS[@]}"
 fi
 
@@ -139,6 +158,16 @@ PORT=2026
 BIND_IP=""
 ADMIN_NAME=""
 ADMIN_PW=""
+[ -n "$OCR_MODE" ] || OCR_MODE="full"
+
+if [ -f "$DEFAULTS_FILE" ]; then
+  configured_port=$(grep -E '^PORT=' "$DEFAULTS_FILE" | tail -1 | cut -d= -f2- || true)
+  case "${configured_port:-}" in ''|*[!0-9]*) ;; *) PORT="$configured_port" ;; esac
+  configured_bind=$(grep -E '^BIND_IP=' "$DEFAULTS_FILE" | tail -1 | cut -d= -f2- || true)
+  [ -n "${configured_bind:-}" ] && BIND_IP="$configured_bind"
+  configured_data_dir=$(grep -E '^DATA_DIR=' "$DEFAULTS_FILE" | tail -1 | cut -d= -f2- || true)
+  case "${configured_data_dir:-}" in /*) [ "$DATA_DIR_SET" = "0" ] && DATA_DIR="$configured_data_dir" ;; esac
+fi
 
 # sudo does not always keep a tty; remember interactivity from the caller
 if [ -t 0 ]; then export BP_WANT_MENU=1; fi
@@ -170,6 +199,29 @@ if [ "$WANT_CLIENT" != "1" ] && [ "$QUIET" != "1" ] && { [ -t 0 ] || [ "${BP_WAN
     PORT="${port_in:-2026}"
     case "$PORT" in ''|*[!0-9]*) PORT=2026 ;; esac
     [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || PORT=2026
+
+    read -rp "  Data directory [$DATA_DIR]: " data_dir_in
+    DATA_DIR="${data_dir_in:-$DATA_DIR}"
+    case "$DATA_DIR" in
+      /*) ;;
+      *) echo "  Data directory must be absolute; keeping $DATA_DIR"; DATA_DIR="/var/lib/budget-planner" ;;
+    esac
+
+    if [ -z "$RESTORE_DIR" ]; then
+      read -rp "  Complete server-data directory to restore (blank for fresh setup): " RESTORE_DIR
+    fi
+
+    echo
+    echo "  Local OCR tools (CSV/XLSX imports work without them):"
+    echo "   1) Full OCR — PDF and JPG/PNG (recommended)"
+    echo "   2) PDF text extraction only"
+    echo "   3) None"
+    read -rp "  Choice [1]: " ocr_choice
+    case "${ocr_choice:-1}" in
+      2) OCR_MODE="pdf" ;;
+      3) OCR_MODE="none" ;;
+      *) OCR_MODE="full" ;;
+    esac
 
     echo
     read -rp "  Create the first admin account now? [Y/n] " mkadmin
@@ -246,18 +298,100 @@ if [ "$WANT_CLIENT" = "1" ]; then
 fi
 
 # ---- write chosen configuration ----------------------------------------
-if [ -n "$BIND_IP" ] || [ "$PORT" != "2026" ]; then
-  {
-    echo "PORT=$PORT"
-    [ -n "$BIND_IP" ] && echo "BIND_IP=$BIND_IP"
-  } > "$DEFAULTS_FILE"
-  systemctl restart budget-planner
+mkdir -p "$(dirname "$DEFAULTS_FILE")"
+touch "$DEFAULTS_FILE"
+set_default() {
+  local key="$1" value="$2" tmp
+  tmp=$(mktemp)
+  grep -vE "^${key}=" "$DEFAULTS_FILE" > "$tmp" || true
+  printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" "$DEFAULTS_FILE"
+}
+set_default PORT "$PORT"
+[ -n "$BIND_IP" ] && set_default BIND_IP "$BIND_IP"
+set_default DATA_DIR "$DATA_DIR"
+
+# The packaged service is sandboxed to its default directory. A drop-in keeps
+# that protection while allowing an explicitly selected custom path.
+if [ "$DATA_DIR" != "/var/lib/budget-planner" ]; then
+  install -d -m 700 -o budget -g budget "$DATA_DIR"
+  install -d -m 755 /etc/systemd/system/budget-planner.service.d
+  cat > /etc/systemd/system/budget-planner.service.d/data-dir.conf <<EOF
+[Service]
+ReadWritePaths=
+ReadWritePaths=/var/lib/budget-planner
+ReadWritePaths=$DATA_DIR
+EOF
 fi
+
+case "$OCR_MODE" in
+  pdf) echo "==> installing optional PDF extraction support"; apt-get install -y poppler-utils ;;
+  full) echo "==> installing optional PDF and image OCR support"; apt-get install -y poppler-utils tesseract-ocr ;;
+  none) echo "==> skipping optional OCR packages" ;;
+esac
+
+systemctl daemon-reload
+
+restore_server_data() {
+  local source="$1" target="$2" stage backup
+  case "$source" in /*) ;; *) echo "ERROR: restore source must be an absolute path" >&2; exit 1 ;; esac
+  [ -d "$source" ] || { echo "ERROR: restore source is not a directory: $source" >&2; exit 1; }
+  [ -f "$source/master.db" ] || { echo "ERROR: restore source needs master.db" >&2; exit 1; }
+  [ -d "$source/users" ] || { echo "ERROR: restore source needs a users/ directory" >&2; exit 1; }
+  [ "$(realpath "$source")" != "$(realpath -m "$target")" ] || { echo "ERROR: restore source and target must differ" >&2; exit 1; }
+  [ ! -L "$source/master.db" ] && [ ! -L "$source/users" ] || { echo "ERROR: restore source cannot contain symlinks at its root" >&2; exit 1; }
+  for db_file in "$source"/users/*.db; do
+    [ -e "$db_file" ] || continue
+    [ ! -L "$db_file" ] || { echo "ERROR: restore source contains a symlink: $db_file" >&2; exit 1; }
+  done
+
+  # Open every database read-only and run SQLite's integrity check before any
+  # live directory is moved. This requires no sqlite3 command-line package.
+  node --input-type=module - "$source" <<'NODE'
+import fs from 'node:fs';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+const source = process.argv[2];
+const files = [path.join(source, 'master.db'), ...fs.readdirSync(path.join(source, 'users')).filter((name) => name.endsWith('.db')).map((name) => path.join(source, 'users', name))];
+for (const file of files) {
+  const database = new DatabaseSync(file, { readOnly: true });
+  const result = database.prepare('PRAGMA integrity_check').get();
+  database.close();
+  if (result?.integrity_check !== 'ok') throw new Error(`SQLite integrity check failed: ${file}`);
+}
+NODE
+
+  stage="${target}.restore.$RANDOM"
+  backup="${target}.before-restore.$(date +%Y%m%d-%H%M%S)"
+  [ ! -e "$stage" ] || { echo "ERROR: temporary restore path already exists: $stage" >&2; exit 1; }
+  install -d -m 700 -o budget -g budget "$stage"
+  cp -a "$source"/. "$stage"/
+  chown -R budget:budget "$stage"
+  chmod 700 "$stage"
+  if [ -e "$target" ]; then
+    mv "$target" "$backup"
+    echo "==> existing data retained at $backup"
+  fi
+  mv "$stage" "$target"
+}
+
+if [ -n "$RESTORE_DIR" ]; then
+  if [ "$QUIET" != "1" ] && [ -t 0 ]; then
+    read -rp "Type RESTORE to replace the selected data directory after validation: " restore_confirm
+    [ "$restore_confirm" = "RESTORE" ] || { echo "Restore cancelled."; exit 1; }
+  fi
+  echo "==> stopping service for complete server-data restore"
+  systemctl stop budget-planner || true
+  restore_server_data "$RESTORE_DIR" "$DATA_DIR"
+fi
+
+systemctl restart budget-planner
 
 # ---- optional admin creation -------------------------------------------
 if [ -n "$ADMIN_NAME" ] && [ -n "$ADMIN_PW" ]; then
   echo "==> creating admin account"
-  if sudo -u budget env DATA_DIR=/var/lib/budget-planner \
+  if sudo -u budget env DATA_DIR="$DATA_DIR" \
       BP_USER="$ADMIN_NAME" BP_PW="$ADMIN_PW" \
       node /opt/budget-planner/server/cli-add-user.mjs; then
     ADMIN_DONE=yes
@@ -281,7 +415,7 @@ command -v tailscale >/dev/null 2>&1 && TS_IP=$(tailscale ip -4 -1 2>/dev/null |
 echo
 echo "============================================================="
 echo " Budget Planner server: $STATE"
-echo "   Data dir: /var/lib/budget-planner   (SQLite — back it up!)"
+echo "   Data dir: $DATA_DIR   (SQLite — back it up!)"
 [ "$STATE" = "running" ] || { echo "============================================================="; exit 0; }
 echo
 [ -n "${ADMIN_DONE:-}" ] && echo "   Admin account: $ADMIN_NAME (log in with it right away)" \
@@ -290,5 +424,5 @@ echo "   This machine:  http://localhost:$PORT"
 [ -n "$LAN_IP" ] && [ "$BIND_IP" != "127.0.0.1" ] && echo "   Home network:  http://$LAN_IP:$PORT"
 [ -n "$TS_IP" ] && [ "$BIND_IP" != "127.0.0.1" ] && echo "   Tailscale:     http://$TS_IP:$PORT"
 echo
-echo "   Backup: copy /var/lib/budget-planner (or Settings -> Backup)"
+echo "   Backup: copy $DATA_DIR (or Settings -> Backup)"
 echo "============================================================="

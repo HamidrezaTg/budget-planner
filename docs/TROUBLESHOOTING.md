@@ -72,8 +72,7 @@ first-launch setup screen back.
 
 ### PDF or image import says OCR tools are unavailable
 
-The server needs Poppler and Tesseract for PDF statements and Tesseract for JPG/PNG statement
-images. On Debian/Ubuntu install:
+Local PDF and image import needs optional Poppler/Tesseract tools. On Debian/Ubuntu install:
 
 ```bash
 sudo apt install poppler-utils tesseract-ocr
@@ -81,8 +80,9 @@ sudo apt install poppler-utils tesseract-ocr
 
 The service must be able to find `pdfinfo`, `pdftotext`, `pdftoppm`, and `tesseract` on its `PATH`.
 Selectable PDFs use local text extraction. Scanned PDFs and JPG/PNG images are OCR'd locally; set
-`TESSERACT_LANG` to a language installed on the server when `eng` is not sufficient. The import
-preview still requires explicit confirmation.
+`TESSERACT_LANG` to a language installed on the server when `eng` is not sufficient. Alternatively,
+the Import page's explicit online OCR mode uses the active vision profile and sends bounded pages
+to that provider. The import preview still requires explicit confirmation.
 
 ### Importing the same/overlapping statement again
 

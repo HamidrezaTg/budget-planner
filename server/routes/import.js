@@ -4,9 +4,15 @@ import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { als, DATA_DIR } from '../db.js';
-import { parseStatement, rawGrid, transactionsFromGrid } from '../services/parser.js';
+import {
+  parseStatement,
+  rawGrid,
+  rowsFromExtractedText,
+  transactionsFromGrid,
+} from '../services/parser.js';
 import { applyCategorization } from '../services/categorizer.js';
 import { getAiConfig, chatComplete, parseJsonLoose } from '../services/ai.js';
+import { onlineOcr } from '../services/online-ocr.js';
 import { annotateWithTransferPairs } from '../services/transfer-detect.js';
 
 const router = Router();
@@ -150,11 +156,36 @@ function resolveAccountId(conn, account_id) {
 router.post(
   '/upload',
   upload.single('file'),
-  withCtx((req, res) => {
+  withCtx(async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     try {
-      const parsed = parseStatement(req.file.path);
+      const online = req.body?.ocr_mode === 'online';
+      const extractedText = online
+        ? await onlineOcr(req.file.path, getAiConfig(req.username))
+        : null;
+      const grid = online
+        ? [['Date', 'Description', 'Amount', 'Currency'], ...rowsFromExtractedText(extractedText)]
+        : null;
+      const parsed = online
+        ? transactionsFromGrid(grid, {
+            header_row_index: 0,
+            col_date: 0,
+            col_description: 1,
+            col_amount: 2,
+            col_currency: 3,
+          })
+        : parseStatement(req.file.path);
       const token = stageFile(req.file, req.username);
+      if (online) {
+        staged.get(token).spec = {
+          header_row_index: 0,
+          col_date: 0,
+          col_description: 1,
+          col_amount: 2,
+          col_currency: 3,
+        };
+        staged.get(token).grid = grid;
+      }
       const { preview, summary } = previewParsed(parsed, req.impDb, null);
       res.json({
         token,
@@ -183,8 +214,12 @@ router.post(
   withCtx(async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     try {
-      const cfg = getAiConfig();
-      const grid = rawGrid(req.file.path, 25);
+      const cfg = getAiConfig(req.username);
+      const online = req.body?.ocr_mode === 'online';
+      const extractedText = online ? await onlineOcr(req.file.path, cfg) : null;
+      const grid = online
+        ? [['Date', 'Description', 'Amount', 'Currency'], ...rowsFromExtractedText(extractedText)]
+        : rawGrid(req.file.path, 25);
       if (!grid.length) return res.status(400).json({ error: 'File appears to be empty' });
 
       const msg = await chatComplete(cfg, [
@@ -213,13 +248,19 @@ router.post(
       ]);
 
       const spec = parseJsonLoose(msg.content);
-      const fullGrid = rawGrid(req.file.path, 1000000);
+      const fullGrid = online
+        ? [['Date', 'Description', 'Amount', 'Currency'], ...rowsFromExtractedText(extractedText)]
+        : rawGrid(req.file.path, 1000000);
       const parsed = transactionsFromGrid(fullGrid, spec);
       const token = stageFile(req.file, req.username);
       staged.get(token).spec = spec;
+      staged.get(token).grid = fullGrid;
 
       const { preview, summary } = previewParsed(parsed, req.impDb, null);
-      auditImport(req.impDb, `AI format fix via ${cfg.model}: ${spec.notes ?? ''}`);
+      auditImport(
+        req.impDb,
+        `${online ? 'Online OCR and ' : ''}AI format fix via ${cfg.model}: ${spec.notes ?? ''}`,
+      );
       res.json({
         token,
         stats: parsed.stats,
@@ -251,7 +292,10 @@ router.post(
       return res.status(400).json({ error: 'Unknown account — please pick a valid account' });
     try {
       const parsed = stagedEntry.spec
-        ? transactionsFromGrid(rawGrid(stagedEntry.path, 1000000), stagedEntry.spec)
+        ? transactionsFromGrid(
+            stagedEntry.grid || rawGrid(stagedEntry.path, 1000000),
+            stagedEntry.spec,
+          )
         : parseStatement(stagedEntry.path);
       parsed.transactions.forEach((t) => {
         t.account_id = accId;
@@ -282,7 +326,7 @@ router.post(
     const filePath = stagedEntry.path;
     try {
       const parsed = stagedEntry.spec
-        ? transactionsFromGrid(rawGrid(filePath, 1000000), stagedEntry.spec)
+        ? transactionsFromGrid(stagedEntry.grid || rawGrid(filePath, 1000000), stagedEntry.spec)
         : parseStatement(filePath);
       // Account-aware categorization: assign the chosen account BEFORE rules run,
       // so account-scoped automation rules actually match on import.

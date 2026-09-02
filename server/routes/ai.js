@@ -45,7 +45,7 @@ function fail(res, e, kind) {
 // ---------------------------------------------- 1) category suggestions
 router.post('/suggest-categories', async (req, res) => {
   try {
-    const cfg = getAiConfig();
+    const cfg = getAiConfig(req.username);
     const limit = Math.min(Number(req.body?.limit) || 40, 100);
     const txs = db
       .prepare(
@@ -113,7 +113,7 @@ const FINANCE_TOOLS = [
 
 router.post('/chat', async (req, res) => {
   try {
-    const cfg = getAiConfig();
+    const cfg = getAiConfig(req.username);
     const history = boundedHistory(req.body?.messages);
 
     const messages = [
@@ -169,7 +169,7 @@ router.post('/chat', async (req, res) => {
 // ---------------------------------------------- 3) dev-mode chat (proposals only)
 router.post('/dev-chat', async (req, res) => {
   try {
-    const cfg = getAiConfig();
+    const cfg = getAiConfig(req.username);
     const history = boundedHistory(req.body?.messages);
 
     const messages = [

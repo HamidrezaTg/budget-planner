@@ -35,15 +35,23 @@ desktop clients are user interfaces that connect to the server.
 
 ### Debian or Ubuntu: recommended installer
 
-Requires Node.js 22 or newer. The installer downloads the latest release, verifies
-the release checksum, installs the server and systemd service, and stores data in
-`/var/lib/budget-planner`.
+Requires Node.js 22 or newer. The installer downloads the latest GitHub release,
+verifies the release checksum, installs the server and systemd service, and stores
+data in `/var/lib/budget-planner`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HamidrezaTg/budget-planner/main/scripts/install.sh \
+curl -fsSL https://github.com/HamidrezaTg/budget-planner/releases/latest/download/budget-planner-install.sh \
   -o /tmp/budget-planner-install.sh
 bash /tmp/budget-planner-install.sh
 ```
+
+The interactive installer asks whether to install local OCR tools. Use
+`--ocr none`, `--ocr pdf`, or `--ocr full` for unattended installs, and
+`--data-dir /absolute/path` to place the server data elsewhere. Custom data paths
+are added to the systemd write sandbox automatically. To migrate a complete server,
+use `--restore-server-data /absolute/path` where the source contains `master.db` and
+`users/`; the installer validates the SQLite files and retains the old destination
+before swapping it.
 
 The default port is `2026`. Open `http://<server-ip>:2026` in a browser, create the
 first account, and follow the setup path in the [User Guide](docs/USER_GUIDE.md).
@@ -58,9 +66,9 @@ Download `budget-planner-server_<version>_all.deb` from
 sudo apt install ./budget-planner-server_<version>_all.deb
 ```
 
-The package also installs the PDF and image import prerequisites `poppler-utils` and
-`tesseract-ocr`. Source installs need those packages separately for selectable/scanned PDF
-statements and JPG/PNG statement images.
+The package keeps OCR tools optional. Install `poppler-utils` for PDF extraction and
+`tesseract-ocr` as well for scanned PDFs and JPG/PNG statement images. CSV/XLSX imports
+work without either package.
 
 Removing the package keeps data. Purging the package deletes packaged application
 data; make a backup first.

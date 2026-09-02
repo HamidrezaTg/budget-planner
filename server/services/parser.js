@@ -205,7 +205,7 @@ export function extractPdfText(filePath) {
 const PDF_DATE_RE = /\b(?:\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b/;
 const PDF_AMOUNT_RE = /(?:[-+]?\(?\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})\)?|[-+]?\d+[.,]\d{2})/g;
 
-function pdfRows(text) {
+export function rowsFromExtractedText(text) {
   const rows = [];
   for (const line of text.split(/\r?\n/)) {
     const date = line.match(PDF_DATE_RE)?.[0];
@@ -378,7 +378,9 @@ export function parseStatement(filePath) {
   if (format === 'pdf' || format === 'png' || format === 'jpeg') {
     parsedRows = {
       mapping: { date: 0, description: 1, amount: 2, currency: 3 },
-      raw: pdfRows(format === 'pdf' ? extractPdfText(filePath) : extractImageText(filePath)),
+      raw: rowsFromExtractedText(
+        format === 'pdf' ? extractPdfText(filePath) : extractImageText(filePath),
+      ),
     };
   } else if (format === 'xlsx') {
     // no cellDates: keep raw serial numbers and convert with UTC math,
@@ -576,7 +578,7 @@ export function rawGrid(filePath, maxRows = 25) {
   const format = detectFormat(filePath);
   if (format === 'pdf' || format === 'png' || format === 'jpeg') {
     const text = format === 'pdf' ? extractPdfText(filePath) : extractImageText(filePath);
-    const rows = pdfRows(text).slice(0, Math.min(maxRows - 1, MAX_IMPORT_ROWS));
+    const rows = rowsFromExtractedText(text).slice(0, Math.min(maxRows - 1, MAX_IMPORT_ROWS));
     return [['Date', 'Description', 'Amount', 'Currency'], ...rows];
   }
   if (format === 'xlsx') {

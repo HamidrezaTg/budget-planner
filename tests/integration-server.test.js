@@ -66,6 +66,73 @@ test('setup creates the admin account and logs in', async () => {
   assert.equal(info.admin, true);
 });
 
+test('AI profiles migrate, stay private, and can be shared by the admin', async () => {
+  await api(
+    '/auth/users',
+    'POST',
+    { username: 'sharee', password: 'correct-sharee-password' },
+    cookies,
+  );
+  const created = await api(
+    '/settings/ai-profiles',
+    'POST',
+    {
+      name: 'Household vision',
+      provider: 'openrouter',
+      model: 'vision-model',
+      api_key: 'secret-key-value',
+    },
+    cookies,
+  );
+  assert.equal(created.own, true);
+  assert.equal(created.has_key, true);
+  assert.match(created.key_hint, /secr.*alue/);
+  await api(
+    `/settings/ai-profiles/${created.id}/shares`,
+    'PUT',
+    { usernames: ['sharee'] },
+    cookies,
+  );
+
+  const login = await fetch(`${srv.url}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'sharee', password: 'correct-sharee-password' }),
+  });
+  assert.equal(login.status, 200);
+  const bobCookies = login.headers
+    .getSetCookie()
+    .map((c) => c.split(';')[0])
+    .join('; ');
+  const available = await api('/settings/ai-profiles', 'GET', null, bobCookies);
+  const shared = available.profiles.find((profile) => profile.id === created.id);
+  assert.equal(shared.shared, true);
+  assert.equal('base_url' in shared, false);
+  assert.equal('has_key' in shared, false);
+  assert.equal('key_hint' in shared, false);
+
+  await api(
+    '/settings/ai-profiles/active',
+    'PUT',
+    {
+      owner_user_id: created.owner_user_id,
+      profile_id: created.id,
+    },
+    bobCookies,
+  );
+  const bobSettings = await api('/settings', 'GET', null, bobCookies);
+  assert.equal(bobSettings.shared, true);
+  assert.equal(bobSettings.has_key, false);
+  assert.equal(bobSettings.base_url, '');
+
+  const denied = await fetch(`${srv.url}/api/settings/ai-profiles/${created.id}/shares`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Cookie: bobCookies },
+    body: JSON.stringify({ usernames: [] }),
+  });
+  assert.equal(denied.status, 403);
+});
+
 test('state-changing requests reject cross-origin browser headers but allow same-origin and native requests', async () => {
   const rejected = await fetch(`${srv.url}/api/accounts`, {
     method: 'POST',

@@ -54,6 +54,22 @@ CREATE TABLE IF NOT EXISTS share_tokens (
   revoked_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_share_tokens_user ON share_tokens(user_id);
+CREATE TABLE IF NOT EXISTS ai_profile_shares (
+  profile_id TEXT NOT NULL,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (profile_id, recipient_user_id),
+  CHECK (owner_user_id != recipient_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ai_profile_shares_recipient
+  ON ai_profile_shares(recipient_user_id);
+CREATE TABLE IF NOT EXISTS ai_active_profiles (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  profile_id TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // migration: role column; the first account ever created becomes admin
@@ -133,6 +149,9 @@ export function getUserDb(username, opts = {}) {
   // Set AFTER initUserSchema so legacy ALTER TABLE ADD COLUMN migrations
   // (which may carry a REFERENCES clause) are not blocked by SQLite.
   inst.exec('PRAGMA foreign_keys = ON;');
+  try {
+    Object.defineProperty(inst, '__bpUsername', { value: username, configurable: true });
+  } catch {}
   dbCache.set(username, inst);
   reportFkViolations(username, inst);
   return inst;
@@ -374,6 +393,17 @@ CREATE TABLE IF NOT EXISTS monthly_reports (
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ai_profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  api_key TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS notification_deliveries (

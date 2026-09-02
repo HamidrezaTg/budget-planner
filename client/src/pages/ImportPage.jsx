@@ -32,12 +32,18 @@ export default function ImportPage() {
   );
   const [accounts, setAccounts] = useState([]);
   const [selectedTransfers, setSelectedTransfers] = useState([]);
+  const [ocrMode, setOcrMode] = useState('local');
+  const [aiSettings, setAiSettings] = useState(null);
 
   useEffect(() => {
     api
       .get('/categories/meta/all')
       .then((m) => setAccounts(m.accounts))
       .catch((e) => setError(e.message));
+    api
+      .get('/settings')
+      .then(setAiSettings)
+      .catch(() => {});
   }, []);
 
   const processFile = async (file, endpoint) => {
@@ -48,7 +54,8 @@ export default function ImportPage() {
     setSelectedTransfers([]);
     setBusy(true);
     try {
-      const data = await api.upload(endpoint, file);
+      const online = ocrMode === 'online' && /\.(pdf|jpe?g|png)$/i.test(file.name || '');
+      const data = await api.upload(endpoint, file, online ? { ocr_mode: 'online' } : {});
       if (accountId && data.token) {
         try {
           const preview = await api.post('/import/preview', {
@@ -136,9 +143,10 @@ export default function ImportPage() {
       <h1>Import statement</h1>
       <p className="muted">
         Upload your bank export (.csv, .xlsx, PDF, JPG, or PNG — Revolut files are detected
-        automatically). PDF text extraction and image OCR run locally; configured AI is used only to
-        map extracted rows. Only COMPLETED transactions are imported; pendings from previous months
-        count as completed; duplicates are skipped.
+        automatically). Local OCR is the private default; the optional online OCR choice sends PDF
+        page renders or images to the active AI provider. Configured AI is used to map extracted
+        rows. Only COMPLETED transactions are imported; pendings from previous months count as
+        completed; duplicates are skipped.
       </p>
 
       <div
@@ -170,6 +178,21 @@ export default function ImportPage() {
             hidden
           />
         </label>
+        <label className="muted tiny" style={{ display: 'block', marginTop: 10 }}>
+          OCR source for PDF/JPG/PNG
+          <select value={ocrMode} onChange={(e) => setOcrMode(e.target.value)} disabled={busy}>
+            <option value="local">Local OCR (private, recommended)</option>
+            <option value="online" disabled={!aiSettings?.profile_id}>
+              Online vision OCR{aiSettings?.profile_name ? ` · ${aiSettings.profile_name}` : ''}
+            </option>
+          </select>
+        </label>
+        {ocrMode === 'online' && (
+          <p className="muted tiny">
+            The selected statement pages will be sent to your active AI provider for OCR. Use local
+            OCR when the statement must stay on this server.
+          </p>
+        )}
         {error && <div className="error">{error}</div>}
       </div>
 

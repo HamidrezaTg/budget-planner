@@ -11,7 +11,19 @@ import {
   safeDbFilename,
 } from '../db.js';
 import { getAiConfig, chatComplete, isTrustedBaseUrl } from '../services/ai.js';
-import { requireAuth } from '../auth.js';
+import { requireAuth, requireAdmin } from '../auth.js';
+import {
+  PROVIDERS,
+  baseUrlFor,
+  listProfiles,
+  createProfile,
+  updateProfile,
+  deleteProfile,
+  setActiveProfile,
+  replaceShares,
+  listShares,
+  upsertCurrentProfile,
+} from '../services/ai-profiles.js';
 import { pauseRequests, resumeRequests } from '../request-gate.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -46,69 +58,45 @@ const REQUIRED_TABLES = [
   'settings',
 ];
 
-// Known OpenAI-compatible providers. All expose GET /models for listing.
-const PROVIDERS = {
-  openai: { label: 'OpenAI', base_url: 'https://api.openai.com/v1' },
-  anthropic: { label: 'Anthropic (Claude)', base_url: 'https://api.anthropic.com/v1' },
-  openrouter: { label: 'OpenRouter', base_url: 'https://openrouter.ai/api/v1' },
-  groq: { label: 'Groq', base_url: 'https://api.groq.com/openai/v1' },
-  deepseek: { label: 'DeepSeek', base_url: 'https://api.deepseek.com/v1' },
-  mistral: { label: 'Mistral', base_url: 'https://api.mistral.ai/v1' },
-  together: { label: 'Together AI', base_url: 'https://api.together.xyz/v1' },
-  ollama: { label: 'Ollama (local)', base_url: 'http://localhost:11434/v1', no_key: true },
-  lmstudio: { label: 'LM Studio (local)', base_url: 'http://localhost:1234/v1', no_key: true },
-  custom: { label: 'Custom (enter URL)', base_url: '' },
-};
-
 function masked(cfg) {
   return {
-    provider: getSetting('ai_provider') || '',
-    base_url: cfg.baseUrl,
+    provider: cfg.provider || '',
+    base_url: cfg.shared ? '' : cfg.baseUrl || '',
     model: cfg.model,
-    has_key: !!cfg.apiKey,
-    key_hint: cfg.apiKey ? cfg.apiKey.slice(0, 4) + '…' + cfg.apiKey.slice(-4) : '',
+    has_key: !cfg.shared && !!cfg.apiKey,
+    key_hint: cfg.shared || !cfg.apiKey ? '' : cfg.apiKey.slice(0, 4) + '…' + cfg.apiKey.slice(-4),
+    profile_id: cfg.profileId || null,
+    profile_name: cfg.profileName || '',
+    shared: !!cfg.shared,
     providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, ...p })),
   };
-}
-
-function baseUrlFor(provider, customUrl) {
-  const p = PROVIDERS[provider];
-  if (!p) throw new Error('Unknown provider');
-  if (provider === 'custom') {
-    const url = (customUrl || '').trim().replace(/\/+$/, '');
-    if (!url) throw new Error('Custom provider needs a Base URL');
-    // The server fetches this URL itself; only real HTTP(S) endpoints are
-    // allowed so the field cannot smuggle in other schemes.
-    if (!/^https?:\/\//i.test(url))
-      throw new Error('Custom Base URL must start with http:// or https://');
-    return url;
-  }
-  return p.base_url;
 }
 
 router.get('/', (req, res) => {
   try {
     res.json({
-      ...masked(getAiConfig()),
+      ...masked(getAiConfig(req.username)),
+      ...listProfiles(req.username),
       currency: getSetting('currency') || 'EUR',
       theme: getSetting('theme') || 'system',
     });
   } catch {
     res.json({
-      provider: getSetting('ai_provider') || '',
-      base_url: getSetting('ai_base_url') || '',
-      model: getSetting('ai_model') || '',
+      provider: '',
+      base_url: '',
+      model: '',
       has_key: false,
       key_hint: '',
       currency: getSetting('currency') || 'EUR',
       theme: getSetting('theme') || 'system',
       providers: Object.entries(PROVIDERS).map(([id, p]) => ({ id, ...p })),
+      profiles: listProfiles(req.username).profiles,
     });
   }
 });
 
 router.put('/', (req, res) => {
-  const { provider, api_key, model, base_url, currency, theme } = req.body ?? {};
+  const { name, provider, api_key, model, base_url, currency, theme } = req.body ?? {};
   // Validate EVERYTHING before mutating anything: the currency change wipes
   // all FX rates, and that must never happen when another field is invalid.
   if (currency !== undefined && !CURRENCIES.includes(currency))
@@ -132,37 +120,107 @@ router.put('/', (req, res) => {
     }
   }
   if (theme !== undefined) setSetting('theme', theme);
-  if (provider !== undefined) {
-    let url;
+  if (
+    provider !== undefined ||
+    api_key !== undefined ||
+    model !== undefined ||
+    base_url !== undefined
+  ) {
     try {
-      url = baseUrlFor(provider, base_url);
+      upsertCurrentProfile(req.username, { name, provider, api_key, model, base_url });
     } catch (e) {
       return res.status(400).json({ error: e.message });
     }
-    setSetting('ai_provider', provider);
-    setSetting('ai_base_url', url);
   }
-  if (api_key) setSetting('ai_api_key', api_key.trim());
-  if (model !== undefined) setSetting('ai_model', model.trim());
   let ai;
   try {
-    ai = masked(getAiConfig());
+    ai = masked(getAiConfig(req.username));
   } catch {
     ai = {
-      provider: getSetting('ai_provider') || '',
-      base_url: getSetting('ai_base_url') || '',
-      model: getSetting('ai_model') || '',
-      has_key: !!getSetting('ai_api_key'),
+      provider: '',
+      base_url: '',
+      model: '',
+      has_key: false,
       key_hint: '',
     };
   }
   res.json({
     ...ai,
+    ...listProfiles(req.username),
     currency: getSetting('currency') || 'EUR',
     theme: getSetting('theme') || 'system',
     rates_cleared: ratesCleared,
   });
 });
+
+// ------------------------------------------------------------- AI profiles
+router.get('/ai-profiles', (req, res) => res.json(listProfiles(req.username)));
+
+router.post('/ai-profiles', (req, res) => {
+  try {
+    const row = createProfile(req.username, req.body ?? {});
+    res.status(201).json(profileResponse(row, req.username));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.put('/ai-profiles/active', (req, res) => {
+  try {
+    const ownerId = Number(req.body?.owner_user_id);
+    const profileId = String(req.body?.profile_id || '');
+    setActiveProfile(req.username, ownerId, profileId);
+    res.json(listProfiles(req.username));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.put('/ai-profiles/:id', (req, res) => {
+  try {
+    const row = updateProfile(req.username, req.params.id, req.body ?? {});
+    res.json(profileResponse(row, req.username));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/ai-profiles/:id', (req, res) => {
+  try {
+    deleteProfile(req.username, req.params.id);
+    res.json(listProfiles(req.username));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.get('/ai-profiles/:id/shares', requireAdmin, (req, res) => {
+  try {
+    res.json({ shares: listShares(req.username, req.params.id) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.put('/ai-profiles/:id/shares', requireAdmin, (req, res) => {
+  try {
+    res.json({ shares: replaceShares(req.username, req.params.id, req.body?.usernames) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+function profileResponse(row, username) {
+  return (
+    listProfiles(username).profiles.find((profile) => profile.id === row.id && profile.own) || {
+      id: row.id,
+      name: row.name,
+      provider: row.provider,
+      model: row.model,
+      own: true,
+    }
+  );
+}
 
 function ntfyResponse() {
   const config = ntfyConfig();
@@ -499,12 +557,14 @@ router.post('/restore', restoreUpload.single('file'), async (req, res) => {
 router.post('/models', async (req, res) => {
   try {
     const { provider, api_key, base_url } = req.body ?? {};
+    const active = getAiConfig(req.username);
+    const selectedProvider = provider || active.provider || 'openai';
     const url = baseUrlFor(
-      provider || getSetting('ai_provider') || 'openai',
-      base_url ?? getSetting('ai_base_url'),
+      selectedProvider,
+      base_url ?? (!provider || provider === active.provider ? active.baseUrl : undefined),
     );
-    const key = api_key || getSetting('ai_api_key') || '';
-    const needsKey = !(PROVIDERS[provider] ?? {}).no_key;
+    const key = api_key || (!provider || provider === active.provider ? active.apiKey : '') || '';
+    const needsKey = !PROVIDERS[selectedProvider].no_key;
     if (needsKey && !key) return res.status(400).json({ error: 'Enter your API key first' });
 
     const r = await fetch(`${url}/models`, {
@@ -529,9 +589,9 @@ router.post('/models', async (req, res) => {
   }
 });
 
-router.post('/test', async (_req, res) => {
+router.post('/test', async (req, res) => {
   try {
-    const cfg = getAiConfig();
+    const cfg = getAiConfig(req.username);
     const msg = await chatComplete(cfg, [{ role: 'user', content: 'Reply with exactly: OK' }]);
     res.json({ ok: true, reply: (msg.content || '').slice(0, 100) });
   } catch (e) {

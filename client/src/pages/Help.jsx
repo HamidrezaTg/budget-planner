@@ -232,14 +232,15 @@ const SECTIONS = [
     summary:
       'AI is optional. The planner works without it, and every write-capable action requires explicit confirmation.',
     steps: [
-      'Configure a provider, API key, and model in Settings. Local providers such as Ollama and LM Studio can avoid sending data to a hosted service.',
+      'Configure one or more named provider profiles in Settings. Supported presets include 9Router, OpenCode Zen, OpenRouter, Ollama, and LM Studio, plus custom OpenAI-compatible endpoints.',
+      'Every user owns private profiles. The administrator can share an administrator-owned profile with selected users; shared recipients can use it but never see its API key or private URL.',
       'Use Finance chat for read-only questions. It can query permitted budget data but cannot change your budget.',
       'Use format analysis on Import to understand unfamiliar statement columns, then verify the preview yourself.',
       'Use category suggestions as proposals. Apply them individually, all at once, or only at 80% confidence after reviewing the results.',
       'Dev mode creates a fixed-whitelist proposal for budgets, rules, commitments, funds, income, or balance anchors. Nothing changes until Apply is pressed; raw SQL, deletions, and authentication changes are not allowed.',
     ],
     notes: [
-      'Configured AI providers receive the prompts or files needed for the selected operation. Read the provider privacy policy before using hosted AI with financial data.',
+      'Local OCR is the private default. Explicit online vision OCR sends bounded PDF page renders or JPG/PNG bytes to the active AI provider; read the provider privacy policy before using it with financial data.',
     ],
   },
   {

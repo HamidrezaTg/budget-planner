@@ -1,5 +1,5 @@
 // Shared OpenAI-compatible chat client + per-user AI configuration.
-import { getSetting } from '../db.js';
+import { currentProfileConfig } from './ai-profiles.js';
 
 // Base URLs of the built-in providers, whose error bodies are safe to surface
 // verbatim (their hosts are fixed, not user-chosen). Anything else is a custom
@@ -10,32 +10,31 @@ const KNOWN_PROVIDER_BASES = new Set([
   'https://api.openai.com/v1',
   'https://api.anthropic.com/v1',
   'https://openrouter.ai/api/v1',
+  'https://opencode.ai/zen/v1',
   'https://api.groq.com/openai/v1',
   'https://api.deepseek.com/v1',
   'https://api.mistral.ai/v1',
   'https://api.together.xyz/v1',
   'http://localhost:11434/v1',
   'http://localhost:1234/v1',
+  'http://localhost:20128/v1',
 ]);
 
 export function isTrustedBaseUrl(url) {
   return KNOWN_PROVIDER_BASES.has(String(url || '').replace(/\/+$/, ''));
 }
 
-export function getAiConfig() {
-  const cfg = {
-    baseUrl: (getSetting('ai_base_url') || process.env.AI_BASE_URL || '').replace(/\/+$/, ''),
-    apiKey: getSetting('ai_api_key') || process.env.AI_API_KEY || '',
-    model: getSetting('ai_model') || process.env.AI_MODEL || 'gpt-4o-mini',
+export function getAiConfig(username) {
+  const profile = currentProfileConfig(username);
+  return {
+    baseUrl: String(profile.base_url || '').replace(/\/+$/, ''),
+    apiKey: profile.api_key || '',
+    model: profile.model,
+    provider: profile.provider,
+    profileId: profile.profile_id,
+    profileName: profile.name,
+    shared: profile.shared,
   };
-  if (!cfg.baseUrl) {
-    const err = new Error(
-      'AI is not configured. Set Base URL, API key and Model in Settings (any OpenAI-compatible endpoint).',
-    );
-    err.status = 400;
-    throw err;
-  }
-  return cfg;
 }
 
 async function post(path, body, cfg, extra = {}) {

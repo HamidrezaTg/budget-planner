@@ -11,6 +11,10 @@ export default function Settings({ me }) {
   const [model, setModel] = useState('');
   const [models, setModels] = useState([]);
   const [customUrl, setCustomUrl] = useState('');
+  const [profiles, setProfiles] = useState([]);
+  const [profileName, setProfileName] = useState('');
+  const [users, setUsers] = useState([]);
+  const [sharedRecipients, setSharedRecipients] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -61,6 +65,8 @@ export default function Settings({ me }) {
         setProvider(s.provider || '');
         setModel(s.model || '');
         setCustomUrl(s.base_url || '');
+        setProfiles(s.profiles || []);
+        setProfileName(s.profile_name || '');
         setCurrencyState(s.currency || 'EUR');
         if (s.provider && s.model) setModels([s.model]);
       })
@@ -83,8 +89,81 @@ export default function Settings({ me }) {
     checkVersion(true);
   }, [checkVersion]);
 
+  useEffect(() => {
+    if (!me?.admin) return;
+    api
+      .get('/auth/users')
+      .then(setUsers)
+      .catch(() => {});
+  }, [me?.admin]);
+
   const providerDef = cfg?.providers?.find((p) => p.id === provider);
   const needsKey = providerDef ? !providerDef.no_key : true;
+  const activeProfile = profiles.find((p) => p.active);
+
+  const refreshSettings = async () => {
+    const s = await api.get('/settings');
+    setCfg(s);
+    setProfiles(s.profiles || []);
+    setProvider(s.provider || '');
+    setModel(s.model || '');
+    setCustomUrl(s.base_url || '');
+    setProfileName(s.profile_name || '');
+    if (s.provider && s.model) setModels([s.model]);
+  };
+
+  const chooseProfile = async (value) => {
+    if (!value) return;
+    const [owner, ...idParts] = value.split(':');
+    try {
+      await api.put('/settings/ai-profiles/active', {
+        owner_user_id: Number(owner),
+        profile_id: idParts.join(':'),
+      });
+      await refreshSettings();
+      setApiKey('');
+      setMsg({ ok: true, text: 'Active AI profile changed.' });
+    } catch (error) {
+      setMsg({ ok: false, text: error.message });
+    }
+  };
+
+  const createNewProfile = async () => {
+    try {
+      const created = await api.post('/settings/ai-profiles', {
+        name: profileName || 'New profile',
+        provider,
+        model,
+        api_key: apiKey || undefined,
+        ...(provider === 'custom' ? { base_url: customUrl } : {}),
+      });
+      await refreshSettings();
+      setApiKey('');
+      setMsg({ ok: true, text: `Created ${created.name}.` });
+    } catch (error) {
+      setMsg({ ok: false, text: error.message });
+    }
+  };
+
+  useEffect(() => {
+    if (!me?.admin || !activeProfile?.own) return;
+    api
+      .get(`/settings/ai-profiles/${activeProfile.id}/shares`)
+      .then((r) => setSharedRecipients((r.shares || []).map((share) => share.username)))
+      .catch(() => setSharedRecipients([]));
+  }, [activeProfile?.id, activeProfile?.own, me?.admin]);
+
+  const saveProfileShares = async () => {
+    if (!activeProfile?.own) return;
+    try {
+      await api.put(`/settings/ai-profiles/${activeProfile.id}/shares`, {
+        usernames: sharedRecipients,
+      });
+      setMsg({ ok: true, text: 'AI profile sharing updated.' });
+    } catch (error) {
+      setMsg({ ok: false, text: error.message });
+    }
+  };
 
   const loadModels = async () => {
     setLoadingModels(true);
@@ -109,6 +188,7 @@ export default function Settings({ me }) {
     setMsg(null);
     try {
       const updated = await api.put('/settings', {
+        name: profileName,
         provider,
         model,
         currency,
@@ -116,6 +196,7 @@ export default function Settings({ me }) {
         ...(apiKey ? { api_key: apiKey } : {}),
       });
       setCfg(updated);
+      setProfiles(updated.profiles || []);
       setCurrency(currency);
       setApiKey('');
       // rates were stored relative to the old base currency
@@ -141,6 +222,24 @@ export default function Settings({ me }) {
       setMsg({ ok: r.ok, text: r.ok ? `AI replied: "${r.reply}"` : r.error });
     } catch (err) {
       setMsg({ ok: false, text: err.message });
+    }
+  };
+
+  const removeActiveProfile = async () => {
+    if (!activeProfile?.own) return;
+    const ok = await confirm({
+      title: `Delete ${activeProfile.name}?`,
+      message: 'This removes the profile and revokes any sharing grants.',
+      danger: true,
+      confirmLabel: 'Delete profile',
+    });
+    if (!ok) return;
+    try {
+      await api.del(`/settings/ai-profiles/${activeProfile.id}`);
+      await refreshSettings();
+      setMsg({ ok: true, text: 'AI profile deleted.' });
+    } catch (error) {
+      setMsg({ ok: false, text: error.message });
     }
   };
 
@@ -703,15 +802,45 @@ export default function Settings({ me }) {
         </div>
         <div className="settings-section">
           <p className="muted tiny">
-            Pick a provider, enter your API key, then load the models available to your key.
-            Everything is stored in your own database only.
+            Profiles keep provider credentials separate. Shared profiles from the admin can be used
+            but cannot be edited, and their credentials are never shown.
           </p>
+          {profiles.length > 0 && (
+            <label className="muted tiny">
+              Active profile
+              <select
+                value={activeProfile ? `${activeProfile.owner_user_id}:${activeProfile.id}` : ''}
+                onChange={(e) => chooseProfile(e.target.value)}
+              >
+                {profiles.map((p) => (
+                  <option key={`${p.owner_user_id}:${p.id}`} value={`${p.owner_user_id}:${p.id}`}>
+                    {p.name} · {p.provider} {p.own ? '' : `(shared by ${p.owner_username})`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {activeProfile?.shared && (
+            <p className="muted tiny">
+              This profile is shared read-only by {activeProfile.owner_username}.
+            </p>
+          )}
           <form onSubmit={save}>
             <div className="form-grid">
+              <label title="A private name for this provider and model combination">
+                Profile name
+                <input
+                  value={profileName}
+                  disabled={activeProfile?.shared}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="Household assistant"
+                />
+              </label>
               <label title="AI provider — built-in options talk to the listed service; Custom lets you paste any OpenAI-compatible URL">
                 Provider
                 <select
                   value={provider}
+                  disabled={activeProfile?.shared}
                   onChange={(e) => {
                     setProvider(e.target.value);
                     setModels([]);
@@ -727,7 +856,7 @@ export default function Settings({ me }) {
                 </select>
               </label>
 
-              {provider === 'custom' && (
+              {provider === 'custom' && !activeProfile?.shared && (
                 <label title="Full URL of any OpenAI-compatible endpoint. Must start with http:// or https://">
                   Base URL
                   <input
@@ -738,7 +867,7 @@ export default function Settings({ me }) {
                 </label>
               )}
 
-              {provider && needsKey && (
+              {provider && needsKey && !activeProfile?.shared && (
                 <label title="Your API key. Leave empty when editing to keep the saved key.">
                   API key{' '}
                   {cfg.has_key && cfg.provider === provider && (
@@ -756,7 +885,7 @@ export default function Settings({ me }) {
                   />
                 </label>
               )}
-              {provider && !needsKey && (
+              {provider && !needsKey && !activeProfile?.shared && (
                 <div className="good" style={{ marginTop: 4 }}>
                   Runs locally — no API key needed.
                 </div>
@@ -769,7 +898,7 @@ export default function Settings({ me }) {
                     <select
                       value={model}
                       onChange={(e) => setModel(e.target.value)}
-                      disabled={!models.length}
+                      disabled={!models.length || activeProfile?.shared}
                       style={{ flex: 1 }}
                     >
                       <option value="">
@@ -787,7 +916,10 @@ export default function Settings({ me }) {
                       onClick={loadModels}
                       disabled={
                         loadingModels ||
-                        (needsKey && !apiKey && !(cfg.has_key && cfg.provider === provider))
+                        (needsKey &&
+                          !apiKey &&
+                          !(cfg.has_key && cfg.provider === provider) &&
+                          !activeProfile?.shared)
                       }
                       title="Fetch the list of models your key can use"
                     >
@@ -806,7 +938,7 @@ export default function Settings({ me }) {
               <button
                 className="btn primary"
                 type="submit"
-                disabled={!provider || !model}
+                disabled={!provider || !model || activeProfile?.shared}
                 title="Save the AI settings"
               >
                 Save
@@ -815,11 +947,25 @@ export default function Settings({ me }) {
                 className="btn ghost"
                 type="button"
                 onClick={test}
-                disabled={!cfg.has_key}
+                disabled={!cfg.has_key && !activeProfile?.shared}
                 title="Send a tiny test prompt to verify the connection"
               >
                 Test connection
               </button>
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={createNewProfile}
+                disabled={!provider || !model || activeProfile?.shared}
+                title="Create another profile using the values above"
+              >
+                New profile
+              </button>
+              {activeProfile?.own && (
+                <button className="btn danger" type="button" onClick={removeActiveProfile}>
+                  Delete profile
+                </button>
+              )}
             </div>
             {msg && (
               <div className={msg.ok ? 'good' : 'error'} style={{ marginTop: 6 }}>
@@ -827,6 +973,42 @@ export default function Settings({ me }) {
               </div>
             )}
           </form>
+          {me?.admin && activeProfile?.own && users.length > 1 && (
+            <div style={{ marginTop: 16 }}>
+              <p className="muted tiny" style={{ marginBottom: 6 }}>
+                Share this profile with household users. They can use it, but cannot view or change
+                its API key or endpoint.
+              </p>
+              <div className="btn-row" style={{ flexWrap: 'wrap' }}>
+                {users
+                  .filter((user) => user.username !== me.username)
+                  .map((user) => (
+                    <label className="muted tiny" key={user.username}>
+                      <input
+                        type="checkbox"
+                        checked={sharedRecipients.includes(user.username)}
+                        onChange={(e) =>
+                          setSharedRecipients((previous) =>
+                            e.target.checked
+                              ? [...previous, user.username]
+                              : previous.filter((name) => name !== user.username),
+                          )
+                        }
+                      />{' '}
+                      {user.username}
+                    </label>
+                  ))}
+              </div>
+              <button
+                className="btn small"
+                type="button"
+                onClick={saveProfileShares}
+                style={{ marginTop: 8 }}
+              >
+                Save sharing
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

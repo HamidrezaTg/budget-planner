@@ -216,11 +216,12 @@ is safe in normal cases, although a bank changing merchant wording can still req
 manual cleanup.
 
 AI format analysis sends extracted statement text/rows, not PDF bytes, to the AI
-provider configured by the user. Verify the preview even when the detected format
-looks correct. Debian packages install `poppler-utils` and `tesseract-ocr`; on
-other systems install `pdftotext`, `pdfinfo`, `pdftoppm`, and `tesseract` and make
-them available on the service user's `PATH`. Set `TESSERACT_LANG` when a local
-language pack is needed.
+provider configured by the user. The Import page also offers explicit online vision
+OCR. That mode sends bounded PDF page renders or image bytes to the active provider;
+choose local OCR when the statement must remain on this server. Verify the preview
+even when the detected format looks correct. Debian packages keep OCR tools optional:
+install `poppler-utils` for PDF support and `tesseract-ocr` for local scanned-PDF and
+image OCR. Set `TESSERACT_LANG` when a local language pack is needed.
 
 ## Transactions
 
@@ -360,7 +361,10 @@ Exports retain original amounts and currency codes.
 ## AI Chat
 
 AI is optional and can use OpenAI-compatible hosted or local providers, including
-Ollama and LM Studio.
+9Router, OpenCode Zen, OpenRouter, Ollama, and LM Studio. Settings supports multiple
+named profiles and an active-profile selector. Every user owns their own profiles;
+only an administrator can share one of the administrator's profiles with selected
+users. Recipients can use a shared profile but cannot see its API key or private URL.
 
 - **Finance** is read-only. It can answer questions using permitted budget data but
   cannot alter the database.
@@ -394,6 +398,13 @@ data, settings, plans, and transactions, but not attachment files.
 **Restore backup** validates SQLite integrity, required tables, and references. A
 pre-restore copy is created and a failed restore rolls back. For a complete migration,
 restore the database and copy the matching `uploads/<username>/` directory separately.
+
+For a complete server migration, use the release installer with
+`--restore-server-data /path/to/server-data`. The source must contain `master.db` and
+`users/` (plus optional `uploads/`). Every database is integrity-checked before the
+service is stopped. The existing destination is retained as a timestamped
+`.before-restore` directory and the validated data is installed with an atomic directory
+swap. Do not use a single user's SQLite backup as a server-data restore source.
 
 **Reset spending data** removes transactions and attachments while retaining planning
 configuration. Treat it as destructive and back up first.

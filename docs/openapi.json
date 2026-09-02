@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Budget Planner API",
-    "version": "3.20.0",
+    "version": "3.20.1",
     "description": "Static contract for the Budget Planner HTTP API. JSON amounts are numbers and transaction expenses are negative. Unless an operation is marked public, send the bp_session cookie returned by login or setup."
   },
   "servers": [
@@ -1170,7 +1170,7 @@
     "/settings": {
       "get": {
         "tags": ["Settings"],
-        "summary": "Get user settings and AI provider metadata",
+        "summary": "Get user settings and available AI profiles",
         "operationId": "getSettings",
         "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
       },
@@ -1179,6 +1179,133 @@
         "summary": "Update user settings",
         "operationId": "updateSettings",
         "requestBody": { "$ref": "#/components/requestBodies/Settings" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/settings/ai-profiles": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "List owned and shared AI profiles",
+        "operationId": "listAiProfiles",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Create a private AI profile",
+        "operationId": "createAiProfile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "provider", "model"],
+                "properties": {
+                  "name": { "type": "string", "maxLength": 80 },
+                  "provider": { "type": "string" },
+                  "base_url": { "type": "string" },
+                  "api_key": { "type": "string", "writeOnly": true },
+                  "model": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/settings/ai-profiles/active": {
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Select the active owned or shared AI profile",
+        "operationId": "selectActiveAiProfile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["owner_user_id", "profile_id"],
+                "properties": {
+                  "owner_user_id": { "type": "integer" },
+                  "profile_id": { "type": "string", "format": "uuid" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/settings/ai-profiles/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string", "format": "uuid" }
+        }
+      ],
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Update an owned AI profile",
+        "operationId": "updateAiProfile",
+        "requestBody": { "$ref": "#/components/requestBodies/AiProfile" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Settings"],
+        "summary": "Delete an owned AI profile",
+        "operationId": "deleteAiProfile",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/settings/ai-profiles/{id}/shares": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string", "format": "uuid" }
+        }
+      ],
+      "get": {
+        "tags": ["Settings"],
+        "summary": "List users with access to an admin AI profile",
+        "operationId": "listAiProfileShares",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Replace users sharing an admin AI profile",
+        "operationId": "replaceAiProfileShares",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["usernames"],
+                "properties": { "usernames": { "type": "array", "items": { "type": "string" } } }
+              }
+            }
+          }
+        },
         "responses": {
           "200": { "$ref": "#/components/responses/JsonResponse" },
           "400": { "$ref": "#/components/responses/ErrorResponse" }
@@ -1774,6 +1901,12 @@
         "required": true,
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AiChat" } } }
       },
+      "AiProfile": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/AiProfile" } }
+        }
+      },
       "AiApply": {
         "required": true,
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AiApply" } } }
@@ -1794,13 +1927,29 @@
         ]
       },
       "Binary": { "type": "string", "format": "binary" },
+      "AiProfile": {
+        "type": "object",
+        "required": ["name", "provider", "model"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 80 },
+          "provider": { "type": "string" },
+          "base_url": { "type": "string" },
+          "api_key": { "type": "string", "writeOnly": true },
+          "model": { "type": "string" }
+        }
+      },
       "Multipart": {
         "type": "object",
         "required": ["file"],
         "properties": {
           "file": {
             "$ref": "#/components/schemas/Binary",
-            "description": "CSV, XLS/XLSX, PDF, JPG, or PNG bank statement. PDFs use local text extraction/OCR; images use local Tesseract OCR."
+            "description": "CSV, XLS/XLSX, PDF, JPG, or PNG bank statement."
+          },
+          "ocr_mode": {
+            "type": "string",
+            "enum": ["local", "online"],
+            "description": "For /import/smart only. Online sends bounded PDF page renders or image bytes to the active AI provider."
           }
         }
       },

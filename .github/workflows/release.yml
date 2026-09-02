@@ -134,8 +134,9 @@ jobs:
 
       - name: Generate checksums
         run: |
+          cp scripts/install.sh dist/budget-planner-install.sh
           cd dist
-          sha256sum budget-planner-server_*_all.deb budget-planner-client_*.deb budget-planner-client_*.AppImage \
+          sha256sum budget-planner-install.sh budget-planner-server_*_all.deb budget-planner-client_*.deb budget-planner-client_*.AppImage \
             $( [ -f budget-planner-android.apk ] && echo budget-planner-android.apk ) \
             > SHA256SUMS.txt
           cat SHA256SUMS.txt
@@ -153,6 +154,7 @@ jobs:
           fi
           ARGS=()
           for f in dist/budget-planner-server_*_all.deb \
+                   dist/budget-planner-install.sh \
                    dist/budget-planner-client_*_amd64.deb \
                    dist/budget-planner-client_*_amd64.AppImage \
                    dist/budget-planner-android.apk \
