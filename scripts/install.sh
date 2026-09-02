@@ -3,7 +3,7 @@
 # Budget Planner — interactive installer (server .deb)
 #
 # Public repository: no authentication needed.
-#   curl -fsSL https://github.com/HamidrezaTg/budget-planner/releases/latest/download/budget-planner-install.sh -o /tmp/bp-install.sh && bash /tmp/bp-install.sh
+#   bash <(curl -fsSL https://github.com/HamidrezaTg/budget-planner/releases/latest/download/budget-planner-install.sh)
 #
 # Flags: --client (desktop client), --version X, --quiet (skip menu, defaults),
 #        --ocr none|pdf|full, --data-dir /absolute/path,
@@ -72,12 +72,31 @@ if [ -z "$RELEASE_JSON" ]; then
   RELEASE_JSON=$(fetch_release) || { echo "ERROR: could not fetch releases even with authentication." >&2; exit 1; }
 fi
 
+# Resolve the tag before privilege escalation. Process substitution gives bash
+# a /dev/fd path, which root cannot reliably reopen after sudo. The tag lets us
+# cache the exact release installer instead of falling back to mutable main.
+TAG=$(printf '%s' "$RELEASE_JSON" | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
+[ -n "$TAG" ] || { echo "ERROR: release not found." >&2; exit 1; }
+
 if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
   echo "==> re-running with sudo (your GitHub login travels along)"
   SELF="$0"
-  if [ ! -f "$SELF" ]; then
-    SELF="/tmp/budget-planner-install.sh"
-    curl -fsSL "https://raw.githubusercontent.com/$REPO/main/scripts/install.sh?v=$(date +%s)" -o "$SELF"
+  SELF_IS_STREAM=0
+  case "$SELF" in
+    /dev/fd/*|/proc/*/fd/*) SELF_IS_STREAM=1 ;;
+  esac
+  if [ "$SELF_IS_STREAM" = "1" ] || [ ! -f "$SELF" ]; then
+    SAFE_TAG=${TAG//[^A-Za-z0-9._-]/_}
+    SELF="/tmp/budget-planner-install-${SAFE_TAG}.sh"
+    echo "==> caching the exact ${TAG} installer for sudo"
+    if [ -n "${GH_TOKEN:-}" ]; then
+      curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+        -o "$SELF" "https://github.com/$REPO/releases/download/$TAG/budget-planner-install.sh"
+    else
+      curl -fsSL -o "$SELF" \
+        "https://github.com/$REPO/releases/download/$TAG/budget-planner-install.sh"
+    fi
+    chmod 700 "$SELF"
   fi
   # Rebuild the command-line flags: the argument loop above consumed $@, so a
   # bare "$@" here would silently drop --client/--version/--quiet.
@@ -91,11 +110,6 @@ if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
   exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$SELF" "${REEXEC_ARGS[@]}"
 fi
 
-# Parse the release JSON with grep/sed only — no Node required, so the script
-# still works on machines that have not installed Node yet (Node is only a
-# server dependency, never needed for the desktop client).
-TAG=$(printf '%s' "$RELEASE_JSON" | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
-[ -n "$TAG" ] || { echo "ERROR: release not found." >&2; exit 1; }
 echo "==> release: $TAG"
 
 if [ "$WANT_CLIENT" = "1" ]; then

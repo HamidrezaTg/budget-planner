@@ -3,6 +3,17 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.20.3] — 2026-09-02
+
+### Added
+
+- One-command release installer usage with `bash <(curl ...)`.
+
+### Fixed
+
+- Process-substitution installs now re-execute the exact tagged release installer through `sudo` instead of downloading mutable `main`.
+- CSV preflight, private reusable import templates, and mandatory AI structuring after PDF/image OCR are included in the release.
+
 ## [3.20.2] — 2026-09-02
 
 ### Fixed

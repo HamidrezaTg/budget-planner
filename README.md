@@ -40,9 +40,7 @@ verifies the release checksum, installs the server and systemd service, and stor
 data in `/var/lib/budget-planner`.
 
 ```bash
-curl -fsSL https://github.com/HamidrezaTg/budget-planner/releases/latest/download/budget-planner-install.sh \
-  -o /tmp/budget-planner-install.sh
-bash /tmp/budget-planner-install.sh
+bash <(curl -fsSL https://github.com/HamidrezaTg/budget-planner/releases/latest/download/budget-planner-install.sh)
 ```
 
 The interactive installer asks whether to install local OCR tools. Use
