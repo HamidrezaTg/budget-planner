@@ -24,6 +24,11 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Install PDF extraction and OCR tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils tesseract-ocr
+
       - name: Install dependencies
         run: npm ci
 
