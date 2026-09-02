@@ -63,6 +63,18 @@ first-launch setup screen back.
 
 ## Import & transactions
 
+### PDF import says PDF tools are unavailable
+The server needs Poppler and Tesseract for PDF statements. On Debian/Ubuntu install:
+
+```bash
+sudo apt install poppler-utils tesseract-ocr
+```
+
+The service must be able to find `pdfinfo`, `pdftotext`, `pdftoppm`, and `tesseract` on
+its `PATH`. Selectable PDFs use local text extraction. Scanned PDFs are rendered and
+OCR'd locally; set `TESSERACT_LANG` to a language installed on the server when `eng`
+is not sufficient. The import preview still requires explicit confirmation.
+
 ### Importing the same/overlapping statement again
 Safe by design: rows are fingerprinted (date + amount + description, plus an
 occurrence index for genuine same-day twins) and the database rejects duplicates.

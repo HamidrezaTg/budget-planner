@@ -9,7 +9,34 @@ import {
   toISODate,
   parseAmountValue,
   transactionsFromGrid,
+  extractPdfText,
 } from '../server/services/parser.js';
+
+function makePdf(text) {
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${Buffer.byteLength(text)} >>\nstream\n${text}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  const chunks = [Buffer.from('%PDF-1.4\n')];
+  const offsets = [0];
+  for (let i = 0; i < objects.length; i++) {
+    offsets.push(chunks.reduce((sum, chunk) => sum + chunk.length, 0));
+    chunks.push(Buffer.from(`${i + 1} 0 obj\n${objects[i]}\nendobj\n`));
+  }
+  const xref = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  chunks.push(Buffer.from(`xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`));
+  for (let i = 1; i < offsets.length; i++)
+    chunks.push(Buffer.from(`${String(offsets[i]).padStart(10, '0')} 00000 n \n`));
+  chunks.push(
+    Buffer.from(
+      `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`,
+    ),
+  );
+  return Buffer.concat(chunks);
+}
 
 function makeZip({ compressedSize = 1, uncompressedSize = 1, centralSignature = 0x02014b50 } = {}) {
   const name = Buffer.from('xl/workbook.xml');
@@ -144,6 +171,22 @@ test('XLSX import remains compatible with the maintained spreadsheet package', (
       currency: 'EUR',
       dedup_key: '2026-05-01|-4.50|EUR|coffee',
     });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('PDF statement text is extracted locally and normalized into transactions', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'bp-pdf-'));
+  const file = path.join(dir, 'statement.pdf');
+  try {
+    writeFileSync(file, makePdf('BT /F1 12 Tf 50 750 Td (01.09.2026 REWE Market -12,50) Tj ET'));
+    assert.match(extractPdfText(file), /REWE Market/);
+    const parsed = parseStatement(file);
+    assert.equal(parsed.transactions.length, 1);
+    assert.equal(parsed.transactions[0].date, '2026-09-01');
+    assert.equal(parsed.transactions[0].amount, -12.5);
+    assert.equal(parsed.transactions[0].description, 'REWE Market');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -44,6 +44,7 @@ export default function Categories() {
   const [editingCat, setEditingCat] = useState({}); // { [catId]: { name, group_id, account_id, monthly_budget, is_active, _saving } }
   // Per-group inline rename state.
   const [renamingGroup, setRenamingGroup] = useState({});
+  const [editingGroupSort, setEditingGroupSort] = useState({});
 
   const load = () => {
     api
@@ -221,6 +222,32 @@ export default function Categories() {
     }
   };
 
+  const saveGroupSort = async (g) => {
+    const raw = editingGroupSort[g.id];
+    if (raw === undefined) return;
+    const sort = Number(raw);
+    if (!Number.isInteger(sort) || sort < 0) {
+      setError('Group sort must be a non-negative whole number.');
+      return;
+    }
+    try {
+      await api.patch(`/categories/groups/${g.id}`, { name: g.name, sort });
+      setEditingGroupSort((p) => {
+        const next = { ...p };
+        delete next[g.id];
+        return next;
+      });
+      setError('');
+      load();
+      api
+        .get('/categories/meta/all')
+        .then(setMeta)
+        .catch(() => {});
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const addRule = async (e) => {
     e.preventDefault();
     if (!newRule.keyword.trim() || !newRule.category_id) return;
@@ -368,7 +395,36 @@ export default function Categories() {
                       g.name
                     )}
                   </td>
-                  <td className="muted">{g.sort}</td>
+                  <td>
+                    <input
+                      className="sort-input"
+                      type="number"
+                      min="0"
+                      step="1"
+                      aria-label={`Sort order for ${g.name}`}
+                      value={editingGroupSort[g.id] ?? g.sort}
+                      onChange={(e) =>
+                        setEditingGroupSort((p) => ({ ...p, [g.id]: e.target.value }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveGroupSort(g);
+                        if (e.key === 'Escape')
+                          setEditingGroupSort((p) => {
+                            const next = { ...p };
+                            delete next[g.id];
+                            return next;
+                          });
+                      }}
+                    />
+                    <button
+                      className={`btn small ${editingGroupSort[g.id] !== undefined ? 'primary' : 'ghost'}`}
+                      title="Save group sort order"
+                      onClick={() => saveGroupSort(g)}
+                      disabled={editingGroupSort[g.id] === undefined}
+                    >
+                      ✓
+                    </button>
+                  </td>
                   <td className="muted">{count}</td>
                   <td>
                     {renamingGroup[g.id] !== undefined ? (

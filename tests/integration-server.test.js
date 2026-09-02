@@ -517,8 +517,8 @@ test('transaction links, transfer pairing, coverage, and paired deletion are enf
   assert.equal(coverage.total_actual, 50);
   assert.equal(coverage.fund_covered, 20);
   assert.equal(coverage.commitment_covered, 30);
-  assert.equal(coverage.budget_actual, 0);
-  assert.equal(coverage.uncovered_amount, 0);
+  assert.equal(coverage.budget_actual, 50);
+  assert.equal(coverage.uncovered_amount, 50);
 
   const transfer = await api(
     '/transactions/transfer',

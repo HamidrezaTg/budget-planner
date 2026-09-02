@@ -112,6 +112,14 @@ router.patch('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   const row = db.prepare('SELECT id, name FROM categories WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
+  const managed = db
+    .prepare('SELECT managed_commitment_id FROM categories WHERE id = ?')
+    .get(req.params.id);
+  if (managed?.managed_commitment_id != null) {
+    return res.status(409).json({
+      error: 'This category belongs to a commitment. Edit or delete the commitment instead.',
+    });
+  }
   const txCount = db
     .prepare('SELECT COUNT(*) AS c FROM transactions WHERE category_id = ?')
     .get(req.params.id).c;
@@ -175,9 +183,11 @@ router.patch('/groups/:id', (req, res) => {
   const b = req.body ?? {};
   const err = validateGroup({ ...row, ...b }, row.id);
   if (err) return res.status(400).json({ error: err });
+  if (b.sort !== undefined && (!Number.isInteger(Number(b.sort)) || Number(b.sort) < 0))
+    return res.status(400).json({ error: 'sort must be a non-negative whole number' });
   db.prepare('UPDATE category_groups SET name = ?, sort = ? WHERE id = ?').run(
     String(b.name).trim(),
-    Number.isFinite(Number(b.sort)) ? Number(b.sort) : row.sort,
+    b.sort !== undefined ? Number(b.sort) : row.sort,
     req.params.id,
   );
   res.json(db.prepare('SELECT * FROM category_groups WHERE id = ?').get(req.params.id));

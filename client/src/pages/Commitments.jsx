@@ -11,6 +11,8 @@ export default function Commitments() {
     monthly_amount: '',
     start_month: '',
     end_month: '',
+    account_id: '',
+    note: '',
   });
   const [edits, setEdits] = useState({});
   const { confirm, toast } = useDialogs();
@@ -29,11 +31,32 @@ export default function Commitments() {
       .catch(() => {});
   }, [month]);
 
+  const startEdit = (row) => ({
+    name: row.name,
+    amount: String(row.monthly_amount),
+    start_month: row.start_month,
+    end_month: row.end_month ?? '',
+    account_id: row.account_id ?? '',
+    note: row.note ?? '',
+  });
+
   const add = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/commitments', { ...form, end_month: form.end_month || null });
-      setForm({ name: '', monthly_amount: '', start_month: '', end_month: '' });
+      await api.post('/commitments', {
+        ...form,
+        account_id: form.account_id || null,
+        end_month: form.end_month || null,
+        note: form.note || null,
+      });
+      setForm({
+        name: '',
+        monthly_amount: '',
+        start_month: '',
+        end_month: '',
+        account_id: '',
+        note: '',
+      });
       load();
     } catch (err) {
       toast(err.message, 'error');
@@ -45,8 +68,12 @@ export default function Commitments() {
     if (!e) return;
     try {
       await api.patch(`/commitments/${row.id}`, {
+        name: e.name.trim(),
         monthly_amount: e.amount !== undefined ? Number(e.amount) : undefined,
+        start_month: e.start_month,
         end_month: e.end_month !== undefined ? e.end_month || null : undefined,
+        account_id: e.account_id || null,
+        note: e.note || null,
       });
       setEdits((p) => ({ ...p, [row.id]: undefined }));
       load();
@@ -55,11 +82,12 @@ export default function Commitments() {
     }
   };
 
-  const activeNow = (r) => {
-    const now = new Date();
-    const m = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const activeAt = (r, m) => {
     return m >= r.start_month && (!r.end_month || m <= r.end_month) && r.monthly_amount > 0;
   };
+  const activeTotal = rows
+    .filter((row) => activeAt(row, month))
+    .reduce((sum, row) => sum + row.monthly_amount, 0);
 
   return (
     <div>
@@ -69,6 +97,14 @@ export default function Commitments() {
         projection automatically drops them out when they finish. Payment status below is for{' '}
         {monthLabel(month)}.
       </p>
+
+      <div className="stats-row commitment-month-summary">
+        <div className="card stat">
+          <div className="stat-label">Active commitments in {monthLabel(month)}</div>
+          <div className="stat-value expense">{eur(activeTotal)}</div>
+          <div className="muted tiny">planned monthly cash outflow</div>
+        </div>
+      </div>
 
       <div className="card table-card">
         <table>
@@ -85,37 +121,129 @@ export default function Commitments() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className={activeNow(r) ? '' : 'done-row'}>
+              <tr key={r.id} className={activeAt(r, month) ? '' : 'done-row'}>
                 <td>
-                  {r.name}
+                  {edits[r.id] ? (
+                    <div className="commit-edit-stack">
+                      <input
+                        aria-label={`Name for ${r.name}`}
+                        value={edits[r.id].name}
+                        onChange={(e) =>
+                          setEdits((p) => ({ ...p, [r.id]: { ...p[r.id], name: e.target.value } }))
+                        }
+                      />
+                      <input
+                        aria-label={`Note for ${r.name}`}
+                        placeholder="Note (optional)"
+                        value={edits[r.id].note}
+                        onChange={(e) =>
+                          setEdits((p) => ({ ...p, [r.id]: { ...p[r.id], note: e.target.value } }))
+                        }
+                      />
+                    </div>
+                  ) : (
+                    r.name
+                  )}
                   {r.category_name && <span className="muted tiny"> → {r.category_name}</span>}
+                  {!edits[r.id] && r.note && <span className="muted tiny"> · {r.note}</span>}
                 </td>
-                <td className="muted">{r.account_name ?? '—'}</td>
-                <td className="num">{eur(r.monthly_amount)}</td>
+                <td className="muted">
+                  {edits[r.id] ? (
+                    <select
+                      aria-label={`Account for ${r.name}`}
+                      value={edits[r.id].account_id}
+                      onChange={(e) =>
+                        setEdits((p) => ({
+                          ...p,
+                          [r.id]: { ...p[r.id], account_id: e.target.value },
+                        }))
+                      }
+                    >
+                      <option value="">No account</option>
+                      {meta.accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    (r.account_name ?? '—')
+                  )}
+                </td>
+                <td className="num">
+                  {edits[r.id] ? (
+                    <input
+                      className="budget-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      aria-label={`Monthly amount for ${r.name}`}
+                      value={edits[r.id].amount}
+                      onChange={(e) =>
+                        setEdits((p) => ({ ...p, [r.id]: { ...p[r.id], amount: e.target.value } }))
+                      }
+                    />
+                  ) : (
+                    eur(r.monthly_amount)
+                  )}
+                </td>
                 <td className={`num ${r.payment_status === 'paid' ? 'good' : ''}`}>
                   {eur(r.paid_amount)}
                   <span className="muted tiny"> · {r.payment_status}</span>
                 </td>
-                <td>{r.start_month}</td>
+                <td>
+                  {edits[r.id] ? (
+                    <input
+                      type="month"
+                      aria-label={`Start month for ${r.name}`}
+                      value={edits[r.id].start_month}
+                      onChange={(e) =>
+                        setEdits((p) => ({
+                          ...p,
+                          [r.id]: { ...p[r.id], start_month: e.target.value },
+                        }))
+                      }
+                    />
+                  ) : (
+                    r.start_month
+                  )}
+                </td>
                 <td>
                   <input
                     type="month"
                     title="Month this commitment ends — leave empty for an open-ended commitment"
-                    defaultValue={r.end_month ?? ''}
+                    value={edits[r.id]?.end_month ?? r.end_month ?? ''}
                     key={r.id + String(r.end_month)}
                     style={{ width: 150 }}
                     onChange={(e) =>
                       setEdits((p) => ({
                         ...p,
-                        [r.id]: { ...(p[r.id] ?? {}), end_month: e.target.value },
+                        [r.id]: { ...(p[r.id] ?? startEdit(r)), end_month: e.target.value },
                       }))
                     }
                   />
                 </td>
                 <td>
+                  {edits[r.id] ? (
+                    <button
+                      className="btn ghost small"
+                      title="Cancel editing"
+                      onClick={() => setEdits((p) => ({ ...p, [r.id]: undefined }))}
+                    >
+                      Cancel
+                    </button>
+                  ) : (
+                    <button
+                      className="btn ghost small"
+                      title={`Edit the "${r.name}" commitment`}
+                      onClick={() => setEdits((p) => ({ ...p, [r.id]: startEdit(r) }))}
+                    >
+                      Edit
+                    </button>
+                  )}
                   <button
-                    className={`btn small ${edits[r.id]?.end_month !== undefined ? 'primary' : 'ghost'}`}
-                    title="Save the new end month"
+                    className={`btn small ${edits[r.id] ? 'primary' : 'ghost'}`}
+                    title="Save commitment changes"
                     onClick={() => save(r)}
                     disabled={!edits[r.id]}
                   >
@@ -148,47 +276,67 @@ export default function Commitments() {
             ))}
           </tbody>
         </table>
-        <form onSubmit={add} className="inline-form commit-form">
-          <input
-            title="Commitment name (e.g. Car loan)"
-            placeholder="Name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-          <input
-            title="Monthly amount — positive number"
-            placeholder="€/month"
-            type="number"
-            step="0.01"
-            min="0"
-            style={{ width: 110 }}
-            value={form.monthly_amount}
-            onChange={(e) => setForm({ ...form, monthly_amount: e.target.value })}
-          />
-          <input
-            title="Start month (YYYY-MM)"
-            type="month"
-            value={form.start_month}
-            onChange={(e) => setForm({ ...form, start_month: e.target.value })}
-          />
-          <input
-            title="Optional end month (YYYY-MM) — leave empty for an open-ended commitment"
-            type="month"
-            value={form.end_month}
-            onChange={(e) => setForm({ ...form, end_month: e.target.value })}
-          />
-          <select
-            title="Account this commitment is paid from"
-            value={form.account_id ?? ''}
-            onChange={(e) => setForm({ ...form, account_id: e.target.value || null })}
-          >
-            <option value="">Account…</option>
-            {meta.accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+        <form onSubmit={add} className="commit-form">
+          <p className="eyebrow">Add commitment</p>
+          <div className="commit-form-grid">
+            <label>
+              Name
+              <input
+                required
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </label>
+            <label>
+              Monthly amount
+              <input
+                required
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.monthly_amount}
+                onChange={(e) => setForm({ ...form, monthly_amount: e.target.value })}
+              />
+            </label>
+            <label>
+              Start month
+              <input
+                required
+                type="month"
+                value={form.start_month}
+                onChange={(e) => setForm({ ...form, start_month: e.target.value })}
+              />
+            </label>
+            <label>
+              End month
+              <input
+                type="month"
+                value={form.end_month}
+                onChange={(e) => setForm({ ...form, end_month: e.target.value })}
+              />
+            </label>
+            <label>
+              Account
+              <select
+                value={form.account_id}
+                onChange={(e) => setForm({ ...form, account_id: e.target.value })}
+              >
+                <option value="">No account</option>
+                {meta.accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Note
+              <input
+                value={form.note}
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+              />
+            </label>
+          </div>
           <button className="btn primary" title="Add this commitment">
             Add commitment
           </button>

@@ -176,6 +176,19 @@ export default function Reports() {
               <div className="stat-label">Transactions</div>
               <div className="stat-value">{monthly.totals.n}</div>
             </div>
+            <div className="card stat">
+              <div className="stat-label">Category plan</div>
+              <div className="stat-value">{eur(monthly.totals.planned)}</div>
+            </div>
+            <div className="card stat">
+              <div className="stat-label">Planned cash outflows</div>
+              <div className="stat-value expense">
+                {eur(monthly.totals.planned_cash_outflows ?? monthly.totals.planned)}
+              </div>
+              <div className="muted tiny">
+                includes {eur(monthly.totals.fund_contributions ?? 0)} set aside to funds
+              </div>
+            </div>
           </div>
           <div className="card table-card">
             <table>

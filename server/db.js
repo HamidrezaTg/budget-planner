@@ -179,7 +179,8 @@ CREATE TABLE IF NOT EXISTS categories (
   active_from TEXT,
   active_to TEXT,                            -- YYYY-MM, NULL = active
   is_active INTEGER NOT NULL DEFAULT 1,
-  roll_overs INTEGER NOT NULL DEFAULT 0      -- underspend carries to next month
+  roll_overs INTEGER NOT NULL DEFAULT 0,     -- underspend carries to next month
+  managed_commitment_id INTEGER REFERENCES commitments(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS category_groups (
@@ -435,6 +436,11 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
       db.exec(`ALTER TABLE income_sources ADD COLUMN ${col}`);
     } catch {}
   }
+  try {
+    db.exec(
+      'ALTER TABLE categories ADD COLUMN managed_commitment_id INTEGER REFERENCES commitments(id) ON DELETE SET NULL',
+    );
+  } catch {}
 
   // These columns were added to older databases by the migrations above. Do
   // not create their indexes in the initial schema batch, or a legacy database
@@ -444,6 +450,8 @@ CREATE INDEX IF NOT EXISTS idx_tx_split_of ON transactions(split_of);
 CREATE INDEX IF NOT EXISTS idx_tx_transfer_group ON transactions(transfer_group);
 CREATE INDEX IF NOT EXISTS idx_tx_fund ON transactions(fund_id);
 CREATE INDEX IF NOT EXISTS idx_tx_commitment ON transactions(commitment_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_category_managed_commitment
+  ON categories(managed_commitment_id) WHERE managed_commitment_id IS NOT NULL;
   `);
 
   // Deduplication fingerprint now includes the transaction currency. Recompute
@@ -470,6 +478,120 @@ CREATE INDEX IF NOT EXISTS idx_tx_commitment ON transactions(commitment_id);
 
   const seed = db.prepare('SELECT COUNT(*) AS c FROM categories').get().c;
   if (seed === 0) seedGeneric(db);
+  migrateCommitmentCategories(db);
+}
+
+// A commitment is a dated obligation, so it gets a dated Loan category and
+// budget. Existing explicit category links are left alone: they may contain
+// unrelated historical spending and need an explicit user decision.
+function uniqueCommitmentCategoryName(inst, baseName, currentId = null) {
+  let name = baseName;
+  let suffix = 2;
+  while (
+    inst.prepare('SELECT 1 FROM categories WHERE name = ? AND id != ?').get(name, currentId ?? -1)
+  ) {
+    name = `${baseName} (${suffix++})`;
+  }
+  return name;
+}
+
+export function ensureCommitmentCategory(inst, commitment) {
+  if (commitment.category_id != null) {
+    const linked = inst
+      .prepare('SELECT id, managed_commitment_id FROM categories WHERE id = ?')
+      .get(commitment.category_id);
+    if (!linked || linked.managed_commitment_id !== commitment.id) return linked?.id ?? null;
+    inst
+      .prepare(
+        `UPDATE categories
+         SET name=?, monthly_budget=?, active_from=?, active_to=?, account_id=?, is_active=1
+         WHERE id=?`,
+      )
+      .run(
+        uniqueCommitmentCategoryName(inst, `Loan - ${commitment.name}`, linked.id),
+        commitment.monthly_amount,
+        commitment.start_month,
+        commitment.end_month,
+        commitment.account_id,
+        linked.id,
+      );
+    return linked.id;
+  }
+
+  let group = inst.prepare("SELECT id FROM category_groups WHERE name = 'Loans'").get();
+  if (!group) {
+    const sort = inst
+      .prepare('SELECT COALESCE(MAX(sort), 0) AS value FROM category_groups')
+      .get().value;
+    const result = inst
+      .prepare('INSERT INTO category_groups (name, sort) VALUES (?, ?)')
+      .run('Loans', sort + 10);
+    group = { id: result.lastInsertRowid };
+  }
+
+  const managed = inst
+    .prepare('SELECT id FROM categories WHERE managed_commitment_id = ?')
+    .get(commitment.id);
+  if (managed) {
+    inst
+      .prepare(
+        `UPDATE categories
+         SET name=?, group_id=?, monthly_budget=?, active_from=?, active_to=?, account_id=?, is_active=1
+         WHERE id=?`,
+      )
+      .run(
+        uniqueCommitmentCategoryName(inst, `Loan - ${commitment.name}`, managed.id),
+        group.id,
+        commitment.monthly_amount,
+        commitment.start_month,
+        commitment.end_month,
+        commitment.account_id,
+        managed.id,
+      );
+    inst
+      .prepare('UPDATE commitments SET category_id = ? WHERE id = ?')
+      .run(managed.id, commitment.id);
+    return managed.id;
+  }
+
+  const name = uniqueCommitmentCategoryName(inst, `Loan - ${commitment.name}`);
+  const result = inst
+    .prepare(
+      `INSERT INTO categories
+       (name, group_id, account_id, monthly_budget, active_from, active_to, is_active, managed_commitment_id)
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
+    )
+    .run(
+      name,
+      group.id,
+      commitment.account_id,
+      commitment.monthly_amount,
+      commitment.start_month,
+      commitment.end_month,
+      commitment.id,
+    );
+  inst
+    .prepare('UPDATE commitments SET category_id = ? WHERE id = ?')
+    .run(result.lastInsertRowid, commitment.id);
+  return result.lastInsertRowid;
+}
+
+export function retireCommitmentCategory(inst, commitment) {
+  if (commitment.category_id == null) return;
+  const category = inst
+    .prepare('SELECT id FROM categories WHERE id = ? AND managed_commitment_id = ?')
+    .get(commitment.category_id, commitment.id);
+  if (!category) return;
+  inst
+    .prepare('UPDATE categories SET monthly_budget = 0, is_active = 0 WHERE id = ?')
+    .run(category.id);
+}
+
+function migrateCommitmentCategories(inst) {
+  const commitments = inst
+    .prepare('SELECT * FROM commitments WHERE category_id IS NULL ORDER BY id')
+    .all();
+  for (const commitment of commitments) ensureCommitmentCategory(inst, commitment);
 }
 
 function migrateDedupKeys(inst) {

@@ -135,8 +135,9 @@ export default function ImportPage() {
     <div>
       <h1>Import statement</h1>
       <p className="muted">
-        Upload your bank export (.csv or .xlsx — Revolut files are detected automatically). Only
-        COMPLETED transactions are imported; pendings from previous months count as completed;
+        Upload your bank export (.csv, .xlsx, or PDF — Revolut files are detected automatically).
+        PDF text extraction and OCR run locally; configured AI is used only to map extracted rows.
+        Only COMPLETED transactions are imported; pendings from previous months count as completed;
         duplicates are skipped.
       </p>
 
@@ -145,10 +146,16 @@ export default function ImportPage() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       >
-        <p className="drop-hint">Drop a CSV or XLSX file here</p>
+        <p className="drop-hint">Drop a CSV, XLSX, or PDF file here</p>
         <label className="btn primary file-btn">
-          {busy ? 'Processing…' : 'Choose CSV / XLSX file'}
-          <input type="file" accept=".csv,.xlsx,.xls" onChange={onFile} disabled={busy} hidden />
+          {busy ? 'Processing…' : 'Choose CSV / XLSX / PDF file'}
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls,.pdf,application/pdf"
+            onChange={onFile}
+            disabled={busy}
+            hidden
+          />
         </label>
         <label
           className="btn file-btn"
@@ -157,7 +164,7 @@ export default function ImportPage() {
           Analyze format with AI
           <input
             type="file"
-            accept=".csv,.xlsx,.xls"
+            accept=".csv,.xlsx,.xls,.pdf,application/pdf"
             onChange={smartAnalyze}
             disabled={busy}
             hidden

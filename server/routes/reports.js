@@ -34,6 +34,8 @@ function monthlySummary(month, accountId) {
       expenses: -view.actual_total,
       planned: view.planned_total,
       result: view.month_result,
+      fund_contributions: view.fund_contribution_total,
+      planned_cash_outflows: view.planned_cash_outflows,
       transfer_to_revolut: view.transfer_to_revolut,
       rows: view.rows
         .filter((row) => row.actual > 0 || row.planned > 0)
@@ -86,6 +88,8 @@ function monthlySummary(month, accountId) {
     expenses: -totals.expenses,
     planned,
     result: planned - actual,
+    fund_contributions: 0,
+    planned_cash_outflows: planned,
     transfer_to_revolut: null,
     rows: resultRows.map((row) => ({ ...row, spent: row.spent })),
   };
@@ -212,6 +216,8 @@ router.get('/monthly/:month', (req, res) => {
       income: view.income,
       expenses: view.expenses,
       planned: view.planned,
+      fund_contributions: view.fund_contributions,
+      planned_cash_outflows: view.planned_cash_outflows,
       result: view.result,
       n: db.prepare(countSql).get(month, ...(accountId == null ? [] : [accountId])).c,
     },

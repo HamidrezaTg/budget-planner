@@ -44,9 +44,13 @@ export default function Funds() {
 
   const saveConfig = async (f) => {
     const c = amounts['c' + f.id];
-    if (c === undefined) return;
+    const o = amounts['o' + f.id];
+    if (c === undefined && o === undefined) return;
     try {
-      await api.patch(`/funds/${f.id}`, { monthly_contribution: Number(c) || 0 });
+      await api.patch(`/funds/${f.id}`, {
+        ...(c !== undefined ? { monthly_contribution: Number(c) || 0 } : {}),
+        ...(o !== undefined ? { opening_balance: Number(o) || 0 } : {}),
+      });
       setMsg('');
       load();
     } catch (e) {
@@ -129,6 +133,19 @@ export default function Funds() {
       </p>
       {msg && <div className="error">{msg}</div>}
 
+      <div className="stats-row fund-month-summary">
+        <div className="card stat">
+          <div className="stat-label">Funds set aside in {data.month}</div>
+          <div className="stat-value income">{eur(data.summary?.scheduled_contributions ?? 0)}</div>
+          <div className="muted tiny">scheduled monthly contributions</div>
+        </div>
+        <div className="card stat">
+          <div className="stat-label">Reserved fund balance</div>
+          <div className="stat-value">{eur(data.summary?.balance ?? 0)}</div>
+          <div className="muted tiny">at the selected working month</div>
+        </div>
+      </div>
+
       <div className="card table-card">
         <div className="panel-head">
           <span className="muted tiny">
@@ -203,6 +220,7 @@ export default function Funds() {
                 <th className="num">Balance</th>
                 <th>Goal</th>
                 <th className="num">Monthly contribution</th>
+                <th className="num">Opening balance</th>
                 <th style={{ minWidth: 250 }}>Add or withdraw</th>
                 <th></th>
               </tr>
@@ -311,11 +329,24 @@ export default function Funds() {
                       title="Per-month amount set aside into this fund"
                       onChange={(e) => setAmounts((p) => ({ ...p, ['c' + f.id]: e.target.value }))}
                     />
+                  </td>
+                  <td className="num">
+                    <input
+                      className="budget-input"
+                      type="number"
+                      step="0.01"
+                      defaultValue={f.opening_balance}
+                      key={'o' + f.id + String(f.opening_balance)}
+                      title="Money already in this fund when planning starts"
+                      onChange={(e) => setAmounts((p) => ({ ...p, ['o' + f.id]: e.target.value }))}
+                    />
                     <button
-                      className={`btn small ${(amounts['c' + f.id] ?? '') !== '' ? 'primary' : 'ghost'}`}
-                      title="Save the new monthly contribution"
+                      className={`btn small ${amounts['c' + f.id] !== undefined || amounts['o' + f.id] !== undefined ? 'primary' : 'ghost'}`}
+                      title="Save fund configuration"
                       onClick={() => saveConfig(f)}
-                      disabled={amounts['c' + f.id] === undefined}
+                      disabled={
+                        amounts['c' + f.id] === undefined && amounts['o' + f.id] === undefined
+                      }
                     >
                       ✓
                     </button>

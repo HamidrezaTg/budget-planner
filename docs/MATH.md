@@ -23,6 +23,7 @@ warning rather than silently wrong totals).
 planned(c, M) = budget_lines[c, M]              if an override exists
               = categories.monthly_budget[c]    otherwise
               = 0                               if c is inactive or outside its active window
+              + fund-linked spending in M       for one-month fund purchase additions
 
 actual(c, M)  = −Σ transactions.amount  where category = c and month(t) = M
 
@@ -30,6 +31,8 @@ difference(c, M) = planned(c, M) − actual(c, M)      positive → under budget
 
 group totals   = Σ over categories in the group
 planned_total  = Σ over ALL categories (all 7 groups, Savings included)
+fund_contribution_total(M) = Σ monthly_contribution(f) where start_month(f) ≤ M
+planned_cash_outflows(M) = planned_total(M) + fund_contribution_total(M)
 actual_total   = Σ over ALL categories
 month_result   = planned_total − actual_total
 ```
@@ -79,14 +82,13 @@ income(M)  = Σ over income sources s:
              = sources.current_amount[s]   if the source is recurring
              = 0                           otherwise (one-off sources without entry)
 
-commitments(M) = Σ commitments.monthly_amount  over commitments where
+commitments(M) = Σ managed Loan-category plans over commitments where
                  start_month ≤ M AND (end_month is NULL OR M ≤ end_month)
 
-variable(M)    = Σ planned(c, M)  over categories NOT linked to any commitment
-                 (avoids double counting — e.g. the car-loan commitment already
-                  represents the Vehicle budget)
+variable(M)    = Σ planned(c, M) over ordinary categories
+funds(M)       = Σ monthly_contribution(f) for funds active in M
 
-outgoings(M)   = commitments(M) + variable(M)
+outgoings(M)   = commitments(M) + variable(M) + funds(M)
 net(M)         = income(M) − outgoings(M)
 ```
 
@@ -99,6 +101,10 @@ total(M)     = free(M) + committed(M)
 ```
 
 `free` is spendable surplus; `committed` is money already earmarked for future bills.
+Fund contributions reduce `free` and increase `committed` by the same amount, so they
+are allocations rather than new wealth. A fund-linked purchase remains actual spending
+in its selected category and reduces the fund balance; it is not removed from budget
+actuals. The category receives a one-month plan addition for that purchase.
 
 ### Re-anchoring (why you can trust the long horizon)
 
@@ -152,4 +158,7 @@ contains the keyword.
 - Dev mode: the model can only emit one of 12 whitelisted proposal types. Each is
   validated server-side (names resolved to ids, amounts and months checked), shown
   to you, applied only on confirmation, and written to `ai_audit_log`.
+
+```
+
 ```

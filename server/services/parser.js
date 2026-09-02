@@ -1,4 +1,7 @@
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import papaparse from 'papaparse';
 import xlsxModule from 'xlsx';
 
@@ -15,6 +18,9 @@ const MAX_XLSX_ZIP_ENTRY_BYTES = 64 * 1024 * 1024;
 const MAX_XLSX_ZIP_UNCOMPRESSED_BYTES = 256 * 1024 * 1024;
 const MAX_XLSX_ZIP_COMPRESSION_RATIO = 1_000;
 const MAX_XLSX_ZIP_CENTRAL_DIRECTORY_BYTES = 4 * 1024 * 1024;
+const MAX_PDF_PAGES = 40;
+const MAX_PDF_TEXT_BYTES = 16 * 1024 * 1024;
+const PDF_COMMAND_TIMEOUT_MS = 120_000;
 
 const REVOLUT_COLUMNS = {
   date: ['Started Date', 'started date'],
@@ -36,9 +42,111 @@ function detectFormat(filePath) {
     fs.closeSync(fd);
   }
   const signature = buf.readUInt32LE(0);
+  if (buf.subarray(0, 4).toString('ascii') === '%PDF') return 'pdf';
   return signature === 0x04034b50 || signature === 0x06054b50 || signature === 0x02014b50
     ? 'xlsx'
     : 'csv';
+}
+
+function runPdfCommand(command, args, options = {}) {
+  try {
+    return execFileSync(command, args, {
+      encoding: 'utf8',
+      timeout: PDF_COMMAND_TIMEOUT_MS,
+      maxBuffer: MAX_PDF_TEXT_BYTES,
+      ...options,
+    });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(
+        `PDF support requires ${command}. Install Poppler (poppler-utils) and Tesseract (tesseract-ocr) on the server`,
+      );
+    }
+    if (error.killed || error.signal === 'SIGTERM') throw new Error(`PDF ${command} timed out`);
+    throw new Error(`PDF ${command} failed`);
+  }
+}
+
+function pdfPageCount(filePath) {
+  const info = runPdfCommand('pdfinfo', [filePath], { maxBuffer: 64 * 1024 });
+  const pages = Number(info.match(/^Pages:\s+(\d+)/m)?.[1]);
+  if (!Number.isInteger(pages) || pages < 1)
+    throw new Error('Could not determine the PDF page count');
+  if (pages > MAX_PDF_PAGES) throw new Error(`PDF has too many pages (maximum ${MAX_PDF_PAGES})`);
+  return pages;
+}
+
+function ocrPdf(filePath, pages) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'budget-planner-pdf-'));
+  const prefix = path.join(dir, 'page');
+  try {
+    runPdfCommand(
+      'pdftoppm',
+      ['-f', '1', '-l', String(pages), '-r', '150', '-png', filePath, prefix],
+      {
+        encoding: 'buffer',
+        maxBuffer: 1024 * 1024,
+      },
+    );
+    const images = fs
+      .readdirSync(dir)
+      .filter((name) => name.startsWith('page-') && name.endsWith('.png'))
+      .sort((a, b) => Number(a.match(/page-(\d+)/)?.[1]) - Number(b.match(/page-(\d+)/)?.[1]));
+    if (!images.length) throw new Error('PDF rasterization produced no pages');
+    return images
+      .map((image) =>
+        runPdfCommand(
+          'tesseract',
+          [path.join(dir, image), 'stdout', '-l', process.env.TESSERACT_LANG || 'eng'],
+          { maxBuffer: MAX_PDF_TEXT_BYTES },
+        ),
+      )
+      .join('\n');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function extractPdfText(filePath) {
+  const pages = pdfPageCount(filePath);
+  let text = runPdfCommand('pdftotext', ['-layout', filePath, '-']);
+  if (Buffer.byteLength(text, 'utf8') > MAX_PDF_TEXT_BYTES)
+    throw new Error('Extracted PDF text exceeds the size limit');
+  // Scanned statements usually produce an empty or nearly empty text layer.
+  // OCR is local and only its resulting text can continue to the AI mapper.
+  if (text.split('\n').filter((line) => line.trim()).length < 2) text = ocrPdf(filePath, pages);
+  if (!text.trim()) throw new Error('PDF contains no readable text and OCR returned nothing');
+  return text.slice(0, MAX_PDF_TEXT_BYTES);
+}
+
+const PDF_DATE_RE = /\b(?:\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b/;
+const PDF_AMOUNT_RE = /(?:[-+]?\(?\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})\)?|[-+]?\d+[.,]\d{2})/g;
+
+function pdfRows(text) {
+  const rows = [];
+  for (const line of text.split(/\r?\n/)) {
+    const date = line.match(PDF_DATE_RE)?.[0];
+    if (!date) continue;
+    const amounts = [...line.matchAll(PDF_AMOUNT_RE)];
+    const amount = amounts.at(-1);
+    if (!amount) continue;
+    const description = line
+      .replace(date, ' ')
+      .replace(amount[0], ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/[|;]/g, ' ')
+      .trim();
+    if (!description) continue;
+    rows.push([date, description, amount[0], 'EUR']);
+    if (rows.length > MAX_IMPORT_ROWS)
+      throw new Error(`Import exceeds the ${MAX_IMPORT_ROWS}-row limit`);
+  }
+  return rows;
+}
+
+function pdfGrid(filePath, maxRows) {
+  const rows = pdfRows(extractPdfText(filePath)).slice(0, Math.min(maxRows - 1, MAX_IMPORT_ROWS));
+  return [['Date', 'Description', 'Amount', 'Currency'], ...rows];
 }
 
 function parseSheetRows(rows) {
@@ -187,14 +295,19 @@ function preflightXlsxZip(buffer) {
 
 export function parseStatement(filePath) {
   const format = detectFormat(filePath);
-  let rows;
+  let parsedRows;
 
-  if (format === 'xlsx') {
+  if (format === 'pdf') {
+    parsedRows = {
+      mapping: { date: 0, description: 1, amount: 2, currency: 3 },
+      raw: pdfRows(extractPdfText(filePath)),
+    };
+  } else if (format === 'xlsx') {
     // no cellDates: keep raw serial numbers and convert with UTC math,
     // otherwise SheetJS shifts dates through the local timezone
     const wb = readWorkbook(filePath);
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
+    parsedRows = parseSheetRows(XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true }));
   } else {
     const text = fs.readFileSync(filePath, 'utf8');
     const parsed = Papa.parse(text.trim(), {
@@ -204,9 +317,9 @@ export function parseStatement(filePath) {
     });
     if (parsed.data.length > MAX_IMPORT_ROWS)
       throw new Error(`Import exceeds the ${MAX_IMPORT_ROWS}-row limit`);
-    rows = parsed.data;
+    parsedRows = parseSheetRows(parsed.data);
   }
-  return finalize(parseSheetRows(rows), format === 'xlsx' ? 'date' : 'string');
+  return finalize(parsedRows, format === 'xlsx' ? 'date' : 'string');
 }
 
 function validISODate(y, m, d) {
@@ -306,7 +419,13 @@ function assignDedupKeys(transactions) {
 }
 
 function finalize({ mapping, raw }, mode) {
-  if (!mapping || !mapping.date || !mapping.amount) {
+  if (
+    !mapping ||
+    mapping.date === undefined ||
+    mapping.date === null ||
+    mapping.amount === undefined ||
+    mapping.amount === null
+  ) {
     throw new Error(
       'Could not detect required columns (date / amount). Headers found: ' +
         (raw[0] ? Object.keys(raw[0]).join(', ') : '(empty file)'),
@@ -377,6 +496,7 @@ function finalize({ mapping, raw }, mode) {
 // Raw grid of first rows (no header assumptions) for the AI to inspect.
 export function rawGrid(filePath, maxRows = 25) {
   const format = detectFormat(filePath);
+  if (format === 'pdf') return pdfGrid(filePath, maxRows);
   if (format === 'xlsx') {
     const wb = readWorkbook(filePath);
     const sheet = wb.Sheets[wb.SheetNames[0]];

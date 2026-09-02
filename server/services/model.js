@@ -39,7 +39,18 @@ export function plannedForCategory(cat, month, depth = 24) {
   const line = db
     .prepare('SELECT planned_amount FROM budget_lines WHERE category_id = ? AND month = ?')
     .get(cat.id, month);
-  const base = line ? line.planned_amount : cat.monthly_budget;
+  // A fund is not a recurring category. When its bill arrives, however, the
+  // linked category gets a one-month plan addition so the exceptional spend is
+  // visible in the category budget for the month it actually happened.
+  const fundAddition = db
+    .prepare(
+      `SELECT COALESCE(SUM(-${FX_MULT} * t.amount), 0) AS amount
+       FROM transactions t ${FX_JOIN}
+       WHERE t.category_id = ? AND t.fund_id IS NOT NULL AND t.amount < 0
+         AND substr(t.date,1,7) = ? AND ${NOT_COUNTED()}`,
+    )
+    .get(cat.id, month).amount;
+  const base = (line ? line.planned_amount : cat.monthly_budget) + Math.max(0, fundAddition);
 
   if (!cat.roll_overs) return base;
 
@@ -197,11 +208,10 @@ export function actualCoverageByCategory(month) {
     if (row.commitment_id != null) item.commitment_covered += spent;
   }
   for (const item of Object.values(map)) {
-    const covered = Math.min(
-      Math.max(0, item.total_actual),
-      item.fund_covered + item.commitment_covered,
-    );
-    item.budget_actual = Math.max(0, item.total_actual - covered);
+    // A fund/commitment link explains how a transaction is paid; it does not
+    // remove the purchase from the category's budget actual. Fund purchases
+    // receive a one-month plan addition in plannedForCategory instead.
+    item.budget_actual = Math.max(0, item.total_actual);
     item.uncovered_amount = item.budget_actual;
     item.uncovered = item.budget_actual;
   }
@@ -325,6 +335,13 @@ export function fundCashFlowsAt(fund, month) {
   };
 }
 
+export function fundContributionForMonth(month) {
+  return db
+    .prepare('SELECT monthly_contribution, start_month FROM funds')
+    .all()
+    .reduce((sum, fund) => sum + (month >= fund.start_month ? fund.monthly_contribution : 0), 0);
+}
+
 // Keep the balance and the displayed contribution/withdrawal totals on one
 // calculation so they cannot drift as new cash-flow sources are added.
 export function fundBalanceAt(fund, month) {
@@ -348,32 +365,49 @@ function latestAnchor(from) {
 
 // Net change in free savings for a single month: income minus commitment and
 // variable outgoings. Shared by the forecast loop and the pre-range roll-forward.
-function monthNet(m, cats, coveredCats, commitments, scenario = null) {
+function monthNet(m, cats, commitments, scenario = null) {
   const inc = incomeForMonth(m);
   const incomeDelta = scenario?.monthly_income_delta ?? 0;
   const outgoingsDelta = scenario?.monthly_outgoings_delta ?? 0;
   const oneOffs = (scenario?.one_offs ?? [])
     .filter((oneOff) => oneOff.month === m)
     .reduce((sum, oneOff) => sum + oneOff.amount, 0);
-  let outgoings = 0;
+  let commitmentOutgoings = 0;
   const lines = [];
+  const categoryIds = new Set(cats.map((cat) => cat.id));
+  const representedCommitments = new Set(
+    commitments
+      .filter(
+        (commitment) => commitment.category_id != null && categoryIds.has(commitment.category_id),
+      )
+      .map((commitment) => commitment.id),
+  );
   for (const cm of commitments) {
     if (m >= cm.start_month && (!cm.end_month || m <= cm.end_month)) {
-      outgoings += cm.monthly_amount;
+      if (!representedCommitments.has(cm.id)) commitmentOutgoings += cm.monthly_amount;
       lines.push({ name: cm.name, amount: cm.monthly_amount });
     }
   }
   let variableTotal = 0;
+  let commitmentCategoryTotal = 0;
   for (const c of cats) {
-    if (coveredCats.has(c.id)) continue;
     const p = plannedForCategory(c, m);
-    if (p) variableTotal += p;
+    if (c.managed_commitment_id != null) commitmentCategoryTotal += p;
+    else if (p) variableTotal += p;
   }
-  outgoings += variableTotal + outgoingsDelta + oneOffs;
+  const fundContributions = fundContributionForMonth(m);
+  const outgoings =
+    variableTotal +
+    commitmentCategoryTotal +
+    commitmentOutgoings +
+    fundContributions +
+    outgoingsDelta +
+    oneOffs;
   return {
     income: inc.total + incomeDelta,
     outgoings,
     variable: variableTotal,
+    fund_contributions: fundContributions,
     net: inc.total + incomeDelta - outgoings,
     lines,
   };
@@ -382,18 +416,10 @@ function monthNet(m, cats, coveredCats, commitments, scenario = null) {
 // Projection: income minus outgoings rolled forward, commitments dropping out
 // at their end dates. Re-anchors to the latest observed bank balance (spec §7).
 export function project(numMonths = 96, from = currentMonth(), scenario = null) {
-  // Every active category's plan counts as variable spend, including untagged
-  // ones — the user is reminded to tag them on the dashboard, but missing the
-  // account column does not silently drop a budget from the forecast.
+  // Every active category's plan counts once. Managed Loan categories are
+  // reported separately from ordinary variable categories.
   const cats = getAllCategories();
   // categories whose spend is already represented by a linked commitment
-  const coveredCats = new Set(
-    db
-      .prepare('SELECT DISTINCT category_id FROM commitments WHERE category_id IS NOT NULL')
-      .all()
-      .map((r) => r.category_id),
-  );
-
   const commitments = db.prepare('SELECT * FROM commitments ORDER BY name').all();
 
   // Total opening balances across all accounts — the "starting cash" the
@@ -432,7 +458,7 @@ export function project(numMonths = 96, from = currentMonth(), scenario = null) 
     free -= drift;
     let m = addMonths(anchorMonth, 1);
     while (m < from) {
-      free += monthNet(m, cats, coveredCats, commitments).net;
+      free += monthNet(m, cats, commitments).net;
       m = addMonths(m, 1);
     }
   }
@@ -445,7 +471,8 @@ export function project(numMonths = 96, from = currentMonth(), scenario = null) 
       variable: variableTotal,
       net,
       lines,
-    } = monthNet(m, cats, coveredCats, commitments, scenario);
+      fund_contributions,
+    } = monthNet(m, cats, commitments, scenario);
 
     // re-anchor: once we pass an observed month, shift so totals match reality
     if (anchorMonth && m === anchorMonth) {
@@ -465,6 +492,7 @@ export function project(numMonths = 96, from = currentMonth(), scenario = null) 
       income: round2(incTotal),
       commitments: round2(lines.reduce((s, l) => s + l.amount, 0)),
       variable: round2(variableTotal),
+      fund_contributions: round2(fund_contributions),
       outgoings: round2(outgoings),
       net: round2(net),
       free_savings: round2(free),
@@ -726,6 +754,21 @@ export function monthView(month) {
   const totalsCommitmentCovered = rows.reduce((s, r) => s + r.commitment_covered, 0);
   const totalsBudgetActual = rows.reduce((s, r) => s + r.budget_actual, 0);
   const inc = incomeForMonth(month);
+  const managedCategoryIds = new Set(
+    cats.filter((c) => c.managed_commitment_id != null).map((c) => c.id),
+  );
+  const managedCommitmentPlan = rows
+    .filter((row) => managedCategoryIds.has(row.id))
+    .reduce((sum, row) => sum + row.planned, 0);
+  const unrepresentedCommitmentPlan = db
+    .prepare(
+      `SELECT COALESCE(SUM(monthly_amount), 0) AS amount FROM commitments
+       WHERE category_id IS NULL AND start_month <= ? AND (end_month IS NULL OR end_month >= ?)`,
+    )
+    .get(month, month).amount;
+  const normalPlannedTotal = totalsPlanned - managedCommitmentPlan;
+  const commitmentPlannedTotal = managedCommitmentPlan + unrepresentedCommitmentPlan;
+  const fundContributionTotal = fundContributionForMonth(month);
 
   const untagged = cats.filter((c) => !c.account_id && c.is_active).map((c) => c.name);
   // Month-scoped count for the month being viewed, plus the global queue size.
@@ -752,7 +795,11 @@ export function monthView(month) {
   const funds = db
     .prepare('SELECT * FROM funds ORDER BY name')
     .all()
-    .map((f) => ({ ...f, balance: round2(fundBalanceAt(f, month)) }));
+    .map((f) => ({
+      ...f,
+      balance: round2(fundBalanceAt(f, month)),
+      scheduled_this_month: round2(month >= f.start_month ? f.monthly_contribution : 0),
+    }));
 
   const result = {
     month,
@@ -767,6 +814,10 @@ export function monthView(month) {
       amount: p.amount,
     })),
     planned_total: round2(totalsPlanned),
+    normal_planned_total: round2(normalPlannedTotal),
+    commitment_planned_total: round2(commitmentPlannedTotal),
+    fund_contribution_total: round2(fundContributionTotal),
+    planned_cash_outflows: round2(totalsPlanned + fundContributionTotal),
     actual_total: round2(totalsActual),
     fund_covered_total: round2(totalsFundCovered),
     commitment_covered_total: round2(totalsCommitmentCovered),

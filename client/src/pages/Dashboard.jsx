@@ -77,8 +77,10 @@ export default function Dashboard() {
           <p className="eyebrow">Monthly check-in</p>
           <h1>{monthLabel(month)}</h1>
           <p className="muted">
-            Planned {eur(data.planned_total)} · Spent {eur(data.actual_total)} · Income{' '}
-            {eur(data.income)}
+            Categories {eur(data.planned_total)} · funds set aside{' '}
+            {eur(data.fund_contribution_total ?? 0)}
+            {' · '}planned cash outflows {eur(data.planned_cash_outflows ?? data.planned_total)} ·
+            Spent {eur(data.actual_total)} · Income {eur(data.income)}
           </p>
         </div>
         <div className="month-nav">
@@ -135,7 +137,7 @@ export default function Dashboard() {
           </div>
           <div className="stat-value">{eur(data.actual_total)}</div>
           <p>
-            {eur(budgetActualTotal)} charged to categories · {eur(coveredTotal)} covered
+            {eur(budgetActualTotal)} charged to categories · {eur(coveredTotal)} linked funding
           </p>
         </div>
         <div className="card stat">

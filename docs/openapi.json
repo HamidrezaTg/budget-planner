@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Budget Planner API",
-    "version": "3.19.2",
+    "version": "3.20.0",
     "description": "Static contract for the Budget Planner HTTP API. JSON amounts are numbers and transaction expenses are negative. Unless an operation is marked public, send the bp_session cookie returned by login or setup."
   },
   "servers": [
@@ -1798,7 +1798,10 @@
         "type": "object",
         "required": ["file"],
         "properties": {
-          "file": { "$ref": "#/components/schemas/Binary", "description": "Bank statement file." }
+          "file": {
+            "$ref": "#/components/schemas/Binary",
+            "description": "CSV, XLS/XLSX, or PDF bank statement. PDFs use local text extraction/OCR."
+          }
         }
       },
       "AttachmentMultipart": {
@@ -2098,7 +2101,11 @@
           "name": { "type": "string" },
           "monthly_amount": { "type": "number", "minimum": 0 },
           "start_month": { "$ref": "#/components/schemas/Month" },
-          "end_month": { "type": ["string", "null"], "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+          "end_month": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "description": "Inclusive end month; must not precede start_month."
+          },
           "account_id": { "type": ["integer", "null"] },
           "fund_id": { "type": ["integer", "null"] },
           "category_id": { "type": ["integer", "null"] },

@@ -19,7 +19,9 @@ const {
   transferToRevolut,
   completedTransferToRevolut,
   incomeForMonth,
+  fundContributionForMonth,
 } = await import('../server/services/model.js');
+const { ensureCommitmentCategory, retireCommitmentCategory } = dbm;
 after(() => {
   cleanup(dir);
 });
@@ -328,6 +330,92 @@ test('fund cash-flow totals include every source and reconcile with the balance'
     assert.equal(flows.contributed - flows.withdrawn, fundBalanceAt(fundRow, month));
   });
   dbm.closeUserDb('fund-reconcile-user');
+});
+
+test('scheduled fund contributions reduce free cash while increasing reserved savings', () => {
+  const db = dbm.getUserDb('fund-projection-user');
+  dbm.als.run(db, () => {
+    const month = currentMonth();
+    db.prepare(
+      `INSERT INTO funds (name, start_month, monthly_contribution, opening_balance)
+       VALUES ('Projection fund', ?, 50, 0)`,
+    ).run(month);
+    db.prepare("INSERT INTO categories (name, monthly_budget) VALUES ('Normal plan', 100)").run();
+    const out = project(1, month);
+    const row = out.months[0];
+    assert.equal(fundContributionForMonth(month), 50);
+    assert.equal(row.variable, 100);
+    assert.equal(row.fund_contributions, 50);
+    assert.equal(row.outgoings, 150);
+    assert.equal(row.net, -150);
+    assert.equal(row.committed_savings, 50);
+    assert.equal(row.total_predicted, -100);
+  });
+  dbm.closeUserDb('fund-projection-user');
+});
+
+test('fund-funded spending gets a one-month category plan and remains actual spending', () => {
+  const db = dbm.getUserDb('fund-category-user');
+  dbm.als.run(db, () => {
+    const month = currentMonth();
+    const account = db
+      .prepare("INSERT INTO accounts (name) VALUES ('Fund bank')")
+      .run().lastInsertRowid;
+    const category = db
+      .prepare("INSERT INTO categories (name, monthly_budget) VALUES ('Trip budget', 40)")
+      .run().lastInsertRowid;
+    const fund = db
+      .prepare(
+        "INSERT INTO funds (name, start_month, monthly_contribution) VALUES ('Trip fund', ?, 0)",
+      )
+      .run(month).lastInsertRowid;
+    db.prepare(
+      `INSERT INTO transactions (date, description, amount, account_id, category_id, fund_id, dedup_key)
+       VALUES (?, 'Trip bill', -100, ?, ?, ?, 'fund-category-bill')`,
+    ).run(`${month}-10`, account, category, fund);
+    const row = monthView(month).rows.find((item) => item.id === category);
+    assert.equal(row.planned, 140);
+    assert.equal(row.actual, 100);
+    assert.equal(row.budget_actual, 100);
+    assert.equal(row.budget_difference, 40);
+  });
+  dbm.closeUserDb('fund-category-user');
+});
+
+test('commitments get dated Loan categories and are counted once in projection', () => {
+  const db = dbm.getUserDb('commitment-category-user');
+  dbm.als.run(db, () => {
+    const month = currentMonth();
+    const id = db
+      .prepare(
+        `INSERT INTO commitments (name, monthly_amount, start_month, end_month)
+         VALUES ('Installment', 125, ?, ?)`,
+      )
+      .run(month, addMonths(month, 2)).lastInsertRowid;
+    const commitment = db.prepare('SELECT * FROM commitments WHERE id = ?').get(id);
+    const categoryId = ensureCommitmentCategory(db, commitment);
+    const category = db
+      .prepare(
+        `SELECT c.*, g.name AS group_name FROM categories c
+         JOIN category_groups g ON g.id = c.group_id WHERE c.id = ?`,
+      )
+      .get(categoryId);
+    assert.equal(category.group_name, 'Loans');
+    assert.equal(category.monthly_budget, 125);
+    assert.equal(category.active_from, month);
+    assert.equal(category.active_to, addMonths(month, 2));
+    const row = project(1, month).months[0];
+    assert.equal(row.commitments, 125);
+    assert.equal(row.variable, 0);
+    assert.equal(row.outgoings, 125);
+    retireCommitmentCategory(db, db.prepare('SELECT * FROM commitments WHERE id = ?').get(id));
+    assert.equal(
+      db.prepare('SELECT monthly_budget, is_active FROM categories WHERE id = ?').get(categoryId)
+        .monthly_budget,
+      0,
+    );
+  });
+  dbm.closeUserDb('commitment-category-user');
 });
 
 test('projection includes per-account opening_balance in the total predicted', () => {

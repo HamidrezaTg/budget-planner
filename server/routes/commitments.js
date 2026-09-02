@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '../db.js';
+import { db, ensureCommitmentCategory, retireCommitmentCategory } from '../db.js';
 import { currentMonth } from '../services/model.js';
 
 const router = Router();
@@ -67,14 +67,27 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'start_month must be YYYY-MM' });
     if (end_month && !MONTH_RE.test(end_month))
       return res.status(400).json({ error: 'end_month must be YYYY-MM' });
+    if (end_month && end_month < start_month)
+      return res.status(400).json({ error: 'end_month must not be before start_month' });
     const amount = planAmount(monthly_amount, 'monthly_amount');
-    const r = db
-      .prepare(
-        `INSERT INTO commitments (name, monthly_amount, start_month, end_month, account_id, fund_id, category_id, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(name.trim(), amount, start_month, end_month, account_id, fund_id, category_id, note);
-    res.json(db.prepare('SELECT * FROM commitments WHERE id = ?').get(r.lastInsertRowid));
+    db.exec('BEGIN');
+    try {
+      const r = db
+        .prepare(
+          `INSERT INTO commitments (name, monthly_amount, start_month, end_month, account_id, fund_id, category_id, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(name.trim(), amount, start_month, end_month, account_id, fund_id, category_id, note);
+      const commitment = db
+        .prepare('SELECT * FROM commitments WHERE id = ?')
+        .get(r.lastInsertRowid);
+      ensureCommitmentCategory(db, commitment);
+      db.exec('COMMIT');
+      res.json(db.prepare('SELECT * FROM commitments WHERE id = ?').get(r.lastInsertRowid));
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
@@ -84,6 +97,8 @@ router.patch('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM commitments WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   const b = req.body ?? {};
+  if (b.name !== undefined && (typeof b.name !== 'string' || !b.name.trim()))
+    return res.status(400).json({ error: 'name is required' });
   if (b.start_month !== undefined && !MONTH_RE.test(String(b.start_month)))
     return res.status(400).json({ error: 'start_month must be YYYY-MM' });
   if (
@@ -101,28 +116,50 @@ router.patch('/:id', (req, res) => {
       return res.status(e.status).json({ error: e.message });
     }
   }
+  const startMonth = b.start_month !== undefined ? b.start_month : row.start_month;
+  const endMonth = b.end_month !== undefined ? b.end_month || null : row.end_month;
+  if (endMonth && endMonth < startMonth)
+    return res.status(400).json({ error: 'end_month must not be before start_month' });
   // null (or '') clears the end month; `?? row.end_month` made clearing
   // impossible (null ?? old → old). The same trap applies to every nullable
   // column below, so clearing account/fund/category/note uses !== undefined.
-  const endMonth = b.end_month !== undefined ? b.end_month || null : row.end_month;
-  db.prepare(
-    `UPDATE commitments SET name=?, monthly_amount=?, start_month=?, end_month=?, account_id=?, fund_id=?, category_id=?, note=? WHERE id=?`,
-  ).run(
-    b.name ?? row.name,
-    amount,
-    b.start_month ?? row.start_month,
-    endMonth,
-    b.account_id !== undefined ? b.account_id : row.account_id,
-    b.fund_id !== undefined ? b.fund_id : row.fund_id,
-    b.category_id !== undefined ? b.category_id : row.category_id,
-    b.note !== undefined ? b.note : row.note,
-    req.params.id,
-  );
+  db.exec('BEGIN');
+  try {
+    db.prepare(
+      `UPDATE commitments SET name=?, monthly_amount=?, start_month=?, end_month=?, account_id=?, fund_id=?, category_id=?, note=? WHERE id=?`,
+    ).run(
+      b.name ?? row.name,
+      amount,
+      startMonth,
+      endMonth,
+      b.account_id !== undefined ? b.account_id : row.account_id,
+      b.fund_id !== undefined ? b.fund_id : row.fund_id,
+      b.category_id !== undefined ? b.category_id : row.category_id,
+      b.note !== undefined ? b.note : row.note,
+      req.params.id,
+    );
+    const updated = db.prepare('SELECT * FROM commitments WHERE id = ?').get(row.id);
+    ensureCommitmentCategory(db, updated);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
   res.json(db.prepare('SELECT * FROM commitments WHERE id = ?').get(row.id));
 });
 
 router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM commitments WHERE id = ?').run(req.params.id);
+  const row = db.prepare('SELECT * FROM commitments WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  db.exec('BEGIN');
+  try {
+    retireCommitmentCategory(db, row);
+    db.prepare('DELETE FROM commitments WHERE id = ?').run(req.params.id);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
   res.json({ ok: true });
 });
 

@@ -41,6 +41,14 @@ router.get('/', (req, res) => {
     .map((f) => {
       const cashFlows = fundCashFlowsAt(f, month);
       const balance = Math.round(cashFlows.balance * 100) / 100;
+      const scheduledThisMonth = month >= f.start_month ? f.monthly_contribution : 0;
+      const manualThisMonth = db
+        .prepare(
+          `SELECT COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS contributions,
+                     COALESCE(SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END), 0) AS withdrawals
+              FROM fund_movements WHERE fund_id = ? AND month = ?`,
+        )
+        .get(f.id, month);
 
       // goal math: how much per month is still needed to hit the target on time?
       let goal = null;
@@ -71,6 +79,9 @@ router.get('/', (req, res) => {
         balance,
         contributed_so_far: Math.round(cashFlows.contributed * 100) / 100,
         withdrawn_so_far: Math.round(cashFlows.withdrawn * 100) / 100,
+        scheduled_this_month: Math.round(scheduledThisMonth * 100) / 100,
+        manual_contributions_this_month: Math.round(manualThisMonth.contributions * 100) / 100,
+        manual_withdrawals_this_month: Math.round(manualThisMonth.withdrawals * 100) / 100,
         negative: balance < 0,
         goal,
       };
@@ -82,7 +93,16 @@ router.get('/', (req, res) => {
        JOIN funds f ON f.id = m.fund_id ORDER BY m.created_at DESC, m.id DESC LIMIT 100`,
     )
     .all();
-  res.json({ month, funds, movements });
+  res.json({
+    month,
+    funds,
+    movements,
+    summary: {
+      scheduled_contributions:
+        Math.round(funds.reduce((sum, fund) => sum + fund.scheduled_this_month, 0) * 100) / 100,
+      balance: Math.round(funds.reduce((sum, fund) => sum + fund.balance, 0) * 100) / 100,
+    },
+  });
 });
 
 // Record a movement: contribution (+) or withdrawal (-)
@@ -143,7 +163,7 @@ router.patch('/:id', (req, res) => {
     contribution,
     b.start_month !== undefined ? b.start_month : row.start_month,
     opening,
-    b.category_id ?? row.category_id,
+    b.category_id !== undefined ? b.category_id : row.category_id,
     targetAmount,
     b.target_date !== undefined ? b.target_date : row.target_date,
     req.params.id,

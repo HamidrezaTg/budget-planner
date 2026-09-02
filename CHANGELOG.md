@@ -3,6 +3,19 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.20.0] — 2026-09-02
+
+### Added
+- Editable category-group sort order, fund opening balances, and full commitment editing.
+- Selected-month fund contribution and commitment totals.
+- Managed, dated Loan categories created automatically for commitments.
+- PDF statement imports with local Poppler text extraction and local Tesseract OCR.
+
+### Changed
+- Fund allocations reduce projected free cash and are shown separately from category plans.
+- Fund-linked purchases remain category actuals and receive a one-month category budget addition.
+- Commitment and category budget calculations count each planned obligation once.
+
 ## [3.19.2] — 2026-09-02
 
 ### Added

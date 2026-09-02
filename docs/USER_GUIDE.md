@@ -186,7 +186,7 @@ inflate income just to make a spending category look correct.
 
 ## Importing Statements
 
-Open **Import**, choose CSV/XLS/XLSX, and select the destination account. Import is
+Open **Import**, choose CSV/XLS/XLSX/PDF, and select the destination account. Import is
 always preview-first:
 
 1. Select or drop the statement.
@@ -198,7 +198,9 @@ always preview-first:
 
 Nothing is saved before confirmation. Standard handling includes:
 
-- CSV, XLS, XLSX, and CSV files whose contents are actually Excel;
+- CSV, XLS, XLSX, and PDF statements;
+- selectable PDF text extracted with Poppler;
+- scanned PDF pages rasterized and OCR'd locally with Tesseract;
 - real calendar-date and amount validation;
 - completed rows;
 - settled older pending rows treated as completed;
@@ -212,8 +214,12 @@ for legitimate identical same-day transactions. Re-importing an overlapping expo
 is safe in normal cases, although a bank changing merchant wording can still require
 manual cleanup.
 
-AI format analysis sends the selected file to the AI provider configured by the
-user. Verify the preview even when the detected format looks correct.
+AI format analysis sends extracted statement text/rows, not PDF bytes, to the AI
+provider configured by the user. Verify the preview even when the detected format
+looks correct. Debian packages install `poppler-utils` and `tesseract-ocr`; on
+other systems install `pdftotext`, `pdfinfo`, `pdftoppm`, and `tesseract` and make
+them available on the service user's `PATH`. Set `TESSERACT_LANG` when a local
+language pack is needed.
 
 ## Transactions
 
@@ -275,14 +281,23 @@ bill arrived before enough money was accrued.
 Goals show progress, remaining amount per month, and whether the contribution is on
 track. Overdue or underfunded goals can raise Dashboard warnings.
 
+The Funds page shows contributions and balances for the selected working month.
+Fund contributions reduce spendable cash in Projection but increase reserved fund
+balances by the same amount. A fund is not a recurring category. When a linked bill
+is recorded, it remains actual spending in its selected category and receives a
+one-month category budget addition for that month.
+
 ## Commitments
 
 Commitments model fixed dated obligations such as loans, instalments, or childcare.
 Set a name, monthly amount, start month, end month, account, and optional category
 or fund links.
 
-The projection includes an active commitment and stops charging it after its end
-month. This makes the future relief from a finished obligation visible.
+Creating a commitment automatically creates a dated category in the Loans group.
+That category is the commitment's budget source, so it is counted once rather than
+being added again as a separate expense. The projection includes an active
+commitment and stops charging it after its end month. This makes the future relief
+from a finished obligation visible.
 
 ## Balances and Reconciliation
 
@@ -297,9 +312,9 @@ Remove an observation only when it was entered incorrectly or is no longer usefu
 
 ## Projection
 
-Projection shows a default 96-month forecast. Each month combines income, active
-commitments, category plans not already covered by commitments, fund effects, free
-savings, committed savings, and total balance.
+Projection shows a default 96-month forecast. Each month combines income, ordinary
+category plans, dated Loan-category plans, fund allocations, free savings, committed
+savings, and total balance.
 
 Use the **Projection horizon** control above the What-if builder to change the
 baseline forecast to any whole number from 1 to 240 months. Press **Update
@@ -307,6 +322,7 @@ projection**; this changes only the baseline and does not create a scenario.
 
 - **Free savings** is accumulated surplus not assigned to future fund obligations.
 - **Committed savings** is money already spoken for by sinking funds.
+- **Fund allocations** are the monthly amounts moved from free cash into funds.
 - Commitment end months stop future commitment charges.
 - Actual income replaces usual income only for months with an actual entry.
 - Balance observations anchor future totals to reality.

@@ -180,7 +180,9 @@ export default function Projection() {
     <div>
       <h1>Projection to {data.months[data.months.length - 1].month}</h1>
       <p className="muted">
-        Income minus outgoings rolled forward. Commitments drop out on their end dates.
+        Income minus category spending, commitments, and fund allocations rolled forward. Fund
+        allocations reduce free cash while increasing reserved fund balances; commitments drop out
+        on their end dates.
         {data.anchored_at
           ? ` Re-anchored to your observed balance at ${data.anchored_at}.`
           : ' Enter real balances on the Balances page to anchor it to reality.'}
@@ -443,6 +445,7 @@ export default function Projection() {
               <th className="num">Income</th>
               <th className="num">Commitments</th>
               <th className="num">Variable</th>
+              <th className="num">Fund allocations</th>
               <th className="num">Net</th>
               <th className="num">Free</th>
               <th className="num">Committed</th>
@@ -458,6 +461,7 @@ export default function Projection() {
                   <td className="num">{eur(m.income)}</td>
                   <td className="num">{eur(m.commitments)}</td>
                   <td className="num">{eur(m.variable)}</td>
+                  <td className="num">{eur(m.fund_contributions ?? 0)}</td>
                   <td className={`num ${m.net >= 0 ? 'income' : 'expense'}`}>{eur(m.net)}</td>
                   <td className={`num ${m.free_savings < 0 ? 'bad' : ''}`}>
                     {eur(m.free_savings)}

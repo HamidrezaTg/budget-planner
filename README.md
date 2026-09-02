@@ -58,6 +58,10 @@ Download `budget-planner-server_<version>_all.deb` from
 sudo apt install ./budget-planner-server_<version>_all.deb
 ```
 
+The package also installs the PDF import prerequisites `poppler-utils` and
+`tesseract-ocr`. Source installs need those packages separately for selectable
+and scanned PDF statements.
+
 Removing the package keeps data. Purging the package deletes packaged application
 data; make a backup first.
 
