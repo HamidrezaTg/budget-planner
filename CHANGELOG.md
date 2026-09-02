@@ -3,6 +3,12 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.20.2] — 2026-09-02
+
+### Fixed
+
+- The release installer preserves its downloaded release asset when re-executing through `sudo`.
+
 ## [3.20.1] — 2026-09-02
 
 ### Added

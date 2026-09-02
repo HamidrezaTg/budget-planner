@@ -41,9 +41,6 @@ case "$OCR_MODE" in ''|none|pdf|full) ;; *) echo "ERROR: --ocr must be none, pdf
 case "$DATA_DIR" in /*) ;; *) echo "ERROR: --data-dir must be an absolute path" >&2; exit 1 ;; esac
 [ -z "$RESTORE_DIR" ] || case "$RESTORE_DIR" in /*) ;; *) echo "ERROR: --restore-server-data must be an absolute path" >&2; exit 1 ;; esac
 
-# if we are the buffered temp copy, remove it (safe: already loaded)
-case "${0:-}" in /tmp/budget-planner-install.sh) rm -f "$0" ;; esac
-
 # ---- release fetch: anonymous first, token only if the repo needs it ----
 fetch_release() {
   local url="https://api.github.com/repos/$REPO/releases/latest"
