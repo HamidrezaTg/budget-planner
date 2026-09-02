@@ -86,7 +86,7 @@ const SECTIONS = [
       'Import is a preview-first workflow. Nothing is written until you explicitly confirm it.',
     steps: [
       'Choose a CSV, XLS, XLSX, PDF, JPG, or PNG statement and select the account it belongs to. Revolut exports and CSV files containing Excel data are supported.',
-      'For an unfamiliar bank format, use Analyze format with AI. It detects columns, dates, decimal style, and cancellation/status rows; review the detected mapping.',
+      'Upload CSV runs a preflight check first. Clear exports can be imported directly; unfamiliar or ambiguous exports are staged and offer Analyze this CSV with AI without requiring another upload.',
       'Inspect the preview. Invalid rows show their source row and reason. Duplicates, pending/reverted rows, and candidate transfer pairs are identified before saving.',
       'Confirm only after checking dates, signed amounts, currency, account, and duplicate counts. Confirmation is the only write step.',
       'Open Transactions and filter Needs review. Assign categories and resolve transfer candidates after import.',
@@ -94,7 +94,7 @@ const SECTIONS = [
     notes: [
       'Completed rows are imported. Current-month pending and reverted rows are skipped; settled older pending rows can be treated as completed.',
       'Duplicate fingerprints use date, amount, description, and an occurrence index for legitimate identical same-day transactions. Changed merchant wording can still require manual review.',
-      'Uploaded statement files are processed and removed. PDF, JPG, and PNG text is extracted locally before optional AI format analysis.',
+      'Uploaded statement files are processed and removed. AI-approved CSV mappings are saved privately per user and reused when the same headers appear again. PDF, JPG, and PNG text always goes through OCR and AI structuring before import.',
     ],
   },
   {

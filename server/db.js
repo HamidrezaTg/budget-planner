@@ -419,6 +419,20 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
   detail TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'ok'
 );
+
+-- Per-user mappings learned from an AI-approved CSV statement. The header
+-- signature prevents a template from being applied to a different export.
+CREATE TABLE IF NOT EXISTS import_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  format TEXT NOT NULL DEFAULT 'csv',
+  header_signature TEXT NOT NULL UNIQUE,
+  headers TEXT NOT NULL DEFAULT '[]',
+  spec TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  use_count INTEGER NOT NULL DEFAULT 0
+);
 `);
 
   // migrations for databases created before the v3 money-engine features

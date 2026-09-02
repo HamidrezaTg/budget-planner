@@ -34,6 +34,7 @@ export default function ImportPage() {
   const [selectedTransfers, setSelectedTransfers] = useState([]);
   const [ocrMode, setOcrMode] = useState('local');
   const [aiSettings, setAiSettings] = useState(null);
+  const [templates, setTemplates] = useState([]);
 
   useEffect(() => {
     api
@@ -43,6 +44,10 @@ export default function ImportPage() {
     api
       .get('/settings')
       .then(setAiSettings)
+      .catch(() => {});
+    api
+      .get('/import/templates')
+      .then((data) => setTemplates(data.templates || []))
       .catch(() => {});
   }, []);
 
@@ -56,7 +61,7 @@ export default function ImportPage() {
     try {
       const online = ocrMode === 'online' && /\.(pdf|jpe?g|png)$/i.test(file.name || '');
       const data = await api.upload(endpoint, file, online ? { ocr_mode: 'online' } : {});
-      if (accountId && data.token) {
+      if (accountId && data.token && data.summary) {
         try {
           const preview = await api.post('/import/preview', {
             token: data.token,
@@ -96,6 +101,32 @@ export default function ImportPage() {
   const smartAnalyze = async (e) => {
     await processFile(e.target.files?.[0], '/import/smart');
     e.target.value = '';
+  };
+
+  const analyzeCsv = async () => {
+    if (!result?.token) return;
+    setBusy(true);
+    setError('');
+    try {
+      const data = await api.post('/import/analyze', { token: result.token });
+      if (accountId && data.summary) {
+        const preview = await api.post('/import/preview', {
+          token: data.token,
+          account_id: accountId,
+        });
+        setResult({ ...data, ...preview });
+      } else {
+        setResult(data);
+      }
+      if (data.csv_check?.template_saved) {
+        const saved = await api.get('/import/templates');
+        setTemplates(saved.templates || []);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const confirm = async () => {
@@ -156,10 +187,14 @@ export default function ImportPage() {
       >
         <p className="drop-hint">Drop a CSV, XLSX, PDF, JPG, or PNG file here</p>
         <label className="btn primary file-btn">
-          {busy ? 'Processing…' : 'Choose statement file'}
+          {busy ? 'Processing…' : 'Upload CSV'}
+          <input type="file" accept=".csv,text/csv" onChange={onFile} disabled={busy} hidden />
+        </label>
+        <label className="btn file-btn">
+          Choose PDF, image, or Excel
           <input
             type="file"
-            accept=".csv,.xlsx,.xls,.pdf,.jpg,.jpeg,.png,text/csv,application/pdf,image/jpeg,image/png"
+            accept=".xlsx,.xls,.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
             onChange={onFile}
             disabled={busy}
             hidden
@@ -193,8 +228,60 @@ export default function ImportPage() {
             OCR when the statement must stay on this server.
           </p>
         )}
+        <p className="muted tiny import-template-note">
+          PDF and image imports always require AI structuring after OCR. CSV imports use AI only
+          when preflight checks fail or no saved template matches.
+        </p>
+        {templates.length > 0 && (
+          <p className="muted tiny import-template-note">
+            Saved CSV templates: {templates.map((template) => template.name).join(', ')}. Matching
+            CSV headers are imported directly without AI.
+          </p>
+        )}
         {error && <div className="error">{error}</div>}
       </div>
+
+      {result?.csv_check?.status === 'needs_ai' && (
+        <div className="card warn-box" role="status">
+          <b>AI analysis recommended for this CSV.</b>
+          <span>{result.csv_check.issues.join(' ')}</span>
+          <button
+            className="btn primary"
+            onClick={analyzeCsv}
+            disabled={busy || !aiSettings?.profile_id}
+          >
+            {busy ? 'Analyzing…' : 'Analyze this CSV with AI'}
+          </button>
+          {!aiSettings?.profile_id && (
+            <span className="muted tiny">Configure an AI profile first.</span>
+          )}
+        </div>
+      )}
+
+      {result?.csv_check?.status === 'ready' && (
+        <div className="card success-box" role="status">
+          <b>CSV is ready to import directly.</b> {result.csv_check.instruction}
+        </div>
+      )}
+
+      {result?.csv_check?.status === 'template' && (
+        <div className="card success-box" role="status">
+          <b>Saved CSV template matched.</b> {result.csv_check.instruction}
+        </div>
+      )}
+
+      {result?.csv_check?.status === 'analyzed' && (
+        <div className="card success-box" role="status">
+          <b>AI approved and saved this CSV structure.</b> {result.ai_instruction}
+        </div>
+      )}
+
+      {result?.ocr_structured_by_ai && (
+        <div className="card success-box" role="status">
+          <b>OCR text was structured by AI.</b> The extracted transactions were validated before
+          import.
+        </div>
+      )}
 
       {result?.ai_spec && (
         <div className="card success-box">
@@ -240,7 +327,7 @@ export default function ImportPage() {
         </div>
       )}
 
-      {result && (
+      {result?.summary && (
         <>
           <div className="stats-row">
             <div className="card stat">

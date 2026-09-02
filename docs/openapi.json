@@ -609,6 +609,38 @@
         }
       }
     },
+    "/import/analyze": {
+      "post": {
+        "tags": ["Resources", "AI"],
+        "summary": "Analyze a staged CSV with AI and save its mapping",
+        "operationId": "analyzeStagedImport",
+        "requestBody": { "$ref": "#/components/requestBodies/ImportAnalyze" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/import/templates": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "List the current user's saved CSV import templates",
+        "operationId": "listImportTemplates",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/import/templates/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a saved CSV import template",
+        "operationId": "deleteImportTemplate",
+        "responses": {
+          "204": { "description": "Template deleted" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
     "/import/preview": {
       "post": {
         "tags": ["Resources"],
@@ -1759,6 +1791,12 @@
           "multipart/form-data": { "schema": { "$ref": "#/components/schemas/Multipart" } }
         }
       },
+      "ImportAnalyze": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ImportAnalyze" } }
+        }
+      },
       "ImportPreview": {
         "required": true,
         "content": {
@@ -2226,6 +2264,11 @@
           "token": { "type": "string" },
           "account_id": { "type": ["integer", "null"] }
         }
+      },
+      "ImportAnalyze": {
+        "type": "object",
+        "required": ["token"],
+        "properties": { "token": { "type": "string" } }
       },
       "ImportConfirm": {
         "type": "object",

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import papaparse from 'papaparse';
 import xlsxModule from 'xlsx';
@@ -50,6 +51,10 @@ function detectFormat(filePath) {
   return signature === 0x04034b50 || signature === 0x06054b50 || signature === 0x02014b50
     ? 'xlsx'
     : 'csv';
+}
+
+export function detectFileFormat(filePath) {
+  return detectFormat(filePath);
 }
 
 function imageDimensions(filePath, format) {
@@ -589,10 +594,146 @@ export function rawGrid(filePath, maxRows = 25) {
       .slice(0, Math.min(maxRows, MAX_IMPORT_ROWS + 1));
   }
   const text = fs.readFileSync(filePath, 'utf8');
-  return Papa.parse(text.trim(), {
+  return Papa.parse(text, {
     skipEmptyLines: false,
     preview: Math.min(maxRows, MAX_IMPORT_ROWS + 1),
-  }).data.slice(0, Math.min(maxRows, MAX_IMPORT_ROWS + 1));
+  })
+    .data.filter((row) => row.some((value) => String(value ?? '').trim()))
+    .slice(0, Math.min(maxRows, MAX_IMPORT_ROWS + 1));
+}
+
+const CSV_HEADER_MATCHERS = {
+  date: /\b(date|datum|booking|value|buchung|started|completed)\b/i,
+  description:
+    /desc|memo|merchant|payee|name|details|narration|reference|purpose|verwendungszweck/i,
+  amount: /\b(amount|sum|value|betrag|total|price)\b/i,
+  in: /credit|deposit|income|incoming|money.?in|haben|gutschrift/i,
+  out: /debit|withdraw|expense|outgoing|money.?out|soll|lastschrift/i,
+  state: /\b(state|status|zustand)\b/i,
+  type: /\b(type|art|transaction type)\b/i,
+  currency: /\b(currency|währung|waehrung|curr)\b/i,
+};
+
+function normalizedHeader(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+export function csvHeaderSignature(grid, headerRow) {
+  const row = grid[headerRow];
+  if (!Array.isArray(row) || !row.some((value) => String(value ?? '').trim())) return '';
+  const normalized = row.map(normalizedHeader);
+  return crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+}
+
+function inferCsvSpec(grid) {
+  let best = null;
+  for (let rowIndex = 0; rowIndex < Math.min(grid.length, 25); rowIndex++) {
+    const row = grid[rowIndex];
+    if (!Array.isArray(row)) continue;
+    const scores = {};
+    for (const [field, matcher] of Object.entries(CSV_HEADER_MATCHERS)) {
+      const index = row.findIndex((value) => matcher.test(normalizedHeader(value)));
+      if (index >= 0) scores[field] = index;
+    }
+    const hasAmount =
+      scores.amount !== undefined || scores.in !== undefined || scores.out !== undefined;
+    const score =
+      (scores.date !== undefined ? 2 : 0) +
+      (scores.description !== undefined ? 2 : 0) +
+      (hasAmount ? 2 : 0) +
+      (scores.currency !== undefined ? 1 : 0) +
+      (scores.state !== undefined ? 1 : 0);
+    if (!best || score > best.score) best = { rowIndex, scores, score };
+  }
+
+  if (!best || best.score < 6) {
+    return {
+      spec: null,
+      header_row_index: best?.rowIndex ?? -1,
+      headers: best ? grid[best.rowIndex].map((value) => String(value ?? '').trim()) : [],
+      signature: best ? csvHeaderSignature(grid, best.rowIndex) : '',
+      issues: ['Required date, description, and amount columns were not identified confidently.'],
+    };
+  }
+
+  const { scores } = best;
+  const spec = {
+    header_row_index: best.rowIndex,
+    col_date: scores.date,
+    col_description: scores.description,
+    col_amount: scores.amount ?? null,
+    col_in: scores.amount === undefined ? (scores.in ?? null) : null,
+    col_out: scores.amount === undefined ? (scores.out ?? null) : null,
+    col_state: scores.state ?? null,
+    ignore_states: ['reverted', 'cancelled', 'canceled'],
+    col_type: scores.type ?? null,
+    col_currency: scores.currency ?? null,
+    date_format: 'auto',
+    decimal_point: '.',
+  };
+  const sample = grid
+    .slice(best.rowIndex + 1)
+    .filter((row) => row.some((value) => String(value ?? '').trim()));
+  const dateValues = sample.map((row) => String(row[scores.date] ?? '').trim()).filter(Boolean);
+  const amountValues = sample
+    .flatMap((row) => [row[scores.amount], row[scores.in], row[scores.out]])
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean);
+  const ambiguousSlashDate = dateValues.some((value) => {
+    const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    return match && Number(match[1]) <= 12 && Number(match[2]) <= 12;
+  });
+  if (ambiguousSlashDate) spec.date_format = 'auto';
+  else if (dateValues.some((value) => /^\d{1,2}\.\d{1,2}\.\d{4}/.test(value)))
+    spec.date_format = 'DD.MM.YYYY';
+  else if (dateValues.some((value) => /^\d{1,2}\/\d{1,2}\/\d{4}/.test(value)))
+    spec.date_format = 'DD/MM/YYYY';
+  if (amountValues.some((value) => /\d\.\d{3},\d{1,2}$/.test(value) || /\d,\d{1,2}$/.test(value)))
+    spec.decimal_point = ',';
+
+  return {
+    spec,
+    header_row_index: best.rowIndex,
+    headers: grid[best.rowIndex].map((value) => String(value ?? '').trim()),
+    signature: csvHeaderSignature(grid, best.rowIndex),
+    sample_rows: sample.length,
+    ambiguous_date: ambiguousSlashDate,
+    issues: [],
+  };
+}
+
+export function csvPreflight(filePath) {
+  const grid = rawGrid(filePath, 26);
+  if (!grid.length || !grid.some((row) => row.some((value) => String(value ?? '').trim())))
+    throw new Error('CSV file appears to be empty');
+  const inferred = inferCsvSpec(grid);
+  const issues = [...inferred.issues];
+  let stats = null;
+  if (inferred.spec) {
+    const parsed = transactionsFromGrid(grid, inferred.spec);
+    stats = parsed.stats;
+    const valid = stats.imported + stats.skippedPendingCurrentMonth;
+    const invalidRate = stats.total ? stats.invalid / stats.total : 1;
+    if (!valid) issues.push('No valid transaction rows were found.');
+    if (invalidRate > 0.1)
+      issues.push(`${stats.invalid} of ${stats.total} sample rows could not be read.`);
+    if (inferred.ambiguous_date)
+      issues.push('Dates use an ambiguous slash format; AI should confirm the date order.');
+  }
+  return {
+    format: 'csv',
+    headers: inferred.headers,
+    signature: inferred.signature,
+    spec: inferred.spec,
+    sample_rows: inferred.sample_rows ?? 0,
+    stats,
+    issues,
+    can_import_directly: !!inferred.spec && issues.length === 0,
+    grid,
+  };
 }
 
 // Build normalized transactions from a full grid using an AI-proposed spec.

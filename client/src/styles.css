@@ -1963,6 +1963,10 @@ tr.override-row td:first-child {
   gap: 14px;
   flex-wrap: wrap;
 }
+.import-template-note {
+  flex-basis: 100%;
+  margin: 0;
+}
 .warn-box {
   border-color: rgba(233, 162, 59, 0.4);
   background: rgba(233, 162, 59, 0.08);

@@ -10,9 +10,34 @@ import {
   toISODate,
   parseAmountValue,
   transactionsFromGrid,
+  csvPreflight,
   extractPdfText,
   extractImageText,
 } from '../server/services/parser.js';
+
+test('CSV preflight approves clear exports and produces a reusable mapping', () => {
+  const file = path.join(mkdtempSync(path.join(tmpdir(), 'bp-csv-')), 'statement.csv');
+  writeFileSync(
+    file,
+    'Date,Description,Amount,Currency\n2026-05-01,Groceries,-12.50,EUR\n2026-05-02,Salary,2500,EUR\n',
+  );
+  const result = csvPreflight(file);
+  assert.equal(result.can_import_directly, true);
+  assert.equal(result.spec.col_date, 0);
+  assert.equal(result.spec.col_description, 1);
+  assert.equal(result.spec.col_amount, 2);
+  assert.ok(result.signature);
+  rmSync(path.dirname(file), { recursive: true, force: true });
+});
+
+test('CSV preflight recommends AI for an unknown or ambiguous export', () => {
+  const file = path.join(mkdtempSync(path.join(tmpdir(), 'bp-csv-')), 'statement.csv');
+  writeFileSync(file, 'When,What,Money\n05/06/2026,Groceries,"-12,50"\n');
+  const result = csvPreflight(file);
+  assert.equal(result.can_import_directly, false);
+  assert.ok(result.issues.length > 0);
+  rmSync(path.dirname(file), { recursive: true, force: true });
+});
 
 function makePdf(text) {
   const objects = [
