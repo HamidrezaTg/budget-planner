@@ -113,7 +113,7 @@ jobs:
           BP_ANDROID_KEY_PASSWORD: ${{ secrets.BP_ANDROID_KEY_PASSWORD }}
 
       - name: Upload Android GitHub build artifacts
-          uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7
         with:
           name: budget-planner-android-github-builds
           if-no-files-found: error
