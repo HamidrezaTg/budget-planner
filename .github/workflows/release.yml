@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -145,9 +146,11 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="v${VERSION}"
-          test "${GITHUB_REF_NAME}" = "${TAG}" || {
-            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${VERSION}"; exit 1;
-          }
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            test "${GITHUB_REF_NAME}" = "${TAG}" || {
+              echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${VERSION}"; exit 1;
+            }
+          fi
           ARGS=()
           for f in dist/budget-planner-server_*_all.deb \
                    dist/budget-planner-client_*_amd64.deb \
