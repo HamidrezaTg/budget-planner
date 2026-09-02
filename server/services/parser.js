@@ -21,6 +21,7 @@ const MAX_XLSX_ZIP_CENTRAL_DIRECTORY_BYTES = 4 * 1024 * 1024;
 const MAX_PDF_PAGES = 40;
 const MAX_PDF_TEXT_BYTES = 16 * 1024 * 1024;
 const PDF_COMMAND_TIMEOUT_MS = 120_000;
+const MAX_IMAGE_PIXELS = 100_000_000;
 
 const REVOLUT_COLUMNS = {
   date: ['Started Date', 'started date'],
@@ -35,17 +36,99 @@ const REVOLUT_COLUMNS = {
 
 function detectFormat(filePath) {
   const fd = fs.openSync(filePath, 'r');
-  const buf = Buffer.alloc(4);
+  const buf = Buffer.alloc(8);
   try {
-    fs.readSync(fd, buf, 0, 4, 0);
+    fs.readSync(fd, buf, 0, buf.length, 0);
   } finally {
     fs.closeSync(fd);
   }
   const signature = buf.readUInt32LE(0);
   if (buf.subarray(0, 4).toString('ascii') === '%PDF') return 'pdf';
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
+    return 'png';
+  if (buf[0] === 0xff && buf[1] === 0xd8) return 'jpeg';
   return signature === 0x04034b50 || signature === 0x06054b50 || signature === 0x02014b50
     ? 'xlsx'
     : 'csv';
+}
+
+function imageDimensions(filePath, format) {
+  const buffer = fs.readFileSync(filePath);
+  let width;
+  let height;
+
+  if (format === 'png') {
+    if (
+      buffer.length < 24 ||
+      !buffer
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ||
+      buffer.toString('ascii', 12, 16) !== 'IHDR'
+    )
+      throw new Error('Invalid PNG image');
+    width = buffer.readUInt32BE(16);
+    height = buffer.readUInt32BE(20);
+  } else {
+    if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8)
+      throw new Error('Invalid JPEG image');
+    let offset = 2;
+    while (offset + 1 < buffer.length) {
+      if (buffer[offset++] !== 0xff) throw new Error('Invalid JPEG image');
+      while (buffer[offset] === 0xff) offset++;
+      const marker = buffer[offset++];
+      if (marker === 0xd9 || marker === 0xda) break;
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) continue;
+      if (offset + 2 > buffer.length) throw new Error('Invalid JPEG image');
+      const length = buffer.readUInt16BE(offset);
+      if (length < 2 || offset + length > buffer.length) throw new Error('Invalid JPEG image');
+      if (
+        (marker >= 0xc0 && marker <= 0xc3) ||
+        (marker >= 0xc5 && marker <= 0xc7) ||
+        (marker >= 0xc9 && marker <= 0xcb) ||
+        (marker >= 0xcd && marker <= 0xcf)
+      ) {
+        if (length < 7) throw new Error('Invalid JPEG image');
+        height = buffer.readUInt16BE(offset + 3);
+        width = buffer.readUInt16BE(offset + 5);
+        break;
+      }
+      offset += length;
+    }
+  }
+
+  if (!width || !height || width * height > MAX_IMAGE_PIXELS)
+    throw new Error(`Image dimensions exceed the ${MAX_IMAGE_PIXELS}-pixel limit`);
+  return { width, height };
+}
+
+function runImageOcr(filePath) {
+  try {
+    return execFileSync(
+      'tesseract',
+      [filePath, 'stdout', '-l', process.env.TESSERACT_LANG || 'eng'],
+      {
+        encoding: 'utf8',
+        timeout: PDF_COMMAND_TIMEOUT_MS,
+        maxBuffer: MAX_PDF_TEXT_BYTES,
+      },
+    );
+  } catch (error) {
+    if (error.code === 'ENOENT')
+      throw new Error('Image OCR requires Tesseract. Install tesseract-ocr on the server');
+    if (error.killed || error.signal === 'SIGTERM') throw new Error('Image OCR timed out');
+    throw new Error('Image OCR failed');
+  }
+}
+
+export function extractImageText(filePath) {
+  const format = detectFormat(filePath);
+  if (format !== 'png' && format !== 'jpeg') throw new Error('File is not a PNG or JPEG image');
+  imageDimensions(filePath, format);
+  const text = runImageOcr(filePath);
+  if (Buffer.byteLength(text, 'utf8') > MAX_PDF_TEXT_BYTES)
+    throw new Error('Extracted image text exceeds the size limit');
+  if (!text.trim()) throw new Error('Image contains no readable text and OCR returned nothing');
+  return text.slice(0, MAX_PDF_TEXT_BYTES);
 }
 
 function runPdfCommand(command, args, options = {}) {
@@ -142,11 +225,6 @@ function pdfRows(text) {
       throw new Error(`Import exceeds the ${MAX_IMPORT_ROWS}-row limit`);
   }
   return rows;
-}
-
-function pdfGrid(filePath, maxRows) {
-  const rows = pdfRows(extractPdfText(filePath)).slice(0, Math.min(maxRows - 1, MAX_IMPORT_ROWS));
-  return [['Date', 'Description', 'Amount', 'Currency'], ...rows];
 }
 
 function parseSheetRows(rows) {
@@ -297,10 +375,10 @@ export function parseStatement(filePath) {
   const format = detectFormat(filePath);
   let parsedRows;
 
-  if (format === 'pdf') {
+  if (format === 'pdf' || format === 'png' || format === 'jpeg') {
     parsedRows = {
       mapping: { date: 0, description: 1, amount: 2, currency: 3 },
-      raw: pdfRows(extractPdfText(filePath)),
+      raw: pdfRows(format === 'pdf' ? extractPdfText(filePath) : extractImageText(filePath)),
     };
   } else if (format === 'xlsx') {
     // no cellDates: keep raw serial numbers and convert with UTC math,
@@ -496,7 +574,11 @@ function finalize({ mapping, raw }, mode) {
 // Raw grid of first rows (no header assumptions) for the AI to inspect.
 export function rawGrid(filePath, maxRows = 25) {
   const format = detectFormat(filePath);
-  if (format === 'pdf') return pdfGrid(filePath, maxRows);
+  if (format === 'pdf' || format === 'png' || format === 'jpeg') {
+    const text = format === 'pdf' ? extractPdfText(filePath) : extractImageText(filePath);
+    const rows = pdfRows(text).slice(0, Math.min(maxRows - 1, MAX_IMPORT_ROWS));
+    return [['Date', 'Description', 'Amount', 'Currency'], ...rows];
+  }
   if (format === 'xlsx') {
     const wb = readWorkbook(filePath);
     const sheet = wb.Sheets[wb.SheetNames[0]];

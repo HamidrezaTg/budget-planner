@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -10,6 +11,7 @@ import {
   parseAmountValue,
   transactionsFromGrid,
   extractPdfText,
+  extractImageText,
 } from '../server/services/parser.js';
 
 function makePdf(text) {
@@ -187,6 +189,33 @@ test('PDF statement text is extracted locally and normalized into transactions',
     assert.equal(parsed.transactions[0].date, '2026-09-01');
     assert.equal(parsed.transactions[0].amount, -12.5);
     assert.equal(parsed.transactions[0].description, 'REWE Market');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('PNG and JPEG statement images are OCRed locally and normalized into transactions', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'bp-image-'));
+  const pdf = path.join(dir, 'source.pdf');
+  try {
+    writeFileSync(pdf, makePdf('BT /F1 12 Tf 50 750 Td (01.09.2026 REWE Market -12,50) Tj ET'));
+    const pngPrefix = path.join(dir, 'statement-png');
+    const jpgPrefix = path.join(dir, 'statement-jpg');
+    execFileSync('pdftoppm', ['-f', '1', '-l', '1', '-r', '150', '-png', pdf, pngPrefix]);
+    execFileSync('pdftoppm', ['-f', '1', '-l', '1', '-r', '150', '-jpeg', pdf, jpgPrefix]);
+
+    for (const [extension, prefix] of [
+      ['png', pngPrefix],
+      ['jpg', jpgPrefix],
+    ]) {
+      const file = `${prefix}-1.${extension}`;
+      assert.match(extractImageText(file), /REWE Market/);
+      const parsed = parseStatement(file);
+      assert.equal(parsed.transactions.length, 1);
+      assert.equal(parsed.transactions[0].date, '2026-09-01');
+      assert.equal(parsed.transactions[0].amount, -12.5);
+      assert.equal(parsed.transactions[0].description, 'REWE Market');
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

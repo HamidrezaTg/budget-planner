@@ -1800,7 +1800,7 @@
         "properties": {
           "file": {
             "$ref": "#/components/schemas/Binary",
-            "description": "CSV, XLS/XLSX, or PDF bank statement. PDFs use local text extraction/OCR."
+            "description": "CSV, XLS/XLSX, PDF, JPG, or PNG bank statement. PDFs use local text extraction/OCR; images use local Tesseract OCR."
           }
         }
       },

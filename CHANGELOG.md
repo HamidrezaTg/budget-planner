@@ -6,12 +6,15 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 ## [3.20.0] — 2026-09-02
 
 ### Added
+
 - Editable category-group sort order, fund opening balances, and full commitment editing.
 - Selected-month fund contribution and commitment totals.
 - Managed, dated Loan categories created automatically for commitments.
 - PDF statement imports with local Poppler text extraction and local Tesseract OCR.
+- JPG and PNG statement imports with local Tesseract OCR.
 
 ### Changed
+
 - Fund allocations reduce projected free cash and are shown separately from category plans.
 - Fund-linked purchases remain category actuals and receive a one-month category budget addition.
 - Commitment and category budget calculations count each planned obligation once.
@@ -19,100 +22,120 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 ## [3.19.2] — 2026-09-02
 
 ### Added
+
 - Salary and recurring income start/end month scheduling for future income changes.
 - Explicit Capacitor mixed-content support for trusted HTTP LAN/VPN connections.
 
 ### Fixed
+
 - Android discovery no longer fails when the app's HTTPS WebView origin connects to
   a trusted HTTP server.
 
 ## [3.19.1] — 2026-09-02
 
 ### Added
+
 - Per-user synchronized themes: System, Light, Dark, Midnight, and Forest.
 - Projection baseline horizon controls and removable What-if scenarios.
 - Public Help documentation and expanded installation/troubleshooting guidance.
 
 ### Changed
+
 - Android accepts trusted LAN/VPN HTTP with an explicit warning while retaining HTTPS support.
 - Debian server packages are named `budget-planner-server_<version>_all.deb`.
 - Server upgrades preserve `/etc/default/budget-planner` configuration.
 
 ### Fixed
+
 - Settings fields and Projection controls now stack correctly on narrow screens.
 
 ## [3.19.0] — 2026-09-01
 
 ### Added
+
 - Paginated transaction browsing with strict API bounds and accessible controls.
 - GitHub-only signed Android APK/AAB release preparation and an iOS Capacitor scaffold.
 
 ### Changed
+
 - Fund balances now reconcile scheduled accruals, manual movements, and linked transactions.
 - Android supports trusted LAN/VPN HTTP with an explicit warning; HTTPS remains recommended,
   including HTTPS Tailscale access.
 - Recurrence auto-posting and report snapshot capture are explicit POST operations.
 
 ### Security
+
 - Added progressive login cooldowns, cross-origin state-change protection, XLSX ZIP limits,
   and deeper attachment content validation.
 
 ## [3.18.6] — 2026-09-01
 
 ### Fixed
+
 - Prevent the Linux, macOS, and Windows desktop clients from exiting during startup when the optional updater is not configured.
 
 ## [3.18.5] — 2026-09-01
 
 ### Added
+
 - Add transaction deletion, paired account transfers, account reassignment, and fund/commitment links.
 - Show fund and commitment coverage separately from ordinary category budget usage.
 
 ### Fixed
+
 - Imported transfer pairs no longer retain an incorrect spending category.
 
 ## [3.18.4] — 2026-09-01
 
 ### Fixed
+
 - Keep account names such as "Sparkasse Revolut" separate from their generic account type.
 - Recognize Revolut-named accounts when calculating the remaining transfer amount.
 
 ### Changed
+
 - Refresh the Accounts table layout and redesign the AI Chat composer and welcome screen.
 
 ## [3.18.3] — 2026-09-01
 
 ### Added
+
 - Show the installed server version and latest GitHub release in Settings.
 - Add shared working-month navigation, account-filtered reports, and multiple income sources.
 
 ### Changed
+
 - Improve dialog scrolling, responsive text wrapping, fund terminology, and appearance themes.
 
 ## [3.18.2] — 2026-09-01
 
 ### Fixed
+
 - Migrate legacy transaction columns before creating their dependent indexes.
 
 ## [3.18.1] — 2026-09-01
 
 ### Fixed
+
 - Use the macOS-native `shasum` command when adding DMG checksums to releases.
 
 ## [3.18.0] — 2026-09-01
 
 ### Added
+
 - Per-account display currencies with monthly FX conversion for aggregate balances.
 - Transient side-by-side forecast scenarios with monthly and one-off adjustments.
 - Hashed, expiring read-only budget share links with revocation.
 - Optional ntfy daily warning summaries for Android subscribers.
 
 ### Changed
+
 - Account balances and transaction views now display their recorded/account currency.
 
 ## [3.17.0] — 2026-08-31
 
 ### Added
+
 - ESLint and Prettier checks in CI, with server and client coverage reports.
 - A live-server Playwright flow covering setup, import, review, and dashboard navigation.
 - A static OpenAPI 3.1 contract covering the public and authenticated API operations.
@@ -120,11 +143,13 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - Caddy HTTPS deployment guidance for secure remote access.
 
 ### Changed
+
 - Moved the mobile Capacitor CLI to development dependencies so production audits remain clean.
 
 ## [3.16.0] — 2026-08-31
 
 ### Added
+
 - Persistent privacy mode that blurs financial values without hiding navigation.
 - Keyboard navigation shortcuts: `g+d`, `g+t`, `g+r`, and `?` for Help.
 - Drag-and-drop statement import with remembered import account selection.
@@ -134,6 +159,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 ## [3.15.0] — 2026-08-31
 
 ### Added
+
 - Linux CI now verifies and retains the Tauri `.deb` and AppImage bundles as
   downloadable build artifacts.
 - AUR package generation now produces `.SRCINFO` and builds the package in a
@@ -144,6 +170,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 ## [3.14.0] — 2026-08-31
 
 ### Added
+
 - Native Tauri **File**, **Edit**, **View**, and **Help** menus with platform
   shortcuts, including `Cmd+Q` on macOS.
 - Sandboxed macOS bundle metadata and network entitlements for self-hosted LAN,
@@ -154,6 +181,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 ## [3.13.1] — 2026-08-31
 
 ### Fixed
+
 - Added committed JavaScript and Rust lockfiles so clean CI and release builds
   use reproducible dependency resolution.
 - Corrected Tauri configuration, native icon assets, Rust window navigation, and
@@ -164,6 +192,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 ## [3.13.0] — 2026-08-31
 
 ### Added
+
 - **Tauri v2 desktop client** (`desktop-client-tauri/`) replacing the old
   Electron shell. A single Rust binary per platform, no Chromium runtime,
   with the same multi-server saved-URL picker as the Android shell.
@@ -179,6 +208,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
   the server test/build job.
 
 ### Changed
+
 - The `/.well-known/budget-planner` endpoint now also sets
   `Access-Control-Allow-Origin: *` so the desktop shell can verify
   reachability from a separate origin without CORS errors.
@@ -191,6 +221,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 ## [3.12.0] — 2026-08-31
 
 ### Added
+
 - **Accounts page** with create, edit, opening-balance, spending-pot, and guarded delete controls.
 - **People management** for names used by income sources, including safe rename and delete.
 - `GET /api/accounts` and `POST`/`PATCH`/`DELETE /api/accounts/:id` for account management.
@@ -200,6 +231,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 - Android saved-server list with discovery validation and a mobile server-switch action.
 
 ### Fixed
+
 - Account and person partial updates no longer require unrelated fields.
 - Username database-file moves close cached SQLite handles and roll back file changes if the master update fails.
 - API request draining no longer deadlocks a rename request on itself.
@@ -207,6 +239,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 ## [3.11.0] — 2026-08-31
 
 ### Added (data model)
+
 - `accounts.opening_balance` — per-account starting balance. Reflected in the
   projection's anchor and total predicted numbers, and in the per-account
   reconciliation view on Balances.
@@ -219,6 +252,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
   change wealth).
 
 ### Added (server)
+
 - `GET /api/balances` now returns `per_account`: each account's predicted
   balance at the current month, its latest observation, and the variance.
 - `PATCH /api/balances/:id` and `DELETE /api/balances/:id` — set
@@ -240,6 +274,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
   can re-anchor before drift compounds.
 
 ### Changed
+
 - The model separates "total" (everything you own, including transfers)
   from "free" (the liquid portion above opening). The total is the
   per-account sum so transfers show up in the right place.
@@ -247,6 +282,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 ## [3.10.0] — 2026-08-30
 
 ### Added (client)
+
 - **Funds**: "Add fund" form (name, start month, contribution, opening balance),
   inline delete with confirm, and tooltips on every action.
 - **Categories & groups**: full CRUD on the Categories page. Add, rename, and
@@ -270,6 +306,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
   list) for clearer hierarchy.
 
 ### Added (server)
+
 - `POST /api/transactions` — single or bulk manual entry with per-row
   validation (date format, description, signed amount, currency, account,
   category existence) and the same dedup rules as CSV import.
@@ -284,6 +321,7 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 Full-project review outcomes (server, client, packaging, docs).
 
 ### Fixed (data integrity)
+
 - **Username collision** — the legacy filename sanitizer collapsed distinct
   usernames ("a.b", "a!b" → "a_b") onto the SAME database file: the second
   user opened the first user's data. Filenames are now collision-free
@@ -302,6 +340,7 @@ Full-project review outcomes (server, client, packaging, docs).
   resulting dedup keys).
 
 ### Fixed (client)
+
 - **FX-rate delete** from Settings was broken (wrong `api.del` payload) — it
   always failed with 400.
 - **"Show needs-review only"** toggle now actually refilters the list, and
@@ -316,6 +355,7 @@ Full-project review outcomes (server, client, packaging, docs).
   logout works offline.
 
 ### Fixed (server quality)
+
 - FK index coverage: `transactions.split_of`, `attachments.transaction_id`,
   `sessions.username`, `fund_movements(fund_id, month)` — the transactions
   list no longer does per-row full scans.
@@ -327,6 +367,7 @@ Full-project review outcomes (server, client, packaging, docs).
 - Import staging eviction prefers the current user's oldest upload.
 
 ### Fixed (security)
+
 - **CSV/Excel formula injection** — export cells starting with `=` `+` `-` `@`
   are neutralized.
 - **Login timing** no longer enumerates usernames (unknown users get identical
@@ -347,16 +388,18 @@ Full-project review outcomes (server, client, packaging, docs).
 ## [3.9.1] — 2026-08-27
 
 ### Android app (major UX rework, verified on an emulator)
+
 - The client shell now **auto-connects** to the saved server on launch —
   previously every launch showed the setup form again.
 - **Recovery screen**: if the server is unreachable you get "Can't reach your
-  server" with *Try again* and *Change server address*; changing servers no
+  server" with _Try again_ and _Change server address_; changing servers no
   longer requires clearing app storage ("Forget this server" included).
 - **Back button works**: back inside the planner walks in-app history instead
   of instantly exiting (Capacitor loads the server page without WebView
   history); back from the planner's first page returns to the connect screen.
 
 ### Mobile web layout (verified on an emulator against seeded data)
+
 - **Sidebar → top app bar with hamburger drawer** on phones. Previously all 13
   nav links wrapped into five rows covering half the screen, and the "Local
   planner" box overlapped the theme toggle and profile.
@@ -371,6 +414,7 @@ Full-project review outcomes (server, client, packaging, docs).
   (focus trap, Escape, ARIA labelling, focus restore).
 
 ### Security & robustness
+
 - The **installer verifies downloaded artifacts** against the release's
   `SHA256SUMS.txt` before installing.
 - **AI endpoints**: per-user rate limit (30/min), chat history capped
@@ -386,6 +430,7 @@ Full-project review outcomes (server, client, packaging, docs).
 ## [3.9.0] — 2026-08-27
 
 ### Fixed (data integrity)
+
 - **Split deletion** — deleting a split parent now removes its children (SQLite
   foreign-key enforcement is enabled on every database). Attachment files for the
   parent AND its children are deleted from disk.
@@ -418,6 +463,7 @@ Full-project review outcomes (server, client, packaging, docs).
   split from its parent instead.
 
 ### Fixed (security)
+
 - **Login protection** — per-IP+username rate limiting (10/minute) with a generic
   error message; the setup endpoint is rate-limited too.
 - **Password policy** — minimum raised to 8 characters for new and changed passwords.
@@ -444,6 +490,7 @@ Full-project review outcomes (server, client, packaging, docs).
 - **First-run setup** — setup is limited to localhost unless `SETUP_TOKEN` is used.
 
 ### Fixed (packaging & installer)
+
 - The desktop client `.deb` now stamps its Debian metadata version from
   `desktop-client/package.json` (fixes the filename-vs-metadata mismatch).
 - The installer preserves `--client`, `--version` and `--quiet` across the sudo
@@ -458,7 +505,9 @@ Full-project review outcomes (server, client, packaging, docs).
 - `scripts/build-apk.sh` builds a signed release APK when `BP_ANDROID_KEYSTORE`,
   `BP_ANDROID_KEYSTORE_PASSWORD` and `BP_ANDROID_KEY_ALIAS` are set, and a clearly
   labeled debug-key build otherwise; keystores are provided via environment only.
+
 ### Added
+
 - Test suite (`npm test`, 31 tests at release) covering parser, DB integrity,
   projection, security, and an end-to-end HTTP flow.
 - GitHub Actions CI: server tests, client build, dependency audit, version checks.
@@ -468,11 +517,13 @@ Full-project review outcomes (server, client, packaging, docs).
   via `PRAGMA foreign_key_check` on first open of each user database.
 
 ### Removed
+
 - Dead `client/src/pages/Savings.jsx` (referenced non-existent `/envelopes` routes).
 
 ## [3.8.0] — 2026-08-26
 
 ### Added
+
 - **Client-only application architecture** — apps contain no backend and connect to
   a server running elsewhere (the user's choice for multi-device use)
 - **Android APK** (`scripts/build-apk.sh`): pure Capacitor client; first launch asks
@@ -484,12 +535,14 @@ Full-project review outcomes (server, client, packaging, docs).
   included.
 
 ### Changed
+
 - The `budget-planner` Debian package remains the **server**; `budget-planner-client`
   is the desktop client — install the server on one machine, clients everywhere else.
 
 ## [3.7.0] — 2026-08-26
 
 ### Added
+
 - **Debian package** (`scripts/build-deb.sh` → `dist/*.deb`): ships server + built
   client + production deps, systemd service with hardening as system user `budget`,
   data in `/var/lib/budget-planner` (kept on remove, deleted on purge)
@@ -501,29 +554,34 @@ Full-project review outcomes (server, client, packaging, docs).
   attachments → balances → **backup/restore round-trip** → password change → exports
 
 ### Verified
+
 - Unauthenticated access returns 401 on every API mount; PWA assets serve correctly
 - Backup→restore survives the multer async-context pitfall (no user context leaks)
 
 ## [3.6.0] — 2026-08-26
 
 ### Added
+
 - **Occurrence-indexed dedup fingerprints** — two genuinely different purchases on the
   same day with the same amount and merchant (e.g. two identical coffees) used to
   silently swallow each other on import; they now both import, while re-imports and
   overlapping exports still insert nothing twice (verified by a 16-case test suite)
 
 ### Fixed
+
 - **CSV import was broken on current Node** — multer's async streaming escapes the
   auth-scoped database context, so every import failed with "No user database context".
   Import handlers now re-enter the user's database context explicitly.
 
 ### Decided
+
 - Bank synchronization stays manual for now (user choice): hardened CSV import is the
   sync path; GoCardless PSD2 integration may be added later and remains on the roadmap.
 
 ## [3.5.0] — 2026-08-26
 
 ### Added
+
 - **Scheduled month-end reports** — closed months with activity are snapshotted
   automatically (lazily, on first view; no external scheduler). Snapshots are frozen:
   later edits/deletions never rewrite history. Reports page gains a Month-end history
@@ -534,6 +592,7 @@ Full-project review outcomes (server, client, packaging, docs).
 ## [3.4.0] — 2026-08-26
 
 ### Added
+
 - **Multi-currency reporting** — transactions keep their statement currency; actual
   spending converts to the display currency per month via the new `fx_rates` table
 - **Exchange-rate management** on Settings: manual month/currency rates plus one-click
@@ -543,21 +602,25 @@ Full-project review outcomes (server, client, packaging, docs).
   "Exchange rates missing" insight until a rate is added
 
 ### Changed
+
 - Recurring transactions post with the base (display) currency label instead of
   hardcoded EUR
 - CSV exports explicitly keep original amounts/currency codes (documented)
 
 ### Fixed
+
 - Yearly report now converts foreign-currency rows consistently with all other views
 
 ## [3.3.0] — 2026-08-26
 
 ### Added
+
 - **Transaction attachments** — attach receipts/documents (PDF, PNG, JPEG, WebP,
   CSV; max 10 MB) via the paperclip control on Transactions; list, download,
   preview images inline, delete; files live under `data/uploads/<user>/`, never in git
 
 ### Fixed
+
 - Fund goals whose target date has passed now raise an overdue **danger** insight
   instead of silently disappearing from the dashboard
 - Goal months-left math unified between the Funds page and dashboard insights
@@ -573,6 +636,7 @@ Full-project review outcomes (server, client, packaging, docs).
 ## [3.2.0] — 2026-08-26
 
 ### Added
+
 - **Dashboard insights** — generated alerts for review backlog, over-budget
   categories, current-month spending pace, fund-goal risk, and recurring items due
   within seven days
@@ -582,6 +646,7 @@ Full-project review outcomes (server, client, packaging, docs).
   transaction type, priority, and a read-only rule tester
 
 ### Fixed
+
 - Existing user databases now receive migrations for v3 feature columns.
 - Recurring-form errors use the in-app toast instead of a browser alert.
 - Fund goals can be created as well as edited from the Funds page.
@@ -592,6 +657,7 @@ The complete rebuild of the original single-user planner into a multi-user,
 household-grade budgeting system.
 
 ### Added
+
 - **Multi-user with private databases** — username + password login; every user
   gets their own SQLite database; admin account manages users (add, reset
   password, delete) from a dedicated Users page
@@ -617,6 +683,7 @@ household-grade budgeting system.
 - **In-app Help** page documenting every page and button
 
 ### Import engine
+
 - CSV/XLSX auto-detection (handles Revolut's ".csv that is actually Excel")
 - Only COMPLETED rows import; pendings from previous months treated as
   completed; current-month pendings and REVERTED rows skipped
@@ -624,11 +691,13 @@ household-grade budgeting system.
 - Pre-confirm preview with per-row status
 
 ### Design
+
 - "Clarity" theme: warm paper light mode + navy dark mode, navy sidebar with
   profile block, glyph navigation, collapsible menu, editorial serif headings
 - Custom modals and toast notifications (no native browser dialogs)
 
 ### Fixed
+
 - Timezone-shifting dates on XLSX import (Excel serials now converted in UTC)
 - Stale-cache white screens (index.html never cached; hashed assets immutable)
 

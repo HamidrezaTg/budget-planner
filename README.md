@@ -10,8 +10,8 @@ desktop clients are user interfaces that connect to the server.
 
 ## What It Does
 
-- Imports CSV, XLS, and XLSX bank statements with preview-first confirmation and
-  database-level duplicate protection.
+- Imports CSV, XLS, XLSX, PDF, JPG, and PNG bank statements with preview-first
+  confirmation and database-level duplicate protection.
 - Learns merchant categorization rules and supports advanced rules, rule testing,
   AI category suggestions, splits, attachments, and transfer pairing.
 - Plans monthly budgets with standing plans, one-month overrides, account
@@ -58,9 +58,9 @@ Download `budget-planner-server_<version>_all.deb` from
 sudo apt install ./budget-planner-server_<version>_all.deb
 ```
 
-The package also installs the PDF import prerequisites `poppler-utils` and
-`tesseract-ocr`. Source installs need those packages separately for selectable
-and scanned PDF statements.
+The package also installs the PDF and image import prerequisites `poppler-utils` and
+`tesseract-ocr`. Source installs need those packages separately for selectable/scanned PDF
+statements and JPG/PNG statement images.
 
 Removing the package keeps data. Purging the package deletes packaged application
 data; make a backup first.

@@ -186,7 +186,7 @@ inflate income just to make a spending category look correct.
 
 ## Importing Statements
 
-Open **Import**, choose CSV/XLS/XLSX/PDF, and select the destination account. Import is
+Open **Import**, choose CSV/XLS/XLSX/PDF/JPG/PNG, and select the destination account. Import is
 always preview-first:
 
 1. Select or drop the statement.
@@ -198,9 +198,10 @@ always preview-first:
 
 Nothing is saved before confirmation. Standard handling includes:
 
-- CSV, XLS, XLSX, and PDF statements;
+- CSV, XLS, XLSX, PDF, JPG, and PNG statements;
 - selectable PDF text extracted with Poppler;
 - scanned PDF pages rasterized and OCR'd locally with Tesseract;
+- JPG and PNG statement images OCR'd locally with Tesseract;
 - real calendar-date and amount validation;
 - completed rows;
 - settled older pending rows treated as completed;
