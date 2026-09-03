@@ -12,8 +12,10 @@ function validateSource(body, { partial = false, existing = null } = {}) {
   }
   if (body.current_amount !== undefined && !Number.isFinite(Number(body.current_amount)))
     return 'current_amount must be a number';
-  if (body.recurring !== undefined && typeof body.recurring !== 'boolean')
-    return 'recurring must be a boolean';
+  // The old recurring toggle is gone: start/end months express everything.
+  // No end month means the income continues indefinitely.
+  if (body.recurring !== undefined)
+    return 'recurring is no longer used — set start_month/end_month instead (no end month = ongoing)';
   for (const field of ['start_month', 'end_month']) {
     const value = body[field];
     if (
@@ -35,22 +37,33 @@ function validateSource(body, { partial = false, existing = null } = {}) {
   return null;
 }
 
-// Income for a month (entries override recurring source amounts)
+const isActiveIn = (s, month) =>
+  (!s.start_month || s.start_month <= month) && (!s.end_month || month <= s.end_month);
+
+// Income for a month (entries override the usual amount inside the period)
 router.get('/', (req, res) => {
   const month = /^\d{4}-\d{2}$/.test(req.query.month ?? '') ? req.query.month : currentMonth();
+  // Explicit columns: the legacy `recurring` column is inert and must not leak.
   const sources = db
     .prepare(
-      `SELECT s.*, p.name AS person_name FROM income_sources s
+      `SELECT s.id, s.name, s.person_id, s.current_amount, s.start_month, s.end_month,
+              p.name AS person_name
+       FROM income_sources s
        LEFT JOIN persons p ON p.id = s.person_id ORDER BY s.id`,
     )
     .all()
-    .map((s) => ({
-      ...s,
-      entry_amount:
-        db
-          .prepare('SELECT amount FROM income_entries WHERE source_id = ? AND month = ?')
-          .get(s.id, month)?.amount ?? null,
-    }));
+    .map((s) => {
+      const active = isActiveIn(s, month);
+      return {
+        ...s,
+        active_in_month: active,
+        entry_amount: active
+          ? (db
+              .prepare('SELECT amount FROM income_entries WHERE source_id = ? AND month = ?')
+              .get(s.id, month)?.amount ?? null)
+          : null,
+      };
+    });
   const view = incomeForMonth(month);
   res.json({ month, sources, total: view.total });
 });
@@ -62,18 +75,18 @@ router.post('/sources', (req, res) => {
   const result = db
     .prepare(
       `INSERT INTO income_sources
-       (name, person_id, current_amount, recurring, start_month, end_month)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       (name, person_id, current_amount, start_month, end_month)
+       VALUES (?, ?, ?, ?, ?)`,
     )
     .run(
       body.name.trim(),
       body.person_id ? Number(body.person_id) : null,
       Number(body.current_amount ?? 0),
-      body.recurring === false ? 0 : 1,
       body.start_month || null,
       body.end_month || null,
     );
-  res.json(db.prepare('SELECT * FROM income_sources WHERE id = ?').get(result.lastInsertRowid));
+  const row = db.prepare('SELECT * FROM income_sources WHERE id = ?').get(result.lastInsertRowid);
+  res.json({ ...row, recurring: undefined });
 });
 
 router.patch('/sources/:id', (req, res) => {
@@ -96,10 +109,6 @@ router.patch('/sources/:id', (req, res) => {
     fields.push('current_amount = ?');
     values.push(Number(body.current_amount));
   }
-  if (body.recurring !== undefined) {
-    fields.push('recurring = ?');
-    values.push(body.recurring ? 1 : 0);
-  }
   if (body.start_month !== undefined) {
     fields.push('start_month = ?');
     values.push(body.start_month || null);
@@ -111,7 +120,8 @@ router.patch('/sources/:id', (req, res) => {
   if (!fields.length) return res.status(400).json({ error: 'No editable fields provided' });
   values.push(req.params.id);
   db.prepare(`UPDATE income_sources SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  res.json(db.prepare('SELECT * FROM income_sources WHERE id = ?').get(req.params.id));
+  const row = db.prepare('SELECT * FROM income_sources WHERE id = ?').get(req.params.id);
+  res.json({ ...row, recurring: undefined });
 });
 
 router.delete('/sources/:id', (req, res) => {
@@ -121,22 +131,29 @@ router.delete('/sources/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// Enter actual income for a source+month; amount null removes the override
+// Enter actual income for a source+month; amount null removes the override.
+// Writes outside the source's period are refused: the UI shows those months
+// as inactive, and a stored-but-ignored entry would only confuse reconciliation.
 router.put('/:month/:sourceId', (req, res) => {
   const { month, sourceId } = req.params;
   if (!MONTH_RE.test(month)) return res.status(400).json({ error: 'month must be YYYY-MM' });
   const src = db.prepare('SELECT * FROM income_sources WHERE id = ?').get(sourceId);
   if (!src) return res.status(404).json({ error: 'Source not found' });
   const amount = req.body?.amount;
-  if (amount === null || amount === undefined || amount === '') {
-    db.prepare('DELETE FROM income_entries WHERE source_id = ? AND month = ?').run(sourceId, month);
-  } else {
+  if (amount !== null && amount !== undefined && amount !== '') {
+    if (!isActiveIn(src, month))
+      return res.status(400).json({
+        error: `${month} is outside this source's period (${src.start_month ?? 'start'} – ${src.end_month ?? 'ongoing'}). Actual income there counts as zero.`,
+      });
     const amt = Number(amount);
     if (isNaN(amt)) return res.status(400).json({ error: 'Invalid amount' });
     db.prepare(
       `INSERT INTO income_entries (source_id, month, amount) VALUES (?, ?, ?)
        ON CONFLICT(source_id, month) DO UPDATE SET amount = excluded.amount`,
     ).run(sourceId, month, amt);
+  } else {
+    // Clearing is always allowed so stale out-of-period entries can be removed.
+    db.prepare('DELETE FROM income_entries WHERE source_id = ? AND month = ?').run(sourceId, month);
   }
   if (req.body?.current_amount !== undefined) {
     db.prepare('UPDATE income_sources SET current_amount = ? WHERE id = ?').run(

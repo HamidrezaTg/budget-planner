@@ -214,7 +214,7 @@ export function schemaContext() {
     '- commitments(name, monthly_amount, start_month, end_month NULL=open, account_id, category_id)',
     '- funds(id, name, monthly_contribution, start_month, opening_balance)',
     '- fund_movements(fund_id, month, amount (+contribution/-withdrawal), kind, note)',
-    '- income_sources(id, name, person_id, current_amount (usual monthly), recurring, start_month, end_month)',
+    '- income_sources(id, name, person_id, current_amount (usual monthly), start_month, end_month (null = ongoing; outside the period actual income counts as zero))',
     '- income_entries(source_id, month TEXT YYYY-MM, amount REAL)',
     '- balance_observations(account_id, month TEXT YYYY-MM, balance REAL)',
     '- category_rules(keyword, category_id)',

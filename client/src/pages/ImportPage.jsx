@@ -558,7 +558,15 @@ export default function ImportPage() {
                       {formatMoney(tx.amount, tx.currency)}
                     </td>
                     <td>{tx.suggested_category_id ? '✓' : '—'}</td>
-                    <td>{tx.duplicate ? 'duplicate' : tx.needs_review ? 'needs review' : 'ok'}</td>
+                    <td>
+                      {tx.duplicate
+                        ? 'duplicate'
+                        : tx.review_reason === 'choice_rule'
+                          ? 'choice rule'
+                          : tx.needs_review
+                            ? 'needs review'
+                            : 'ok'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

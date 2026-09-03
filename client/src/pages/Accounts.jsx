@@ -31,6 +31,7 @@ export default function Accounts() {
     name: '',
     kind: 'bank',
     opening_balance: '0',
+    opening_balance_month: '',
     display_currency: localStorage.getItem('bp-currency') || 'EUR',
     is_spending_pot: false,
   });
@@ -60,6 +61,7 @@ export default function Accounts() {
         name: form.name.trim(),
         kind: form.kind,
         opening_balance: Number(form.opening_balance) || 0,
+        opening_balance_month: form.opening_balance_month || null,
         is_spending_pot: form.is_spending_pot,
         display_currency: form.display_currency,
       });
@@ -67,6 +69,7 @@ export default function Accounts() {
         name: '',
         kind: 'bank',
         opening_balance: '0',
+        opening_balance_month: '',
         display_currency: localStorage.getItem('bp-currency') || 'EUR',
         is_spending_pot: false,
       });
@@ -86,6 +89,7 @@ export default function Accounts() {
         name: account.name,
         kind: editableKind(account.kind),
         opening_balance: String(account.opening_balance ?? 0),
+        opening_balance_month: account.opening_balance_month ?? '',
         display_currency: account.display_currency || 'EUR',
         is_spending_pot: !!account.is_spending_pot,
       },
@@ -106,6 +110,7 @@ export default function Accounts() {
         name: edit.name.trim(),
         kind: edit.kind,
         opening_balance: Number(edit.opening_balance) || 0,
+        opening_balance_month: edit.opening_balance_month || null,
         is_spending_pot: !!edit.is_spending_pot,
         display_currency: edit.display_currency,
       });
@@ -242,6 +247,15 @@ export default function Accounts() {
             />
           </label>
           <label className="muted tiny">
+            Opening month
+            <input
+              type="month"
+              title="The balance was true at the END of this month. Leave empty to count it against all history."
+              value={form.opening_balance_month}
+              onChange={(e) => setForm({ ...form, opening_balance_month: e.target.value })}
+            />
+          </label>
+          <label className="muted tiny">
             Currency
             <select
               value={form.display_currency}
@@ -343,6 +357,17 @@ export default function Accounts() {
                               })
                             }
                           />
+                          <input
+                            type="month"
+                            title="The balance was true at the END of this month. Leave empty to count it against all history."
+                            value={edit.opening_balance_month}
+                            onChange={(e) =>
+                              setEditing({
+                                ...editing,
+                                [account.id]: { ...edit, opening_balance_month: e.target.value },
+                              })
+                            }
+                          />
                         </td>
                         <td>
                           <select
@@ -396,6 +421,9 @@ export default function Accounts() {
                         </td>
                         <td className="num">
                           {formatMoney(account.opening_balance, account.display_currency)}
+                          {account.opening_balance_month && (
+                            <div className="muted tiny">end of {account.opening_balance_month}</div>
+                          )}
                         </td>
                         <td>{account.display_currency}</td>
                         <td>

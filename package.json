@@ -1,6 +1,6 @@
 {
   "name": "budget-planner",
-  "version": "3.21.0",
+  "version": "3.22.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,8 +11,8 @@
     "test:e2e": "playwright test",
     "test:coverage": "c8 --reporter=text --reporter=lcov npm test",
     "lint": "eslint .",
-    "format:check": "prettier --check \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"tests/**/*.js\" \"tests/e2e/**/*.js\" \"scripts/**/*.js\" \"docs/openapi.json\" \"*.config.js\" \"client/*.config.js\"",
-    "format": "prettier --write \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"tests/**/*.js\" \"tests/e2e/**/*.js\" \"scripts/**/*.js\" \"docs/openapi.json\" \"*.config.js\" \"client/*.config.js\""
+    "format:check": "prettier --check \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"tests/**/*.js\" \"tests/e2e/**/*.js\" \"scripts/**/*.{js,mjs}\" \"docs/openapi.json\" \"*.config.js\" \"client/*.config.js\"",
+    "format": "prettier --write \"server/**/*.{js,mjs}\" \"client/src/**/*.{js,jsx}\" \"tests/**/*.js\" \"tests/e2e/**/*.js\" \"scripts/**/*.{js,mjs}\" \"docs/openapi.json\" \"*.config.js\" \"client/*.config.js\""
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

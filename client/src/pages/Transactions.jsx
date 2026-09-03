@@ -4,7 +4,21 @@ import { api, formatMoney } from '../api.js';
 import { Modal, useDialogs } from '../components/Dialog.jsx';
 import { useWorkingMonth } from '../components/WorkingMonth.jsx';
 
-const PAGE_SIZE = 50;
+// Column filters live in the URL: every value is a query param, so filtered
+// views are bookmarkable and browser Back works. Text/number fields keep a
+// local draft that debounces into the URL while typing.
+const FILTER_KEYS = [
+  'q',
+  'account_id',
+  'category_id',
+  'tx_type',
+  'date_from',
+  'date_to',
+  'amount_min',
+  'amount_max',
+  'transfer',
+];
+const pickFilters = (p) => Object.fromEntries(FILTER_KEYS.map((k) => [k, p.get(k) ?? '']));
 
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
@@ -14,9 +28,6 @@ export default function Transactions() {
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [commitments, setCommitments] = useState([]);
-  const [month, setMonth] = useState(params.get('month') || workingMonth);
-  const [review, setReviewOnly] = useState(params.get('review') === '1');
-  const [page, setPage] = useState(0);
   const [suggestions, setSuggestions] = useState(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState('');
@@ -51,25 +62,52 @@ export default function Transactions() {
   const [addBusy, setAddBusy] = useState(false);
   const { confirm } = useDialogs();
 
-  // The URL is the source of truth for the filter: the toggle button updates
-  // the params, and this effect keeps the state (and list) in sync — clicking
-  // a "needs review" link while already on the page now refilters too.
+  // The URL is the single source of truth for every filter: month, review
+  // toggle, and the per-column filters below. Clicking a "needs review" link
+  // or a Dashboard category refilters in place, and Back/Forward work.
+  const review = params.get('review') === '1';
+  const urlMonth = params.get('month') ?? '';
+  const [draft, setDraft] = useState(() => pickFilters(params));
   useEffect(() => {
-    setReviewOnly(params.get('review') === '1');
-    setMonth(params.get('month') || workingMonth);
-    setPage(0);
-  }, [params, workingMonth]);
+    setDraft(pickFilters(params));
+  }, [params]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const p = new URLSearchParams(params);
+      for (const k of FILTER_KEYS) {
+        if (draft[k]) p.set(k, draft[k]);
+        else p.delete(k);
+      }
+      if (p.toString() !== params.toString()) setParams(p);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [draft]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setFilter = (key, value) => setDraft((p) => ({ ...p, [key]: value }));
 
-  // A request-sequence guard: the newest request wins, so fast month/filter
+  // First visit: seed the URL with the working month so the default view
+  // matches the rest of the app. Afterwards the URL stays canonical.
+  useEffect(() => {
+    if (!params.get('month') && workingMonth) {
+      const p = new URLSearchParams(params);
+      p.set('month', workingMonth);
+      setParams(p, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A request-sequence guard: the newest request wins, so fast filter
   // switching can never let an older response clobber a newer one.
   const loadSeq = useRef(0);
   const load = () => {
     const seq = ++loadSeq.current;
     const q = new URLSearchParams();
-    if (month) q.set('month', month);
-    if (review) q.set('review', '1');
-    q.set('limit', PAGE_SIZE);
-    q.set('offset', page * PAGE_SIZE);
+    for (const k of ['month', 'review', ...FILTER_KEYS]) {
+      const v = params.get(k);
+      if (v) q.set(k, v);
+    }
+    // One continuous table: fetch the whole filtered set (server caps at a
+    // hard ceiling for safety).
+    q.set('limit', 'all');
     api
       .get(`/transactions?${q}`)
       .then((d) => {
@@ -82,6 +120,10 @@ export default function Transactions() {
         if (seq === loadSeq.current) setError(e.message);
       });
   };
+
+  useEffect(() => {
+    load();
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     api.get('/categories').then(setCategories);
@@ -168,14 +210,6 @@ export default function Transactions() {
       setAddBusy(false);
     }
   };
-  useEffect(() => {
-    load();
-  }, [month, review, page]);
-
-  useEffect(() => {
-    const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
-    if (page > lastPage) setPage(lastPage);
-  }, [page, total]);
 
   const assign = async (tx, categoryId, remember) => {
     try {
@@ -439,10 +473,34 @@ export default function Transactions() {
     load();
   };
 
+  // Active filter chips (every chip removal also updates the URL).
+  const activeChips = [
+    urlMonth && { key: 'month', label: `month ${urlMonth}` },
+    review && { key: 'review', label: 'needs review' },
+    ...FILTER_KEYS.filter((k) => params.get(k)).map((k) => ({
+      key: k,
+      label: `${k.replace(/_/g, ' ')} ${params.get(k)}`,
+    })),
+  ].filter(Boolean);
+  const clearFilter = (key) => {
+    const p = new URLSearchParams(params);
+    if (key === 'month') setWorkingMonth('');
+    p.delete(key);
+    setParams(p);
+  };
+  const clearAllFilters = () => {
+    const p = new URLSearchParams();
+    setWorkingMonth('');
+    setParams(p);
+  };
+
   return (
     <div>
       <h1>
-        {review ? 'Needs review' : 'Transactions'} <span className="muted h-count">({total})</span>
+        {review ? 'Needs review' : 'Transactions'}{' '}
+        <span className="muted h-count">
+          ({total > rows.length ? `${rows.length} shown of ${total}` : total})
+        </span>
       </h1>
 
       <div className="filters card">
@@ -450,11 +508,14 @@ export default function Transactions() {
           Month
           <input
             type="month"
-            value={month}
+            value={urlMonth}
             onChange={(e) => {
-              setMonth(e.target.value);
-              setPage(0);
-              setWorkingMonth(e.target.value);
+              const v = e.target.value;
+              const p = new URLSearchParams(params);
+              if (v) p.set('month', v);
+              else p.delete('month');
+              setParams(p);
+              setWorkingMonth(v);
             }}
           />
         </label>
@@ -467,20 +528,16 @@ export default function Transactions() {
             } else {
               p.set('review', '1');
             }
-            setPage(0);
             setParams(p);
           }}
         >
           {review ? 'Showing needs-review' : 'Show needs-review only'}
         </button>
-        {month && (
+        {urlMonth && (
           <button
             className="btn ghost"
             title="Show every month"
-            onClick={() => {
-              setMonth('');
-              setPage(0);
-            }}
+            onClick={() => clearFilter('month')}
           >
             Clear month
           </button>
@@ -529,6 +586,12 @@ export default function Transactions() {
       {error && (
         <div className="error" style={{ margin: '0 0 10px 4px' }}>
           {error}
+        </div>
+      )}
+
+      {params.get('context') === 'over-budget' && (
+        <div className="card success-box" style={{ marginBottom: 12 }}>
+          ⚠️ Viewing an over-budget category — these transactions caused the overrun this month.
         </div>
       )}
 
@@ -582,6 +645,32 @@ export default function Transactions() {
 
       {rows.length === 0 && <div className="card empty">Nothing here.</div>}
 
+      {activeChips.length > 0 && (
+        <div className="filters card" style={{ padding: '8px 12px' }}>
+          <span className="muted tiny" style={{ alignSelf: 'center' }}>
+            Filters:
+          </span>
+          {activeChips.map((chip) => (
+            <button
+              key={chip.key}
+              className="btn ghost small active"
+              title="Remove this filter"
+              onClick={() => clearFilter(chip.key)}
+            >
+              {chip.label} ✕
+            </button>
+          ))}
+          <button className="btn ghost small" onClick={clearAllFilters}>
+            Clear all
+          </button>
+          <span className="muted tiny" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
+            {rows.length === total
+              ? `${rows.length} transaction${rows.length === 1 ? '' : 's'} shown`
+              : `showing first ${rows.length} of ${total} — narrow the filters`}
+          </span>
+        </div>
+      )}
+
       <div className="card table-card">
         <table id="transactions-table">
           <thead>
@@ -592,6 +681,111 @@ export default function Transactions() {
               <th>Amount</th>
               <th style={{ minWidth: 260 }}>Category</th>
               <th></th>
+            </tr>
+            <tr className="column-filters">
+              <th>
+                <input
+                  type="date"
+                  aria-label="Filter by date from"
+                  title="From date (inclusive)"
+                  value={draft.date_from}
+                  onChange={(e) => setFilter('date_from', e.target.value)}
+                />
+                <input
+                  type="date"
+                  aria-label="Filter by date to"
+                  title="To date (inclusive)"
+                  value={draft.date_to}
+                  onChange={(e) => setFilter('date_to', e.target.value)}
+                />
+              </th>
+              <th>
+                <input
+                  type="search"
+                  aria-label="Search descriptions"
+                  title="Description contains this text"
+                  placeholder="search description…"
+                  value={draft.q}
+                  onChange={(e) => setFilter('q', e.target.value)}
+                />
+                <input
+                  type="search"
+                  aria-label="Filter by type"
+                  title="Exact tx_type match (e.g. Card)"
+                  placeholder="type (e.g. Card)"
+                  value={draft.tx_type}
+                  onChange={(e) => setFilter('tx_type', e.target.value)}
+                />
+              </th>
+              <th>
+                <select
+                  aria-label="Filter by account"
+                  title="Filter by account"
+                  value={draft.account_id}
+                  onChange={(e) => setFilter('account_id', e.target.value)}
+                >
+                  <option value="">Any account</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </th>
+              <th>
+                <input
+                  type="number"
+                  step="0.01"
+                  aria-label="Filter by minimum amount"
+                  title="Absolute amount at least this"
+                  placeholder="min €"
+                  value={draft.amount_min}
+                  onChange={(e) => setFilter('amount_min', e.target.value)}
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  aria-label="Filter by maximum amount"
+                  title="Absolute amount at most this"
+                  placeholder="max €"
+                  value={draft.amount_max}
+                  onChange={(e) => setFilter('amount_max', e.target.value)}
+                />
+              </th>
+              <th>
+                <select
+                  aria-label="Filter by category"
+                  title="Filter by category"
+                  value={draft.category_id}
+                  onChange={(e) => setFilter('category_id', e.target.value)}
+                >
+                  <option value="">Any category</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Filter by transfer state"
+                  title="Show only transfers, or exclude them"
+                  value={draft.transfer}
+                  onChange={(e) => setFilter('transfer', e.target.value)}
+                >
+                  <option value="">Transfers + normal</option>
+                  <option value="1">Transfers only</option>
+                  <option value="0">Exclude transfers</option>
+                </select>
+              </th>
+              <th>
+                <button
+                  className="btn ghost small"
+                  title="Reset every column filter"
+                  onClick={clearAllFilters}
+                >
+                  Reset
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -646,6 +840,14 @@ export default function Transactions() {
                     )}
                 </td>
                 <td>
+                  {tx.review_reason === 'choice_rule' && (
+                    <span
+                      className="pill-badge accent-badge"
+                      title="A category choice rule matched this description — pick which category applies"
+                    >
+                      choice rule
+                    </span>
+                  )}
                   {tx.transfer_group ? (
                     <span
                       className="pill-badge accent-badge"
@@ -877,32 +1079,13 @@ export default function Transactions() {
             ))}
           </tbody>
         </table>
-        <nav className="transaction-pagination" aria-label="Transaction pagination">
-          <button
-            type="button"
-            className="btn ghost small"
-            aria-label="Previous transactions page"
-            onClick={() => setPage((current) => current - 1)}
-            disabled={page === 0}
-          >
-            Previous
-          </button>
-          <span className="pagination-status" role="status" aria-live="polite">
-            {total === 0
-              ? 'Showing 0 of 0'
-              : `Showing ${page * PAGE_SIZE + 1}-${Math.min((page + 1) * PAGE_SIZE, total)} of ${total}`}{' '}
-            {total > 0 && `(page ${page + 1} of ${Math.ceil(total / PAGE_SIZE)})`}
-          </span>
-          <button
-            type="button"
-            className="btn ghost small"
-            aria-label="Next transactions page"
-            onClick={() => setPage((current) => current + 1)}
-            disabled={(page + 1) * PAGE_SIZE >= total}
-          >
-            Next
-          </button>
-        </nav>
+        {rows.length > 0 && (
+          <p className="muted tiny" style={{ margin: '8px 12px' }} role="status" aria-live="polite">
+            {rows.length === total
+              ? `Showing all ${total} transaction${total === 1 ? '' : 's'} on one page.`
+              : `Showing the first ${rows.length} of ${total} matching transactions — narrow the filters to see the rest.`}
+          </p>
+        )}
       </div>
 
       {splitTx && (

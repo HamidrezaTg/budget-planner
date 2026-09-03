@@ -77,10 +77,11 @@ displayed fund balance.
 For each month M = F … F+N−1:
 
 ```
-income(M)  = Σ over income sources s:
-               income_entries[s, M]        if an actual entry exists
-             = sources.current_amount[s]   if the source is recurring
-             = 0                           otherwise (one-off sources without entry)
+income(M)  = Σ over income sources s active in M
+               (start_month ≤ M AND (end_month is NULL OR M ≤ end_month)):
+                income_entries[s, M]        if an actual entry exists
+              = sources.current_amount[s]   otherwise
+              = 0 for sources NOT active in M (even if an old entry exists)
 
 commitments(M) = Σ managed Loan-category plans over commitments where
                  start_month ≤ M AND (end_month is NULL OR M ≤ end_month)

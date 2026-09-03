@@ -79,6 +79,14 @@ router.patch('/:id', (req, res) => {
       db.prepare('DELETE FROM budget_lines WHERE category_id = ?').run(row.id);
       db.prepare('DELETE FROM category_rules WHERE category_id = ?').run(row.id);
       db.prepare('DELETE FROM category_automation_rules WHERE category_id = ?').run(row.id);
+      // Choice rules that no longer have at least two live candidates can
+      // never fire again; remove them so the Rules Manager stays truthful.
+      db.prepare(
+        `DELETE FROM category_choice_rules WHERE id IN (
+           SELECT r.id FROM category_choice_rules r
+           WHERE (SELECT COUNT(*) FROM category_choice_rule_categories cc WHERE cc.rule_id = r.id) < 2
+         )`,
+      ).run();
       db.prepare(
         'UPDATE commitments SET monthly_amount = 0 WHERE category_id = ? AND end_month IS NULL',
       ).run(row.id);
@@ -141,6 +149,14 @@ router.delete('/:id', (req, res) => {
     db.prepare('DELETE FROM budget_lines WHERE category_id = ?').run(req.params.id);
     db.prepare('DELETE FROM category_rules WHERE category_id = ?').run(req.params.id);
     db.prepare('DELETE FROM category_automation_rules WHERE category_id = ?').run(req.params.id);
+    // The schema cascades choice-rule category links; drop rules left with
+    // fewer than two candidates so they cannot linger as dead entries.
+    db.prepare(
+      `DELETE FROM category_choice_rules WHERE id IN (
+         SELECT r.id FROM category_choice_rules r
+         WHERE (SELECT COUNT(*) FROM category_choice_rule_categories cc WHERE cc.rule_id = r.id) < 2
+       )`,
+    ).run();
     db.prepare('DELETE FROM categories WHERE id = ?').run(req.params.id);
     db.exec('COMMIT');
   } catch (e) {

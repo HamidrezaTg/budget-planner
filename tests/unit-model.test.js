@@ -71,7 +71,7 @@ test('projection rolls forward when the latest observation predates the start mo
   dbm.closeUserDb('proj-user');
 });
 
-test('recurring income follows its start and end months while actual entries remain historical', () => {
+test('income follows its start and end months; out-of-period actuals count as zero', () => {
   const username = 'income-schedule-user';
   const db = dbm.getUserDb(username);
   const start = addMonths(currentMonth(), 1);
@@ -89,12 +89,40 @@ test('recurring income follows its start and end months while actual entries rem
   assert.equal(dbm.als.run(db, () => incomeForMonth(end)).total, 2500);
   assert.equal(dbm.als.run(db, () => incomeForMonth(after)).total, 0);
 
+  // A recorded actual outside the period is masked to zero (the schedule
+  // governs everything); the row itself stays in the database untouched.
   db.prepare('INSERT INTO income_entries (source_id, month, amount) VALUES (?, ?, ?)').run(
     sourceId,
     after,
     900,
   );
-  assert.equal(dbm.als.run(db, () => incomeForMonth(after)).total, 900);
+  assert.equal(dbm.als.run(db, () => incomeForMonth(after)).total, 0);
+  assert.equal(
+    db
+      .prepare('SELECT amount FROM income_entries WHERE source_id = ? AND month = ?')
+      .get(sourceId, after)?.amount,
+    900,
+  );
+  // Inside the period an actual overrides the usual amount.
+  db.prepare('INSERT INTO income_entries (source_id, month, amount) VALUES (?, ?, ?)').run(
+    sourceId,
+    start,
+    2800,
+  );
+  assert.equal(dbm.als.run(db, () => incomeForMonth(start)).total, 2800);
+  // A source with no end month continues indefinitely.
+  const openId = db
+    .prepare(
+      `INSERT INTO income_sources (name, current_amount, recurring, start_month)
+     VALUES ('Ongoing rent income', 300, 1, ?)`,
+    )
+    .run(addMonths(currentMonth(), -2)).lastInsertRowid;
+  assert.equal(
+    dbm.als
+      .run(db, () => incomeForMonth(addMonths(currentMonth(), 24)))
+      .parts.find((p) => p.source.id === openId).amount,
+    300,
+  );
   dbm.closeUserDb(username);
 });
 

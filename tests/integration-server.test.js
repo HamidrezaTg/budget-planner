@@ -788,6 +788,85 @@ test('transaction listing paginates and rejects invalid pagination parameters', 
   }
 });
 
+test('transaction listing supports limit=all and column filters', async () => {
+  const all = await api('/transactions?limit=all', 'GET', null, cookies);
+  assert.equal(all.rows.length, all.total);
+  assert.ok(all.total >= 2);
+
+  // Description search (case-insensitive substring)
+  const sample = all.rows[0];
+  const needle = sample.description.slice(0, 6);
+  const byText = await api(
+    `/transactions?limit=all&q=${encodeURIComponent(needle)}`,
+    'GET',
+    null,
+    cookies,
+  );
+  assert.ok(byText.rows.every((r) => r.description.toLowerCase().includes(needle.toLowerCase())));
+  assert.ok(byText.rows.some((r) => r.id === sample.id));
+
+  // Date range filter
+  const byDate = await api(
+    `/transactions?limit=all&date_from=${sample.date}&date_to=${sample.date}`,
+    'GET',
+    null,
+    cookies,
+  );
+  assert.ok(byDate.rows.every((r) => r.date === sample.date));
+  assert.ok(byDate.rows.some((r) => r.id === sample.id));
+
+  // Amount range: absolute bounds
+  const abs = Math.abs(sample.amount);
+  const byAmount = await api(
+    `/transactions?limit=all&amount_min=${abs}&amount_max=${abs}`,
+    'GET',
+    null,
+    cookies,
+  );
+  assert.ok(byAmount.rows.every((r) => Math.abs(r.amount) === abs));
+  assert.ok(byAmount.rows.some((r) => r.id === sample.id));
+
+  // Transfer filter
+  const transfers = await api('/transactions?limit=all&transfer=1', 'GET', null, cookies);
+  assert.ok(transfers.rows.every((r) => r.transfer_group));
+  const nonTransfers = await api('/transactions?limit=all&transfer=0', 'GET', null, cookies);
+  assert.ok(nonTransfers.rows.every((r) => !r.transfer_group));
+
+  // Account + type filters and malformed values
+  if (sample.account_id) {
+    const byAccount = await api(
+      `/transactions?limit=all&account_id=${sample.account_id}`,
+      'GET',
+      null,
+      cookies,
+    );
+    assert.ok(byAccount.rows.every((r) => r.account_id === sample.account_id));
+  }
+  if (sample.tx_type) {
+    const byType = await api(
+      `/transactions?limit=all&tx_type=${encodeURIComponent(sample.tx_type)}`,
+      'GET',
+      null,
+      cookies,
+    );
+    assert.ok(
+      byType.rows.every((r) => (r.tx_type || '').toLowerCase() === sample.tx_type.toLowerCase()),
+    );
+  }
+  for (const query of [
+    'account_id=0',
+    'account_id=abc',
+    'date_from=2026-13-01',
+    'date_from=not-a-date',
+    'amount_min=abc',
+  ]) {
+    const response = await fetch(`${srv.url}/api/transactions?${query}`, {
+      headers: { Cookie: cookies },
+    });
+    assert.equal(response.status, 400, query);
+  }
+});
+
 test('healthz responds without authentication', async () => {
   const r = await fetch(`${srv.url}/healthz`);
   assert.equal(r.status, 200);
@@ -929,6 +1008,94 @@ test('multi-category recurrence templates post atomically as transaction splits'
     (t) => t.description === 'Integration Household',
   );
   assert.equal(again.length, rows.length);
+  await api(`/recurrences/${rec.id}`, 'DELETE', null, cookies);
+});
+
+test('scheduled transactions honor start/end months and skip months', async () => {
+  const now = new Date();
+  const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const next = `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, '0')}`;
+  const prev =
+    now.getMonth() === 0
+      ? `${now.getFullYear() - 1}-12`
+      : `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`;
+
+  // Invalid schedule is refused.
+  const invalid = await fetch(`${srv.url}/api/recurrences`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({
+      name: 'Bad schedule',
+      amount: -5,
+      day_of_month: 2,
+      start_month: next,
+      end_month: cur,
+    }),
+  });
+  assert.equal(invalid.status, 400);
+
+  // Skip months must be valid YYYY-MM values.
+  const badSkip = await fetch(`${srv.url}/api/recurrences`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({
+      name: 'Bad skip',
+      amount: -5,
+      day_of_month: 2,
+      skip_months: ['2026-13'],
+    }),
+  });
+  assert.equal(badSkip.status, 400);
+
+  const rec = await api(
+    '/recurrences',
+    'POST',
+    {
+      name: 'Scheduled Gym',
+      amount: -30,
+      day_of_month: 2,
+      start_month: cur,
+      end_month: next,
+      skip_months: [prev],
+    },
+    cookies,
+  );
+  assert.equal(rec.name, 'Scheduled Gym');
+  assert.equal(rec.start_month, cur);
+  assert.equal(rec.end_month, next);
+  assert.deepEqual(rec.skip_months, [prev]);
+
+  const listed = await api('/recurrences', 'GET', null, cookies);
+  const mine = listed.recurrences.find((r) => r.id === rec.id);
+  assert.ok(mine);
+  assert.equal(mine.status, 'due'); // current month is inside the schedule
+  assert.deepEqual(mine.skip_months, [prev]);
+
+  // Manual post outside the schedule / in a skip month is refused.
+  const beforeStart = await fetch(`${srv.url}/api/recurrences/${rec.id}/post`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ month: prev }),
+  });
+  assert.equal(beforeStart.status, 400);
+  assert.match((await beforeStart.json()).error, /skip|schedule/i);
+
+  const posted = await api(`/recurrences/${rec.id}/post`, 'POST', { month: cur }, cookies);
+  assert.equal(posted.ok, true);
+  const afterPost = (await api('/recurrences', 'GET', null, cookies)).recurrences.find(
+    (r) => r.id === rec.id,
+  );
+  assert.equal(afterPost.status, 'posted');
+
+  // Updating skip_months replaces the whole list.
+  const updated = await api(`/recurrences/${rec.id}`, 'PATCH', { skip_months: [] }, cookies);
+  assert.deepEqual(updated.skip_months, []);
+
+  // The upcoming panel never shows months outside the schedule.
+  const final = await api('/recurrences', 'GET', null, cookies);
+  assert.ok(
+    final.upcoming.every((u) => u.recurrence_id !== rec.id || (u.month >= cur && u.month <= next)),
+  );
   await api(`/recurrences/${rec.id}`, 'DELETE', null, cookies);
 });
 

@@ -245,6 +245,14 @@ const BUILDERS = {
     if (!src) throw new Error(`Unknown income source "${args.source_name}"`);
     const m = month(args.month);
     const amount = num(args.amount);
+    // Same rule as the HTTP route: an out-of-period write would create a
+    // stored-but-ignored entry that confuses reconciliation.
+    const active =
+      (!src.start_month || src.start_month <= m) && (!src.end_month || m <= src.end_month);
+    if (!active)
+      throw new Error(
+        `${m} is outside ${src.name}'s period (${src.start_month ?? 'start'} – ${src.end_month ?? 'ongoing'}); actual income there counts as zero`,
+      );
     return {
       type: 'enter_income',
       summary: `Record actual income €${amount} for ${src.name} in ${m}`,

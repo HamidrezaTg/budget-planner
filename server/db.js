@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   kind TEXT NOT NULL DEFAULT 'sparkasse',
   is_spending_pot INTEGER NOT NULL DEFAULT 0,
   opening_balance REAL NOT NULL DEFAULT 0,
+  opening_balance_month TEXT,                -- YYYY-MM: balance true at END of this month; NULL = covers all history
   display_currency TEXT NOT NULL DEFAULT 'EUR'
 );
 
@@ -310,7 +311,8 @@ CREATE TABLE IF NOT EXISTS transactions (
   split_of INTEGER REFERENCES transactions(id) ON DELETE CASCADE,
   fund_id INTEGER REFERENCES funds(id) ON DELETE SET NULL,   -- a transaction can be paid from a fund
   commitment_id INTEGER REFERENCES commitments(id) ON DELETE SET NULL,
-  transfer_group TEXT                        -- non-NULL: this row is part of a bank↔card transfer; excluded from spend/income sums
+  transfer_group TEXT,                       -- non-NULL: this row is part of a bank↔card transfer; excluded from spend/income sums
+  review_reason TEXT                         -- why the row is in the review queue: 'choice_rule' | NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_tx_cat ON transactions(category_id);
@@ -318,7 +320,27 @@ CREATE INDEX IF NOT EXISTS idx_tx_cat ON transactions(category_id);
 CREATE TABLE IF NOT EXISTS category_rules (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   keyword TEXT NOT NULL UNIQUE,
-  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE
+  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  origin TEXT NOT NULL DEFAULT 'manual'      -- 'manual' (Rules Manager) | 'learned' (Remember checkbox)
+);
+
+-- Category Choice rules: keywords whose transactions may belong to more than
+-- one category. They never auto-assign; matching rows go to the review queue
+-- and the user picks one of the rule's candidate categories.
+CREATE TABLE IF NOT EXISTS category_choice_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  keyword TEXT NOT NULL,
+  amount_min REAL,
+  amount_max REAL,
+  account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+  tx_type TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS category_choice_rule_categories (
+  rule_id INTEGER NOT NULL REFERENCES category_choice_rules(id) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  PRIMARY KEY (rule_id, category_id)
 );
 
 CREATE TABLE IF NOT EXISTS category_automation_rules (
@@ -343,7 +365,17 @@ CREATE TABLE IF NOT EXISTS recurrences (
   category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   auto_post INTEGER NOT NULL DEFAULT 0,      -- post automatically when due
   active INTEGER NOT NULL DEFAULT 1,
-  last_posted_month TEXT                     -- YYYY-MM of last auto/manual post
+  last_posted_month TEXT,                    -- YYYY-MM of last auto/manual post
+  start_month TEXT,                          -- first scheduled month; NULL = always
+  end_month TEXT                             -- last scheduled month; NULL = ongoing
+);
+
+-- Months deliberately excluded from a schedule (vacation pause, one-time
+-- cancellation). Posting and import folding both respect these.
+CREATE TABLE IF NOT EXISTS recurrence_skips (
+  recurrence_id INTEGER NOT NULL REFERENCES recurrences(id) ON DELETE CASCADE,
+  month TEXT NOT NULL,
+  PRIMARY KEY (recurrence_id, month)
 );
 
 CREATE TABLE IF NOT EXISTS recurrence_parts (
@@ -488,6 +520,44 @@ CREATE TABLE IF NOT EXISTS import_templates (
     db.exec(
       'ALTER TABLE categories ADD COLUMN managed_commitment_id INTEGER REFERENCES commitments(id) ON DELETE SET NULL',
     );
+  } catch {}
+  // v3.22 — category choice rules + rule provenance. Legacy rules are treated
+  // as manual (protected from "un-remember" deletion); legacy review rows keep
+  // a NULL reason.
+  try {
+    db.exec('ALTER TABLE transactions ADD COLUMN review_reason TEXT');
+  } catch {}
+  try {
+    db.exec("ALTER TABLE category_rules ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual'");
+  } catch {}
+  // v3.22 — opening-balance month. NULL keeps the legacy all-history behavior;
+  // a set month means the balance was true at the END of that month, so only
+  // transactions AFTER that month are added on top of it.
+  try {
+    db.exec('ALTER TABLE accounts ADD COLUMN opening_balance_month TEXT');
+  } catch {}
+  // v3.22 — income sources are governed purely by start/end months (the
+  // recurring toggle is retired). Legacy "non-recurring" sources with an
+  // amount but no dates would silently become always-projecting under the
+  // new semantics; close them at the end of the previous month instead so
+  // future projections stay zero while historical entries keep displaying.
+  // Clearing the end month in the UI makes them ongoing again.
+  try {
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+    db.prepare(
+      `UPDATE income_sources SET end_month = ?
+       WHERE recurring = 0 AND start_month IS NULL AND end_month IS NULL AND current_amount <> 0`,
+    ).run(prevMonth);
+  } catch {}
+  // v3.22 — scheduled transactions: optional start/end months. NULL keeps the
+  // legacy always-scheduled behavior.
+  try {
+    db.exec('ALTER TABLE recurrences ADD COLUMN start_month TEXT');
+  } catch {}
+  try {
+    db.exec('ALTER TABLE recurrences ADD COLUMN end_month TEXT');
   } catch {}
 
   // These columns were added to older databases by the migrations above. Do

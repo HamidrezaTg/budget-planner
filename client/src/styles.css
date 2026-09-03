@@ -1106,6 +1106,21 @@ kbd {
 .category-row:last-child {
   border-bottom: none;
 }
+/* Dashboard category rows are links into the filtered Transactions view. */
+a.category-row-link {
+  color: inherit;
+  text-decoration: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+a.category-row-link:hover {
+  background: var(--line-soft);
+}
+a.category-row-link:focus-visible {
+  outline: 2px solid var(--accent, var(--blue));
+  outline-offset: 2px;
+}
 .category-name {
   display: flex;
   align-items: center;
@@ -1508,6 +1523,32 @@ select option {
   color: var(--muted);
   font-size: 12px;
   text-align: center;
+}
+/* Single-page Transactions table: per-column filter row. */
+#transactions-table tr.column-filters th {
+  vertical-align: top;
+  white-space: normal;
+  padding-top: 6px;
+  padding-bottom: 10px;
+}
+#transactions-table tr.column-filters input,
+#transactions-table tr.column-filters select {
+  display: block;
+  width: 100%;
+  max-width: 160px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+#transactions-table tr.column-filters th:last-child input,
+#transactions-table tr.column-filters th:last-child select {
+  max-width: none;
+}
+/* Row virtualization for the one-page table: the browser skips rendering
+   offscreen rows while they stay in the DOM for filters and search. */
+#transactions-table tbody tr {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
 }
 table {
   width: 100%;
@@ -2043,7 +2084,7 @@ select.missing {
   display: grid;
   grid-template-columns:
     minmax(150px, 1.5fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)
-    minmax(120px, 1fr) auto auto;
+    minmax(120px, 1fr) auto;
   gap: 8px;
   align-items: center;
 }
@@ -2054,7 +2095,7 @@ select.missing {
 .income-source-row {
   grid-template-columns:
     minmax(140px, 1.5fr) minmax(110px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)
-    minmax(120px, 1fr) auto auto auto;
+    minmax(120px, 1fr) auto auto;
   padding: 8px 0;
   border-bottom: 1px solid var(--line-soft);
 }
@@ -2662,7 +2703,28 @@ select.missing {
   margin-right: 6px;
 }
 
-/* ---------- bills / recurring rows ---------- */
+/* ---------- bills / recurring (scheduled) rows ---------- */
+.schedule-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+.schedule-editor input[type='month'] {
+  max-width: 150px;
+  font-size: 12px;
+}
+.schedule-skips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.schedule-skips input[type='month'] {
+  max-width: 130px;
+  font-size: 12px;
+  padding: 3px 6px;
+}
 .bill-row {
   display: grid;
   grid-template-columns: 44px auto 1fr auto;
@@ -2821,9 +2883,7 @@ select.missing {
   .income-source-row {
     grid-template-columns: 1fr 1fr;
   }
-  .income-source-form .check-label,
   .income-source-form .btn,
-  .income-source-row .check-label,
   .income-source-row .btn {
     width: 100%;
   }

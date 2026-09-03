@@ -14,7 +14,6 @@ export default function Income() {
     name: '',
     current_amount: '',
     person_id: '',
-    recurring: true,
     start_month: currentMonth(),
     end_month: '',
   });
@@ -34,7 +33,6 @@ export default function Income() {
                 name: source.name,
                 current_amount: String(source.current_amount ?? 0),
                 person_id: source.person_id ?? '',
-                recurring: !!source.recurring,
                 start_month: source.start_month ?? '',
                 end_month: source.end_month ?? '',
               },
@@ -69,7 +67,6 @@ export default function Income() {
         name: '',
         current_amount: '',
         person_id: '',
-        recurring: true,
         start_month: currentMonth(),
         end_month: '',
       });
@@ -141,8 +138,10 @@ export default function Income() {
         <h1>Income — {monthLabel(month)}</h1>
       </div>
       <p className="muted">
-        Actual income must be entered, not assumed. The “usual” amount is used by the projection
-        only during the configured start and end months, unless a month has its own entry.
+        Actual income must be entered, not assumed. Each source is active from its start month to
+        its end month — leave the end month empty for income that continues indefinitely. Outside a
+        source's period its actual counts as zero, and an in-period actual overrides the usual
+        amount.
       </p>
 
       {error && <div className="error">{error}</div>}
@@ -154,8 +153,8 @@ export default function Income() {
             <h2>Income sources</h2>
           </div>
           <span className="muted tiny">
-            Add each salary or recurring income separately. Leave the end month blank for ongoing
-            income.
+            Add each salary or repeating income separately. Leave the end month blank for income
+            that continues indefinitely.
           </span>
         </div>
         <form className="income-source-form" onSubmit={addSource}>
@@ -196,16 +195,8 @@ export default function Income() {
             type="month"
             value={sourceForm.end_month}
             onChange={(e) => setSourceForm({ ...sourceForm, end_month: e.target.value })}
-            title="Last month included in the projection"
+            title="Last month included; leave empty for ongoing income"
           />
-          <label className="check-label">
-            <input
-              type="checkbox"
-              checked={sourceForm.recurring}
-              onChange={(e) => setSourceForm({ ...sourceForm, recurring: e.target.checked })}
-            />
-            Recurring
-          </label>
           <button className="btn primary" type="submit" disabled={!sourceForm.name.trim()}>
             Add source
           </button>
@@ -276,21 +267,8 @@ export default function Income() {
                       [source.id]: { ...edit, end_month: e.target.value },
                     }))
                   }
-                  title="Last month included in the projection"
+                  title="Last month included; leave empty for ongoing income"
                 />
-                <label className="check-label">
-                  <input
-                    type="checkbox"
-                    checked={!!edit.recurring}
-                    onChange={(e) =>
-                      setSourceEdits((p) => ({
-                        ...p,
-                        [source.id]: { ...edit, recurring: e.target.checked },
-                      }))
-                    }
-                  />
-                  Recurring
-                </label>
                 <button className="btn small primary" onClick={() => saveSource(source)}>
                   Save
                 </button>
@@ -320,90 +298,121 @@ export default function Income() {
             </tr>
           </thead>
           <tbody>
-            {data.sources.map((s) => (
-              <tr key={s.id}>
-                <td>
-                  {s.name}
-                  {!s.recurring && <span className="muted tiny"> one-off</span>}
-                </td>
-                <td className="muted">{s.person_name ?? '—'}</td>
-                <td className="num">
-                  {eur(s.current_amount)}
-                  <button
-                    className="btn ghost tiny-btn"
-                    title="Edit usual amount"
-                    onClick={async () => {
-                      const v = await prompt({
-                        title: `Usual monthly amount — ${s.name}`,
-                        label: 'Used by the projection for months without an actual entry',
-                        initial: String(s.current_amount),
-                      });
-                      if (v === null) return;
-                      // Include the month's current entry: a PUT without an
-                      // `amount` means "remove this month's actual entry" on
-                      // the server, which silently wiped real income.
-                      await api.put(`/income/${month}/${s.id}`, {
-                        current_amount: Number(v) || 0,
-                        amount: s.entry_amount ?? null,
-                      });
-                      load();
-                    }}
-                  >
-                    ✎
-                  </button>
-                </td>
-                <td className="num">
-                  <input
-                    className="budget-input"
-                    type="number"
-                    step="0.01"
-                    title="Actual income for this month — leave blank to use the usual amount"
-                    placeholder={String(s.current_amount)}
-                    defaultValue={s.entry_amount ?? ''}
-                    key={`${month}-${s.id}-${String(s.entry_amount)}`}
-                    onChange={(e) =>
-                      setEdits((p) => ({
-                        ...p,
-                        [s.id]: { ...(p[s.id] ?? {}), entry: e.target.value },
-                      }))
-                    }
-                  />
-                </td>
-                <td>
-                  <button
-                    className={`btn small ${edits[s.id] ? 'primary' : 'ghost'}`}
-                    title={
-                      s.entry_amount != null
-                        ? 'Replace the actual for this month'
-                        : 'Save the actual amount you typed'
-                    }
-                    onClick={() => save(s)}
-                    disabled={!edits[s.id]}
-                  >
-                    {s.entry_amount != null ? 'Update' : 'Enter actual'}
-                  </button>
-                  {s.entry_amount != null && (
+            {data.sources.map((s) => {
+              const inactive = s.active_in_month === false;
+              return (
+                <tr key={s.id} className={inactive ? 'done-row' : ''}>
+                  <td>
+                    {s.name}
+                    {inactive && (
+                      <span
+                        className="pill-badge"
+                        title={`Outside this source's period (${s.start_month ?? 'start'} – ${s.end_month ?? 'ongoing'}). Actual income counts as zero.`}
+                      >
+                        not active
+                      </span>
+                    )}
+                  </td>
+                  <td className="muted">{s.person_name ?? '—'}</td>
+                  <td className="num">
+                    {eur(s.current_amount)}
                     <button
-                      className="btn ghost small"
-                      title="Remove the actual for this month — the projection will fall back to the usual amount"
+                      className="btn ghost tiny-btn"
+                      title="Edit usual amount"
                       onClick={async () => {
-                        const ok = await confirm({
-                          title: 'Clear this month’s actual?',
-                          message: `"${s.name}" will fall back to its usual amount for the projection.`,
-                          danger: true,
-                          confirmLabel: 'Clear',
+                        const v = await prompt({
+                          title: `Usual monthly amount — ${s.name}`,
+                          label: 'Used by the projection for months without an actual entry',
+                          initial: String(s.current_amount),
                         });
-                        if (!ok) return;
-                        await api.put(`/income/${month}/${s.id}`, { amount: null });
+                        if (v === null) return;
+                        // Include the month's current entry: a PUT without an
+                        // `amount` means "remove this month's actual entry" on
+                        // the server, which silently wiped real income.
+                        await api.put(`/income/${month}/${s.id}`, {
+                          current_amount: Number(v) || 0,
+                          amount: s.entry_amount ?? null,
+                        });
                         load();
                       }}
                     >
-                      Clear
+                      ✎
                     </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="num">
+                    {inactive ? (
+                      <span
+                        className="muted tiny"
+                        title="This month is outside the source's period"
+                      >
+                        0 — not active
+                      </span>
+                    ) : (
+                      <input
+                        className="budget-input"
+                        type="number"
+                        step="0.01"
+                        title="Actual income for this month — leave blank to use the usual amount"
+                        placeholder={String(s.current_amount)}
+                        defaultValue={s.entry_amount ?? ''}
+                        key={`${month}-${s.id}-${String(s.entry_amount)}`}
+                        onChange={(e) =>
+                          setEdits((p) => ({
+                            ...p,
+                            [s.id]: { ...(p[s.id] ?? {}), entry: e.target.value },
+                          }))
+                        }
+                      />
+                    )}
+                  </td>
+                  <td>
+                    {inactive ? (
+                      <button
+                        className="btn ghost small"
+                        disabled
+                        title="The selected month is outside this source's start/end months"
+                      >
+                        Enter actual
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          className={`btn small ${edits[s.id] ? 'primary' : 'ghost'}`}
+                          title={
+                            s.entry_amount != null
+                              ? 'Replace the actual for this month'
+                              : 'Save the actual amount you typed'
+                          }
+                          onClick={() => save(s)}
+                          disabled={!edits[s.id]}
+                        >
+                          {s.entry_amount != null ? 'Update' : 'Enter actual'}
+                        </button>
+                        {s.entry_amount != null && (
+                          <button
+                            className="btn ghost small"
+                            title="Remove the actual for this month — the projection will fall back to the usual amount"
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: 'Clear this month’s actual?',
+                                message: `"${s.name}" will fall back to its usual amount for the projection.`,
+                                danger: true,
+                                confirmLabel: 'Clear',
+                              });
+                              if (!ok) return;
+                              await api.put(`/income/${month}/${s.id}`, { amount: null });
+                              load();
+                            }}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -18,7 +18,13 @@ export default function Recurring() {
     account_id: '',
     category_id: '',
     auto_post: false,
+    start_month: '',
+    end_month: '',
+    skip_months: [],
   });
+  const [skipDraft, setSkipDraft] = useState('');
+  // Inline schedule editor: { [id]: { start_month, end_month, skip_months, skipDraft } }
+  const [scheduleEdits, setScheduleEdits] = useState({});
   const { toast, confirm } = useDialogs();
 
   const load = () =>
@@ -49,6 +55,9 @@ export default function Recurring() {
         day_of_month: Number(form.day_of_month),
         account_id: form.account_id || null,
         category_id: template ? null : form.category_id || null,
+        start_month: form.start_month || null,
+        end_month: form.end_month || null,
+        skip_months: form.skip_months,
         ...(template ? { parts } : {}),
       });
       setForm({
@@ -58,6 +67,9 @@ export default function Recurring() {
         account_id: '',
         category_id: '',
         auto_post: false,
+        start_month: '',
+        end_month: '',
+        skip_months: [],
       });
       setTemplate(false);
       setParts([
@@ -73,6 +85,59 @@ export default function Recurring() {
   const toggle = async (r, field) => {
     await api.patch(`/recurrences/${r.id}`, { [field]: !r[field] });
     load();
+  };
+
+  const startScheduleEdit = (r) =>
+    setScheduleEdits((p) => ({
+      ...p,
+      [r.id]: {
+        start_month: r.start_month ?? '',
+        end_month: r.end_month ?? '',
+        skip_months: [...(r.skip_months ?? [])],
+        skipDraft: '',
+      },
+    }));
+  const cancelScheduleEdit = (id) =>
+    setScheduleEdits((p) => {
+      const n = { ...p };
+      delete n[id];
+      return n;
+    });
+  const saveScheduleEdit = async (r) => {
+    const edit = scheduleEdits[r.id];
+    if (!edit) return;
+    try {
+      await api.patch(`/recurrences/${r.id}`, {
+        start_month: edit.start_month || null,
+        end_month: edit.end_month || null,
+        skip_months: edit.skip_months,
+      });
+      toast(`Schedule for "${r.name}" saved.`);
+      cancelScheduleEdit(r.id);
+      load();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
+  const scheduleLabel = (r) => {
+    if (r.start_month && r.end_month) return `${r.start_month} → ${r.end_month}`;
+    if (r.start_month) return `from ${r.start_month}`;
+    if (r.end_month) return `until ${r.end_month}`;
+    return 'every month';
+  };
+
+  const statusBadge = (r) => {
+    if (r.status === 'posted')
+      return (
+        <span className="pill-badge" style={{ background: 'var(--teal, var(--blue))' }}>
+          posted {r.status_month}
+        </span>
+      );
+    if (r.status === 'due')
+      return <span className="pill-badge accent-badge">due {r.status_month}</span>;
+    if (r.status === 'paused') return <span className="pill-badge">paused</span>;
+    return <span className="pill-badge">not scheduled</span>;
   };
 
   const post = async (u) => {
@@ -101,11 +166,13 @@ export default function Recurring() {
 
   return (
     <div>
-      <h1>Recurring</h1>
+      <h1>Scheduled Transactions</h1>
       <p className="muted">
-        Expected monthly transactions — rent, subscriptions, salary. They appear in the Upcoming
-        panel on the Dashboard and can post themselves automatically on their day, or wait for you
-        to confirm.
+        Reusable monthly templates — rent, subscriptions, salary. Each month they can post the real
+        transaction automatically on their day or wait for your confirmation, and imported bank rows
+        matching a scheduled item are folded in instead of double-counted. This is what keeps
+        repeating money in your books without re-typing it; the projection, by contrast, uses your
+        income sources and plans.
       </p>
 
       <div className="panel">
@@ -150,64 +217,183 @@ export default function Recurring() {
               <th className="num">Amount</th>
               <th>Account</th>
               <th>Category</th>
+              <th>Schedule</th>
+              <th>Status</th>
               <th>Auto</th>
               <th>Active</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {data.recurrences.map((r) => (
-              <tr key={r.id} className={r.active ? '' : 'done-row'}>
-                <td>{r.name}</td>
-                <td>{r.day_of_month}</td>
-                <td className={`num ${r.amount >= 0 ? 'income' : ''}`}>{eur(r.amount)}</td>
-                <td className="muted">{r.account_name ?? '—'}</td>
-                <td className="muted">
-                  {r.parts?.length
-                    ? r.parts.map((p) => `${p.category_name} ${eur(p.amount)}`).join(' · ')
-                    : (r.category_name ?? '—')}
-                </td>
-                <td>
-                  <button
-                    className={`btn ghost small ${r.auto_post ? 'active' : ''}`}
-                    title={
-                      r.auto_post
-                        ? 'Currently auto-posts on its day. Click to require manual confirmation.'
-                        : 'Currently manual. Click to auto-post on its day.'
-                    }
-                    onClick={() => toggle(r, 'auto_post')}
-                  >
-                    {r.auto_post ? 'auto' : 'manual'}
-                  </button>
-                </td>
-                <td>
-                  <button
-                    className="btn ghost small"
-                    title={
-                      r.active
-                        ? 'Pause — the recurrence stops appearing until you resume'
-                        : 'Resume — the recurrence will appear again'
-                    }
-                    onClick={() => toggle(r, 'active')}
-                  >
-                    {r.active ? 'pause' : 'resume'}
-                  </button>
-                </td>
-                <td>
-                  <button
-                    className="btn danger small"
-                    title={`Delete the "${r.name}" recurrence`}
-                    onClick={() => remove(r)}
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {data.recurrences.map((r) => {
+              const edit = scheduleEdits[r.id];
+              return (
+                <tr key={r.id} className={r.active ? '' : 'done-row'}>
+                  <td>{r.name}</td>
+                  <td>{r.day_of_month}</td>
+                  <td className={`num ${r.amount >= 0 ? 'income' : ''}`}>{eur(r.amount)}</td>
+                  <td className="muted">{r.account_name ?? '—'}</td>
+                  <td className="muted">
+                    {r.parts?.length
+                      ? r.parts.map((p) => `${p.category_name} ${eur(p.amount)}`).join(' · ')
+                      : (r.category_name ?? '—')}
+                  </td>
+                  <td>
+                    {edit ? (
+                      <div className="schedule-editor">
+                        <label className="muted tiny">
+                          start
+                          <input
+                            type="month"
+                            aria-label={`${r.name} start month`}
+                            value={edit.start_month}
+                            onChange={(e) =>
+                              setScheduleEdits((p) => ({
+                                ...p,
+                                [r.id]: { ...edit, start_month: e.target.value },
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="muted tiny">
+                          end
+                          <input
+                            type="month"
+                            aria-label={`${r.name} end month`}
+                            title="Leave empty for ongoing"
+                            value={edit.end_month}
+                            onChange={(e) =>
+                              setScheduleEdits((p) => ({
+                                ...p,
+                                [r.id]: { ...edit, end_month: e.target.value },
+                              }))
+                            }
+                          />
+                        </label>
+                        <div className="schedule-skips">
+                          {edit.skip_months.map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              className="btn ghost small"
+                              title="Stop skipping this month"
+                              onClick={() =>
+                                setScheduleEdits((p) => ({
+                                  ...p,
+                                  [r.id]: {
+                                    ...edit,
+                                    skip_months: edit.skip_months.filter((x) => x !== m),
+                                  },
+                                }))
+                              }
+                            >
+                              ↷ {m} ✕
+                            </button>
+                          ))}
+                          <input
+                            type="month"
+                            aria-label={`${r.name} month to skip`}
+                            title="Add a month this item should NOT post (e.g. vacation pause)"
+                            value={edit.skipDraft}
+                            onChange={(e) =>
+                              setScheduleEdits((p) => ({
+                                ...p,
+                                [r.id]: { ...edit, skipDraft: e.target.value },
+                              }))
+                            }
+                          />
+                          {edit.skipDraft && (
+                            <button
+                              type="button"
+                              className="btn small"
+                              onClick={() =>
+                                setScheduleEdits((p) => ({
+                                  ...p,
+                                  [r.id]: {
+                                    ...edit,
+                                    skip_months: [
+                                      ...new Set([...edit.skip_months, edit.skipDraft]),
+                                    ],
+                                    skipDraft: '',
+                                  },
+                                }))
+                              }
+                            >
+                              + skip
+                            </button>
+                          )}
+                        </div>
+                        <div>
+                          <button className="btn small primary" onClick={() => saveScheduleEdit(r)}>
+                            Save
+                          </button>
+                          <button
+                            className="btn ghost small"
+                            onClick={() => cancelScheduleEdit(r.id)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="muted">{scheduleLabel(r)}</span>
+                        {(r.skip_months ?? []).length > 0 && (
+                          <div className="muted tiny">skipping {r.skip_months.join(', ')}</div>
+                        )}
+                        <button
+                          className="btn ghost tiny-btn"
+                          title="Edit the schedule (start, end, skip months)"
+                          onClick={() => startScheduleEdit(r)}
+                        >
+                          ✎
+                        </button>
+                      </>
+                    )}
+                  </td>
+                  <td>{statusBadge(r)}</td>
+                  <td>
+                    <button
+                      className={`btn ghost small ${r.auto_post ? 'active' : ''}`}
+                      title={
+                        r.auto_post
+                          ? 'Currently auto-posts on its day. Click to require manual confirmation.'
+                          : 'Currently manual. Click to auto-post on its day.'
+                      }
+                      onClick={() => toggle(r, 'auto_post')}
+                    >
+                      {r.auto_post ? 'auto' : 'manual'}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      className="btn ghost small"
+                      title={
+                        r.active
+                          ? 'Pause — the recurrence stops appearing until you resume'
+                          : 'Resume — the recurrence will appear again'
+                      }
+                      onClick={() => toggle(r, 'active')}
+                    >
+                      {r.active ? 'pause' : 'resume'}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      className="btn danger small"
+                      title={`Delete the "${r.name}" recurrence`}
+                      onClick={() => remove(r)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
             {data.recurrences.length === 0 && (
               <tr>
-                <td colSpan="8" className="muted">
-                  No recurring transactions yet — add your first below.
+                <td colSpan="10" className="muted">
+                  No scheduled transactions yet — add your first below.
                 </td>
               </tr>
             )}
@@ -240,6 +426,57 @@ export default function Recurring() {
             onChange={(e) => setForm({ ...form, day_of_month: e.target.value })}
           />
         </label>
+        <input
+          aria-label="Scheduled transaction start month"
+          type="month"
+          title="First month this item is scheduled; leave empty to start from any month"
+          value={form.start_month}
+          onChange={(e) => setForm({ ...form, start_month: e.target.value })}
+        />
+        <input
+          aria-label="Scheduled transaction end month"
+          type="month"
+          title="Last month this item is scheduled; leave empty for ongoing"
+          value={form.end_month}
+          onChange={(e) => setForm({ ...form, end_month: e.target.value })}
+        />
+        <div className="schedule-skips">
+          {form.skip_months.map((m) => (
+            <button
+              key={m}
+              type="button"
+              className="btn ghost small"
+              title="Stop skipping this month"
+              onClick={() =>
+                setForm({ ...form, skip_months: form.skip_months.filter((x) => x !== m) })
+              }
+            >
+              ↷ {m} ✕
+            </button>
+          ))}
+          <input
+            type="month"
+            aria-label="Month to skip"
+            title="Months this item should NOT post (e.g. a vacation pause)"
+            value={skipDraft}
+            onChange={(e) => setSkipDraft(e.target.value)}
+          />
+          {skipDraft && (
+            <button
+              type="button"
+              className="btn small"
+              onClick={() => {
+                setForm((p) => ({
+                  ...p,
+                  skip_months: [...new Set([...p.skip_months, skipDraft])],
+                }));
+                setSkipDraft('');
+              }}
+            >
+              + skip
+            </button>
+          )}
+        </div>
         <select
           title="Account this transaction will be booked against"
           value={form.account_id}

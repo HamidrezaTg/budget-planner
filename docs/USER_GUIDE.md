@@ -151,6 +151,15 @@ plan. Categorization rules determine how imported transactions are assigned.
 
 - Assigning a category to a review row can learn a keyword rule.
 - Learned rules can repair older matching rows retroactively.
+- Unchecking "Remember" while editing a transaction removes the keyword rule that
+  transaction taught — but never a rule you created manually in Categories or one
+  still used by other transactions.
+- Category choice rules cover keywords that may belong to several categories
+  (for example "Amazon" → Household or Electronics). They never auto-assign:
+  matching transactions wait in review and you pick one of the rule's candidate
+  categories. Such rows are marked "choice rule" in the queue.
+- The rules list can be searched and filtered by keyword, type, category, and
+  enabled state; advanced and choice rules can be disabled and re-enabled.
 - Advanced rules can combine description text, absolute amount range, account,
   transaction type, and priority.
 - Higher-priority rules are checked first.
@@ -172,14 +181,19 @@ qualifying activity for unused plan to be carried forward.
 ## Income
 
 An income source can have a name, person, usual amount, active start month, active
-end month, and monthly actual. Dates apply to the recurring projection; leave the
-end month blank for ongoing income.
+end month, and monthly actual. The start and end months govern everything — there
+is no separate recurring toggle. Leave the end month blank for income that
+continues indefinitely.
 
-- **Usual** is the recurring amount used when a month has no actual entry.
-- **Start month** is the first month in which the usual recurring amount is projected.
+- **Usual** is the amount projected for months without an actual entry.
+- **Start month** is the first month in which the usual amount is projected.
 - **End month** is the last month in which it is projected. This lets an old salary
   end while a separate future salary source starts later.
 - **Actual** is the amount that really arrived in that month and overrides usual.
+
+Outside a source's period its income counts as zero: the actual column is disabled,
+an out-of-period actual write is refused, and any historical out-of-period entries
+stay in the database but are not counted or shown.
 
 Enter refunds as transactions according to their actual account movement; do not
 inflate income just to make a spending category look correct.

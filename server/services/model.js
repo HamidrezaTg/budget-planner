@@ -138,18 +138,30 @@ function observedTotalAt(month) {
   );
 }
 
+// Calculated account balance at end of `month`. Transaction-based: opening
+// balance plus every transaction on the account through `month`. When the
+// account has an `opening_balance_month`, the opening balance was true at the
+// END of that month (which is the same point as the start of the next month),
+// so only transactions strictly AFTER that month are added; months before the
+// baseline are unknown and return null. Without a baseline month the legacy
+// behavior applies: the opening balance covers all history.
 export function accountBalanceAt(accountId, month) {
   const account = db
-    .prepare('SELECT id, opening_balance, display_currency FROM accounts WHERE id = ?')
+    .prepare(
+      'SELECT id, opening_balance, opening_balance_month, display_currency FROM accounts WHERE id = ?',
+    )
     .get(accountId);
   if (!account) return 0;
+  const baseline = account.opening_balance_month;
+  if (baseline && month < baseline) return null;
   const transactions = db
     .prepare(
       `SELECT amount, currency, substr(date,1,7) AS month FROM transactions
        WHERE account_id = ? AND substr(date,1,7) <= ?
+         AND (? IS NULL OR substr(date,1,7) > ?)
          AND NOT (split_of IS NULL AND split_group IS NOT NULL)`,
     )
-    .all(accountId, month);
+    .all(accountId, month, baseline, baseline);
   return transactions.reduce(
     (sum, tx) => sum + convertCurrency(tx.amount, tx.currency, account.display_currency, tx.month),
     account.opening_balance,
@@ -222,16 +234,20 @@ export function incomeForMonth(month) {
   const sources = db.prepare('SELECT * FROM income_sources ORDER BY id').all();
   let total = 0;
   const parts = sources.map((s) => {
+    const scheduled =
+      (!s.start_month || s.start_month <= month) && (!s.end_month || month <= s.end_month);
+    // Start/end months govern everything: outside the source's period it
+    // contributes nothing — not even a recorded actual entry, which would
+    // otherwise contradict the configured schedule. Historical out-of-period
+    // entries stay in the database untouched; they are simply not shown or
+    // counted for months outside the period.
+    if (!scheduled) return { source: s, amount: 0, active: false };
     const entry = db
       .prepare('SELECT amount FROM income_entries WHERE source_id = ? AND month = ?')
       .get(s.id, month);
-    const scheduled =
-      (!s.start_month || s.start_month <= month) && (!s.end_month || s.end_month >= month);
-    // Actual entries represent money that arrived, even when outside an old
-    // schedule. Date limits apply to recurring projections only.
-    const amount = entry ? entry.amount : s.recurring && scheduled ? s.current_amount : 0;
+    const amount = entry ? entry.amount : (s.current_amount ?? 0);
     total += amount;
-    return { source: s, amount };
+    return { source: s, amount, active: true };
   });
   return { total, parts };
 }
@@ -284,12 +300,9 @@ function totalPredictedAt(month) {
   const accounts = db.prepare('SELECT id, display_currency FROM accounts').all();
   let bank = 0;
   for (const a of accounts) {
-    bank += convertCurrency(
-      accountBalanceAt(a.id, month),
-      a.display_currency,
-      baseCurrency(),
-      month,
-    );
+    const balance = accountBalanceAt(a.id, month);
+    if (balance === null) continue; // before the account's opening-balance month
+    bank += convertCurrency(balance, a.display_currency, baseCurrency(), month);
   }
   const committed = committedSavingsAt(month);
   return bank + committed;
@@ -529,6 +542,15 @@ function recurringDueWithinDays() {
     const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
     const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     for (const r of recurrences) {
+      // Respect the schedule: start/end bounds and skip months.
+      if (r.start_month && month < r.start_month) continue;
+      if (r.end_month && month > r.end_month) continue;
+      if (
+        db
+          .prepare('SELECT 1 FROM recurrence_skips WHERE recurrence_id = ? AND month = ?')
+          .get(r.id, month)
+      )
+        continue;
       const day = Math.min(r.day_of_month, daysInMonth(month));
       if (day !== date.getDate() || r.last_posted_month === month) continue;
       due.push({ id: r.id, name: r.name, amount: r.amount, month, day });
@@ -561,8 +583,9 @@ function insightsForMonth(month, view) {
         severity: 'danger',
         title: `${r.name} is over budget`,
         message: '',
-        link: '/budgets',
-        action: 'Open budgets',
+        // Deep-link straight to the transactions that caused the overrun.
+        link: `/transactions?month=${month}&category_id=${r.id}&context=over-budget`,
+        action: 'Show transactions',
         fields: { amount_over: round2(r.budget_actual - r.planned) },
       });
     });
@@ -641,6 +664,7 @@ function insightsForMonth(month, view) {
   const accounts = db.prepare('SELECT id, name, display_currency FROM accounts').all();
   for (const a of accounts) {
     const predicted = accountBalanceAt(a.id, month);
+    if (predicted === null) continue; // before the account's opening-balance month
     const obs = db
       .prepare('SELECT balance FROM balance_observations WHERE account_id = ? AND month = ?')
       .get(a.id, month);

@@ -52,9 +52,24 @@ test('login, import, review, and dashboard flow', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /Needs review/ })).toBeVisible();
   await expect(page.getByText('Coffee')).toBeVisible();
 
+  // Assign a category so the dashboard drill-down has something to show.
+  const reviewRow = page.getByRole('row', { name: /Coffee/ });
+  await reviewRow.locator('select').first().selectOption({ label: 'Dining out' });
+  await expect(page.getByText('Coffee')).toBeHidden();
+
   await page.getByRole('link', { name: /Dashboard$/ }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByText('Monthly check-in')).toBeVisible();
+
+  // Dashboard category rows drill down into the filtered Transactions view.
+  await page
+    .getByRole('link', { name: /Dining out/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/transactions\\?month=${month}&category_id=\\d+$`));
+  await expect(page.getByText('Filters:')).toBeVisible();
+  await expect(page.getByText('Coffee')).toBeVisible();
+  await expect(page.getByText('Showing all 1 transaction on one page.')).toBeVisible();
 });
 
 test('themes, responsive settings, and projection controls work', async ({ page }) => {

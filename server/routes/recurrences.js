@@ -21,6 +21,60 @@ function partsFor(recurrenceId) {
     .all(recurrenceId);
 }
 
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function skipMonthsFor(recurrenceId) {
+  return db
+    .prepare('SELECT month FROM recurrence_skips WHERE recurrence_id = ? ORDER BY month')
+    .all(recurrenceId)
+    .map((row) => row.month);
+}
+
+// Is this recurrence scheduled to produce a transaction in `month`?
+// active flag aside: start/end bounds and skip months decide.
+function isScheduledFor(r, month) {
+  if (r.start_month && month < r.start_month) return false;
+  if (r.end_month && month > r.end_month) return false;
+  return !db
+    .prepare('SELECT 1 FROM recurrence_skips WHERE recurrence_id = ? AND month = ?')
+    .get(r.id, month);
+}
+
+// Validation for start/end/skip schedule fields shared by POST and PATCH.
+// Returns an error string, a { start, end, skips } object, or undefined when
+// the caller sent none of the fields.
+function validateSchedule(body, existing = null) {
+  const provided =
+    body.start_month !== undefined ||
+    body.end_month !== undefined ||
+    body.skip_months !== undefined;
+  if (!provided) return undefined;
+  for (const field of ['start_month', 'end_month']) {
+    const value = body[field];
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== '' &&
+      (typeof value !== 'string' || !MONTH_RE.test(value))
+    )
+      return `${field} must be YYYY-MM or empty`;
+  }
+  const start =
+    body.start_month === undefined ? (existing?.start_month ?? null) : body.start_month || null;
+  const end = body.end_month === undefined ? (existing?.end_month ?? null) : body.end_month || null;
+  if (start && end && start > end) return 'start_month must not be after end_month';
+  let skips;
+  if (body.skip_months !== undefined) {
+    if (!Array.isArray(body.skip_months)) return 'skip_months must be an array of YYYY-MM months';
+    skips = [...new Set(body.skip_months.map(String))];
+    for (const m of skips) {
+      if (!MONTH_RE.test(m)) return 'skip_months entries must be YYYY-MM months';
+    }
+    skips.sort();
+  }
+  return { start, end, skips };
+}
+
 function validateParts(parts, total) {
   if (!Array.isArray(parts) || parts.length < 2)
     return { error: 'Provide at least two recurring category parts' };
@@ -49,7 +103,7 @@ function recurrenceWithParts(row) {
 }
 
 // Which recurrences are due within a window starting at month M, day D?
-// Returns upcoming items (not yet posted for their month).
+// Returns upcoming items (not yet posted for their month, still scheduled).
 function upcoming(fromMonth, fromDay, count) {
   const recs = db.prepare('SELECT * FROM recurrences WHERE active = 1 ORDER BY day_of_month').all();
   const items = [];
@@ -57,6 +111,7 @@ function upcoming(fromMonth, fromDay, count) {
   while (items.length < count) {
     const dim = daysInMonth(m);
     for (const r of recs) {
+      if (!isScheduledFor(r, m)) continue;
       const day = Math.min(r.day_of_month, dim);
       if (m === fromMonth && day < fromDay) continue;
       // Already posted for this exact month. A manual post for a FUTURE month
@@ -90,6 +145,7 @@ function autoPost() {
   const recs = db.prepare('SELECT * FROM recurrences WHERE active = 1 AND auto_post = 1').all();
   let posted = 0;
   for (const r of recs) {
+    if (!isScheduledFor(r, m)) continue;
     const day = Math.min(r.day_of_month, daysInMonth(m));
     if (today < day) continue;
     // Skip only if the CURRENT month was already posted. A future-month manual
@@ -163,6 +219,10 @@ function post(r, month, day) {
 }
 
 router.get('/', (req, res) => {
+  const month =
+    MONTH_RE.test(String(req.query.month ?? '')) && req.query.month
+      ? String(req.query.month).slice(0, 7) && req.query.month
+      : currentMonth();
   const rows = db
     .prepare(
       `SELECT r.*, a.name AS account_name, c.name AS category_name
@@ -172,7 +232,16 @@ router.get('/', (req, res) => {
        ORDER BY r.day_of_month, r.name`,
     )
     .all()
-    .map(recurrenceWithParts);
+    .map((row) => {
+      const withParts = recurrenceWithParts(row);
+      const skips = skipMonthsFor(row.id);
+      let status;
+      if (!row.active) status = 'paused';
+      else if (!isScheduledFor(row, month)) status = 'not_scheduled';
+      else if (row.last_posted_month === month) status = 'posted';
+      else status = 'due';
+      return { ...withParts, skip_months: skips, status, status_month: month };
+    });
   const up = upcoming(currentMonth(), new Date().getDate(), 12);
   res.json({ recurrences: rows, upcoming: up, autoPosted: 0 });
 });
@@ -211,9 +280,11 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'category_id must reference a valid category' });
   const checked = parts === undefined ? { parts: null } : validateParts(parts, total);
   if (checked.error) return res.status(400).json({ error: checked.error });
+  const schedule = validateSchedule(req.body ?? {});
+  if (typeof schedule === 'string') return res.status(400).json({ error: schedule });
   const r = db
     .prepare(
-      'INSERT INTO recurrences (name, amount, day_of_month, account_id, category_id, auto_post) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO recurrences (name, amount, day_of_month, account_id, category_id, auto_post, start_month, end_month) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     )
     .run(
       name.trim(),
@@ -222,7 +293,15 @@ router.post('/', (req, res) => {
       account_id,
       checked.parts ? null : category_id,
       auto_post ? 1 : 0,
+      schedule?.start ?? null,
+      schedule?.end ?? null,
     );
+  if (schedule?.skips?.length) {
+    const insSkip = db.prepare(
+      'INSERT OR IGNORE INTO recurrence_skips (recurrence_id, month) VALUES (?, ?)',
+    );
+    for (const m of schedule.skips) insSkip.run(r.lastInsertRowid, m);
+  }
   if (checked.parts) {
     const insPart = db.prepare(
       'INSERT INTO recurrence_parts (recurrence_id, category_id, amount, sort) VALUES (?, ?, ?, ?)',
@@ -231,11 +310,11 @@ router.post('/', (req, res) => {
       insPart.run(r.lastInsertRowid, part.category_id, part.amount, part.sort),
     );
   }
-  res.json(
-    recurrenceWithParts(
-      db.prepare('SELECT * FROM recurrences WHERE id = ?').get(r.lastInsertRowid),
-    ),
-  );
+  const row = db.prepare('SELECT * FROM recurrences WHERE id = ?').get(r.lastInsertRowid);
+  res.json({
+    ...recurrenceWithParts(row),
+    skip_months: skipMonthsFor(row.id),
+  });
 });
 
 router.patch('/:id', (req, res) => {
@@ -276,6 +355,8 @@ router.patch('/:id', (req, res) => {
         ? { parts: null }
         : validateParts(b.parts, total);
   if (checked.error) return res.status(400).json({ error: checked.error });
+  const schedule = validateSchedule(b, row);
+  if (typeof schedule === 'string') return res.status(400).json({ error: schedule });
   const categoryId = Array.isArray(checked.parts)
     ? null
     : b.category_id !== undefined
@@ -284,7 +365,7 @@ router.patch('/:id', (req, res) => {
   db.exec('BEGIN');
   try {
     db.prepare(
-      'UPDATE recurrences SET name=?, amount=?, day_of_month=?, account_id=?, category_id=?, auto_post=?, active=? WHERE id=?',
+      'UPDATE recurrences SET name=?, amount=?, day_of_month=?, account_id=?, category_id=?, auto_post=?, active=?, start_month=?, end_month=? WHERE id=?',
     ).run(
       b.name !== undefined ? b.name.trim() : row.name,
       total,
@@ -293,8 +374,17 @@ router.patch('/:id', (req, res) => {
       categoryId,
       b.auto_post !== undefined ? (b.auto_post ? 1 : 0) : row.auto_post,
       b.active !== undefined ? (b.active ? 1 : 0) : row.active,
+      schedule?.start ?? row.start_month ?? null,
+      schedule?.end ?? row.end_month ?? null,
       req.params.id,
     );
+    if (schedule?.skips !== undefined) {
+      db.prepare('DELETE FROM recurrence_skips WHERE recurrence_id = ?').run(row.id);
+      const insSkip = db.prepare(
+        'INSERT OR IGNORE INTO recurrence_skips (recurrence_id, month) VALUES (?, ?)',
+      );
+      for (const m of schedule.skips) insSkip.run(row.id, m);
+    }
     if (b.parts !== undefined) {
       db.prepare('DELETE FROM recurrence_parts WHERE recurrence_id = ?').run(row.id);
       if (checked.parts) {
@@ -311,7 +401,8 @@ router.patch('/:id', (req, res) => {
     db.exec('ROLLBACK');
     throw error;
   }
-  res.json(recurrenceWithParts(db.prepare('SELECT * FROM recurrences WHERE id = ?').get(row.id)));
+  const updated = db.prepare('SELECT * FROM recurrences WHERE id = ?').get(row.id);
+  res.json({ ...recurrenceWithParts(updated), skip_months: skipMonthsFor(row.id) });
 });
 
 // Post an upcoming item now (creates the real transaction).
@@ -325,6 +416,18 @@ router.post('/:id/post', (req, res) => {
   if (Number(mo) < 1 || Number(mo) > 12)
     return res.status(400).json({ error: 'month must be a valid YYYY-MM' });
   const month = `${y}-${mo}`;
+  if (!r.active)
+    return res.status(400).json({ error: 'This scheduled item is paused — resume it first' });
+  if (!isScheduledFor(r, month)) {
+    const skipped = db
+      .prepare('SELECT 1 FROM recurrence_skips WHERE recurrence_id = ? AND month = ?')
+      .get(r.id, month);
+    return res.status(400).json({
+      error: skipped
+        ? `${month} is in this item's skip list — remove the skip month to post it`
+        : `${month} is outside this item's schedule (${r.start_month ?? 'start'} – ${r.end_month ?? 'ongoing'})`,
+    });
+  }
   const day = Math.min(r.day_of_month, daysInMonth(month));
   post(r, month, day);
   res.json({ ok: true });

@@ -21,6 +21,11 @@ Linux packages are currently unsigned. macOS releases are intentionally
 unsigned until a Developer ID certificate and notarization credentials are
 available; use **Open Anyway** as described in `INSTALL_MAC.md`.
 
+Windows NSIS and MSI release bundles are Authenticode-signed in GitHub Actions.
+The release workflow requires the repository secrets
+`BP_WINDOWS_CERT_BASE64` (base64-encoded PFX) and
+`BP_WINDOWS_CERT_PASSWORD`; it fails closed when either is missing.
+
 The Tauri updater is present in the client but must not be enabled for public
 releases until an updater signing key and public key are stored as repository
 secrets/configuration. Never commit the private signing key.

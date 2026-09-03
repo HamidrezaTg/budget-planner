@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Budget Planner API",
-    "version": "3.20.2",
+    "version": "3.22.0",
     "description": "Static contract for the Budget Planner HTTP API. JSON amounts are numbers and transaction expenses are negative. Unless an operation is marked public, send the bp_session cookie returned by login or setup."
   },
   "servers": [
@@ -366,11 +366,54 @@
           { "$ref": "#/components/parameters/MonthQuery" },
           { "name": "review", "in": "query", "schema": { "type": "string", "enum": ["1"] } },
           { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "account_id", "in": "query", "schema": { "type": "integer" } },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Case-insensitive substring match on the description.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "tx_type",
+            "in": "query",
+            "description": "Exact case-insensitive match on tx_type.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "description": "Inclusive lower date bound (YYYY-MM-DD).",
+            "schema": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "description": "Inclusive upper date bound (YYYY-MM-DD).",
+            "schema": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+          },
+          {
+            "name": "amount_min",
+            "in": "query",
+            "description": "Inclusive lower bound on the absolute amount.",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "amount_max",
+            "in": "query",
+            "description": "Inclusive upper bound on the absolute amount.",
+            "schema": { "type": "number" }
+          },
+          {
+            "name": "transfer",
+            "in": "query",
+            "description": "1 = only paired transfers, 0 = exclude them.",
+            "schema": { "type": "string", "enum": ["0", "1"] }
+          },
           {
             "name": "limit",
             "in": "query",
-            "description": "Rows per page. The maximum is 1000.",
-            "schema": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 500 }
+            "description": "Rows per page. The maximum is 1000; the special value \"all\" returns the whole filtered set (capped at 10000 rows) for the single-page table.",
+            "schema": { "type": "string" }
           },
           {
             "name": "offset",
@@ -535,6 +578,22 @@
       }
     },
     "/transactions/rules": {
+      "get": {
+        "tags": ["Resources"],
+        "summary": "Search and filter categorization rules",
+        "operationId": "searchTransactionRules",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" } },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["keyword", "advanced", "choice"] }
+          },
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "enabled", "in": "query", "schema": { "type": "string", "enum": ["0", "1"] } }
+        ],
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      },
       "post": {
         "tags": ["Resources"],
         "summary": "Create a keyword rule",
@@ -569,6 +628,17 @@
     },
     "/transactions/rules/{id}": {
       "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Retarget a keyword rule to another category",
+        "operationId": "updateTransactionRule",
+        "requestBody": { "$ref": "#/components/requestBodies/KeywordRule" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
       "delete": {
         "tags": ["Resources"],
         "summary": "Delete a keyword rule",
@@ -578,10 +648,53 @@
     },
     "/transactions/rules/advanced/{id}": {
       "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Update an advanced rule (conditions, category, priority, enabled)",
+        "operationId": "updateAdvancedTransactionRule",
+        "requestBody": { "$ref": "#/components/requestBodies/AdvancedRule" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
       "delete": {
         "tags": ["Resources"],
         "summary": "Delete an advanced rule",
         "operationId": "deleteAdvancedTransactionRule",
+        "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
+      }
+    },
+    "/transactions/rules/choice": {
+      "post": {
+        "tags": ["Resources"],
+        "summary": "Create a category choice rule (always asks instead of auto-assigning)",
+        "operationId": "createChoiceTransactionRule",
+        "requestBody": { "$ref": "#/components/requestBodies/ChoiceRule" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/transactions/rules/choice/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Update a category choice rule",
+        "operationId": "updateChoiceTransactionRule",
+        "requestBody": { "$ref": "#/components/requestBodies/ChoiceRule" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "delete": {
+        "tags": ["Resources"],
+        "summary": "Delete a category choice rule",
+        "operationId": "deleteChoiceTransactionRule",
         "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
       }
     },
@@ -1792,6 +1905,12 @@
           "application/json": { "schema": { "$ref": "#/components/schemas/AdvancedRule" } }
         }
       },
+      "ChoiceRule": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ChoiceRule" } }
+        }
+      },
       "RuleTest": {
         "required": true,
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RuleTest" } } }
@@ -2118,6 +2237,12 @@
           },
           "is_spending_pot": { "type": "boolean" },
           "opening_balance": { "type": "number" },
+          "opening_balance_month": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "nullable": true,
+            "description": "The opening balance was true at the END of this month; null covers all history"
+          },
           "display_currency": { "type": "string", "enum": ["EUR", "USD", "GBP", "CHF"] }
         }
       },
@@ -2132,6 +2257,12 @@
           },
           "is_spending_pot": { "type": "boolean" },
           "opening_balance": { "type": "number" },
+          "opening_balance_month": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "nullable": true,
+            "description": "The opening balance was true at the END of this month; null covers all history"
+          },
           "display_currency": { "type": "string", "enum": ["EUR", "USD", "GBP", "CHF"] }
         }
       },
@@ -2271,6 +2402,24 @@
           "tx_type": { "type": "string" }
         }
       },
+      "ChoiceRule": {
+        "type": "object",
+        "required": ["keyword", "category_ids"],
+        "properties": {
+          "keyword": { "type": "string" },
+          "category_ids": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "minItems": 2,
+            "description": "Candidate categories the user picks between in review"
+          },
+          "amount_min": { "type": "number" },
+          "amount_max": { "type": "number" },
+          "account_id": { "type": "integer" },
+          "tx_type": { "type": "string" },
+          "enabled": { "type": "integer", "enum": [0, 1] }
+        }
+      },
       "RuleTest": {
         "type": "object",
         "properties": {
@@ -2390,19 +2539,25 @@
           "name": { "type": "string", "minLength": 1, "maxLength": 80 },
           "person_id": { "type": ["integer", "null"] },
           "current_amount": { "type": "number" },
-          "recurring": { "type": "boolean" },
-          "start_month": { "type": ["string", "null"], "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
-          "end_month": { "type": ["string", "null"], "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" }
+          "start_month": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "description": "First month the source is active; null = active from any past month"
+          },
+          "end_month": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "description": "Last month the source is active; null = continues indefinitely"
+          }
         }
       },
       "IncomeSourcePatch": {
         "type": "object",
-        "description": "Any subset of income source fields. Empty dates clear the schedule limit.",
+        "description": "Any subset of income source fields. Empty dates clear the schedule limit. No end month means the income continues indefinitely.",
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 80 },
           "person_id": { "type": ["integer", "null"] },
           "current_amount": { "type": "number" },
-          "recurring": { "type": "boolean" },
           "start_month": { "type": ["string", "null"], "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
           "end_month": { "type": ["string", "null"], "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" }
         }
@@ -2441,6 +2596,21 @@
           "account_id": { "type": ["integer", "null"] },
           "category_id": { "type": ["integer", "null"] },
           "auto_post": { "type": "boolean" },
+          "start_month": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "description": "First scheduled month; null = scheduled from any month"
+          },
+          "end_month": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "description": "Last scheduled month; null = ongoing"
+          },
+          "skip_months": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+            "description": "Months this item must NOT post or fold imported rows into"
+          },
           "parts": {
             "type": "array",
             "minItems": 2,
@@ -2459,6 +2629,12 @@
           "category_id": { "type": ["integer", "null"] },
           "auto_post": { "type": "boolean" },
           "active": { "type": "boolean" },
+          "start_month": { "type": ["string", "null"], "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+          "end_month": { "type": ["string", "null"], "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+          "skip_months": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" }
+          },
           "parts": {
             "oneOf": [
               { "type": "null" },

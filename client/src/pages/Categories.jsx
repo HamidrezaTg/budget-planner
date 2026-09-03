@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, eur } from '../api.js';
 import { useDialogs } from '../components/Dialog.jsx';
-
 // Category management: groups, categories, learned rules, advanced rules,
 // rule tester. The page also exposes inline add/edit/delete on every list so
 // nothing lives only in seed data any more.
@@ -29,6 +28,13 @@ export default function Categories() {
   const [testResult, setTestResult] = useState(null);
   const [error, setError] = useState('');
 
+  // Rules Manager: live search + filters over every rule type.
+  const [ruleQuery, setRuleQuery] = useState('');
+  const [ruleType, setRuleType] = useState('');
+  const [ruleCategory, setRuleCategory] = useState('');
+  const [ruleEnabled, setRuleEnabled] = useState('');
+  const [choiceRule, setChoiceRule] = useState({ keyword: '', category_ids: [], account_id: '' });
+
   // Add forms.
   const [showAddCat, setShowAddCat] = useState(false);
   const [addCat, setAddCat] = useState({
@@ -46,15 +52,24 @@ export default function Categories() {
   const [renamingGroup, setRenamingGroup] = useState({});
   const [editingGroupSort, setEditingGroupSort] = useState({});
 
+  const loadRules = () => {
+    const q = new URLSearchParams();
+    if (ruleQuery.trim()) q.set('q', ruleQuery.trim());
+    if (ruleType) q.set('type', ruleType);
+    if (ruleCategory) q.set('category_id', ruleCategory);
+    if (ruleEnabled) q.set('enabled', ruleEnabled);
+    api
+      .get(`/transactions/rules${q.toString() ? `?${q}` : ''}`)
+      .then(setRules)
+      .catch((e) => toast(e.message, 'error'));
+  };
+
   const load = () => {
     api
       .get('/categories')
       .then(setCats)
       .catch((e) => toast(e.message, 'error'));
-    api
-      .get('/transactions/rules/all')
-      .then(setRules)
-      .catch((e) => toast(e.message, 'error'));
+    loadRules();
   };
   useEffect(() => {
     load();
@@ -63,6 +78,11 @@ export default function Categories() {
       .then(setMeta)
       .catch(() => {});
   }, []);
+  // Re-query rules (debounced) whenever a search/filter changes.
+  useEffect(() => {
+    const t = setTimeout(loadRules, 200);
+    return () => clearTimeout(t);
+  }, [ruleQuery, ruleType, ruleCategory, ruleEnabled]);
 
   const patch = async (id, body, confirmOptions) => {
     if (confirmOptions) {
@@ -280,7 +300,55 @@ export default function Categories() {
         category_id: '',
         priority: '0',
       });
-      load();
+      loadRules();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  const toggleChoiceCategory = (id) => {
+    setChoiceRule((p) => ({
+      ...p,
+      category_ids: p.category_ids.includes(id)
+        ? p.category_ids.filter((c) => c !== id)
+        : [...p.category_ids, id],
+    }));
+  };
+
+  const addChoiceRule = async (e) => {
+    e.preventDefault();
+    if (!choiceRule.keyword.trim() || choiceRule.category_ids.length < 2) return;
+    try {
+      await api.post('/transactions/rules/choice', {
+        keyword: choiceRule.keyword.trim(),
+        category_ids: choiceRule.category_ids.map(Number),
+        account_id: choiceRule.account_id || null,
+      });
+      setChoiceRule({ keyword: '', category_ids: [], account_id: '' });
+      setError('');
+      toast('Choice rule added — matching transactions will ask you to pick a category.');
+      loadRules();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
+  const toggleRuleEnabled = async (r) => {
+    try {
+      await api.patch(`/transactions/rules/${r.rule_type}/${r.id}`, {
+        enabled: r.enabled ? 0 : 1,
+      });
+      loadRules();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  const retargetKeywordRule = async (r, categoryId) => {
+    if (!categoryId) return;
+    try {
+      await api.patch(`/transactions/rules/${r.id}`, { category_id: Number(categoryId) });
+      loadRules();
     } catch (e) {
       toast(e.message, 'error');
     }
@@ -301,15 +369,31 @@ export default function Categories() {
   };
 
   const deleteRule = async (r) => {
+    const description =
+      r.rule_type === 'advanced'
+        ? [
+            r.description_contains && `desc: ${r.description_contains}`,
+            r.amount_min != null && `≥ €${r.amount_min}`,
+            r.amount_max != null && `≤ €${r.amount_max}`,
+            r.account_id && 'account',
+            r.tx_type && `type: ${r.tx_type}`,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : r.rule_type === 'choice'
+          ? `${r.keyword} → choose between ${(r.categories ?? []).map((c) => c.category_name).join(', ')}`
+          : r.keyword;
     const ok = await confirm({
       title: 'Delete this rule?',
-      message: `"${r.rule_type === 'advanced' ? [r.description_contains && `desc: ${r.description_contains}`, r.amount_min != null && `≥ €${r.amount_min}`, r.amount_max != null && `≤ €${r.amount_max}`, r.account_id && 'account', r.tx_type && `type: ${r.tx_type}`].filter(Boolean).join(' · ') : r.keyword}" will stop matching new transactions. Existing transactions keep their categories.`,
+      message: `"${description}" will stop matching new transactions. Existing transactions keep their categories.`,
       danger: true,
       confirmLabel: 'Delete rule',
     });
     if (!ok) return;
     try {
-      await api.del(`/transactions/rules${r.rule_type === 'advanced' ? '/advanced' : ''}/${r.id}`);
+      await api.del(
+        `/transactions/rules${r.rule_type === 'advanced' ? '/advanced' : ''}${r.rule_type === 'choice' ? '/choice' : ''}/${r.id}`,
+      );
       load();
     } catch (e) {
       toast(e.message, 'error');
@@ -753,7 +837,8 @@ export default function Categories() {
       <h2>Categorization rules</h2>
       <p className="muted">
         Rules are learned automatically when you assign a category to an unknown merchant in the
-        review queue. You can also add them manually here.
+        review queue. You can also add them manually here. Choice rules never guess — they send the
+        transaction to review and let you pick between their categories.
       </p>
       <form onSubmit={addRule} className="card inline-form rule-form">
         <input
@@ -780,6 +865,106 @@ export default function Categories() {
           Add rule
         </button>
       </form>
+
+      <h3 style={{ margin: '18px 0 6px' }}>Category choice rule</h3>
+      <p className="muted">
+        For keywords that can legitimately belong to several categories (e.g. “Amazon” → Household
+        or Electronics). Matching transactions always land in the review queue with these candidate
+        categories.
+      </p>
+      <form onSubmit={addChoiceRule} className="card inline-form rule-form">
+        <input
+          placeholder="Keyword (e.g. amazon)"
+          title="Matching transactions are sent to review instead of being auto-categorized"
+          value={choiceRule.keyword}
+          onChange={(e) => setChoiceRule({ ...choiceRule, keyword: e.target.value })}
+          required
+        />
+        <select
+          title="Optional: restrict the rule to one account"
+          value={choiceRule.account_id}
+          onChange={(e) => setChoiceRule({ ...choiceRule, account_id: e.target.value })}
+        >
+          <option value="">Any account</option>
+          {meta.accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        <select
+          title="Pick two or more candidate categories"
+          value=""
+          onChange={(e) => {
+            if (e.target.value) toggleChoiceCategory(Number(e.target.value));
+          }}
+        >
+          <option value="">
+            {choiceRule.category_ids.length
+              ? `${choiceRule.category_ids.length} candidate(s) — click to add more`
+              : '→ Candidate categories (pick 2+)'}
+          </option>
+          {cats
+            .filter((c) => c.is_active)
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {choiceRule.category_ids.includes(c.id) ? '✓ ' : ''}
+                {c.name}
+              </option>
+            ))}
+        </select>
+        <button
+          className="btn primary"
+          title="Add this choice rule"
+          disabled={choiceRule.category_ids.length < 2 || !choiceRule.keyword.trim()}
+        >
+          Add choice rule
+        </button>
+      </form>
+
+      <div className="card inline-form rule-form" style={{ marginTop: 10 }}>
+        <input
+          placeholder="Search rules…"
+          title="Filter rules by keyword, condition, or category name"
+          value={ruleQuery}
+          onChange={(e) => setRuleQuery(e.target.value)}
+        />
+        <select
+          title="Filter by rule type"
+          value={ruleType}
+          onChange={(e) => setRuleType(e.target.value)}
+        >
+          <option value="">All types</option>
+          <option value="keyword">Keyword</option>
+          <option value="advanced">Advanced</option>
+          <option value="choice">Choice</option>
+        </select>
+        <select
+          title="Filter by category"
+          value={ruleCategory}
+          onChange={(e) => setRuleCategory(e.target.value)}
+        >
+          <option value="">All categories</option>
+          {cats.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <select
+          title="Filter by enabled state"
+          value={ruleEnabled}
+          onChange={(e) => setRuleEnabled(e.target.value)}
+        >
+          <option value="">Enabled + disabled</option>
+          <option value="1">Enabled only</option>
+          <option value="0">Disabled only</option>
+        </select>
+        <span className="muted tiny" style={{ alignSelf: 'center' }}>
+          {rules.length} rule{rules.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
       <div className="card table-card tight">
         <table>
           <thead>
@@ -788,12 +973,13 @@ export default function Categories() {
               <th>Type</th>
               <th>Category</th>
               <th>Matches</th>
+              <th>Status</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {rules.map((r) => (
-              <tr key={`${r.rule_type}-${r.id}`}>
+              <tr key={`${r.rule_type}-${r.id}`} className={r.enabled === 0 ? 'done-row' : ''}>
                 <td>
                   <code>
                     {r.rule_type === 'advanced'
@@ -812,8 +998,44 @@ export default function Categories() {
                 <td>
                   <span className="pill-badge">{r.rule_type}</span>
                 </td>
-                <td>{r.category_name}</td>
-                <td>{r.matches}</td>
+                <td>
+                  {r.rule_type === 'choice' ? (
+                    <span className="muted">
+                      Choose: {(r.categories ?? []).map((c) => c.category_name).join(', ') || '—'}
+                    </span>
+                  ) : r.rule_type === 'keyword' ? (
+                    <select
+                      value={r.category_id}
+                      title="Change the category this keyword assigns"
+                      className="plain"
+                      onChange={(e) => retargetKeywordRule(r, e.target.value)}
+                    >
+                      {cats
+                        .filter((c) => c.is_active || c.id === r.category_id)
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                    </select>
+                  ) : (
+                    r.category_name
+                  )}
+                </td>
+                <td>{r.rule_type === 'choice' ? '—' : r.matches}</td>
+                <td>
+                  {r.rule_type === 'keyword' ? (
+                    <span className="muted tiny">always on</span>
+                  ) : (
+                    <button
+                      className="btn ghost small"
+                      title={r.enabled ? 'Disable this rule' : 'Enable this rule'}
+                      onClick={() => toggleRuleEnabled(r)}
+                    >
+                      {r.enabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                  )}
+                </td>
                 <td>
                   <button
                     className="btn danger small"
@@ -827,8 +1049,8 @@ export default function Categories() {
             ))}
             {rules.length === 0 && (
               <tr>
-                <td colSpan="5" className="muted">
-                  No rules yet — assign categories to learn.
+                <td colSpan="6" className="muted">
+                  No rules match — clear the search or assign categories to learn.
                 </td>
               </tr>
             )}
@@ -952,10 +1174,12 @@ export default function Categories() {
           Test
         </button>
         {testResult && (
-          <span className={testResult.category_id ? 'good' : 'muted'}>
-            {testResult.category_id
-              ? `→ ${testResult.category_name || 'matched category'}`
-              : 'No matching rule'}
+          <span className={testResult.choice || testResult.category_id ? 'good' : 'muted'}>
+            {testResult.choice
+              ? `→ ask: ${testResult.candidates.map((c) => c.category_name).join(' / ')}`
+              : testResult.category_id
+                ? `→ ${testResult.category_name || 'matched category'}`
+                : 'No matching rule'}
           </span>
         )}
       </form>

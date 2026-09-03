@@ -133,25 +133,28 @@ test('person: create + list + rename + delete', async () => {
   assert.equal(d.status, 200);
 });
 
-test('income source: create, update, and delete', async () => {
+test('income source: create, update, and delete (dates govern, recurring retired)', async () => {
   const person = await call('POST', '/api/persons', { name: 'Salary owner' });
+  const rejected = await call('POST', '/api/income/sources', {
+    name: 'Old style',
+    recurring: false,
+  });
+  assert.equal(rejected.status, 400);
+
   const created = await call('POST', '/api/income/sources', {
     name: 'Contract work',
     current_amount: 1200,
     person_id: person.body.id,
-    recurring: false,
     start_month: '2026-10',
     end_month: '2027-03',
   });
   assert.equal(created.status, 200);
   assert.equal(created.body.current_amount, 1200);
-  assert.equal(created.body.recurring, 0);
   assert.equal(created.body.start_month, '2026-10');
   assert.equal(created.body.end_month, '2027-03');
   const updated = await call('PATCH', `/api/income/sources/${created.body.id}`, {
     name: 'Consulting',
     current_amount: 1500,
-    recurring: true,
     person_id: null,
     start_month: '2027-04',
     end_month: null,
@@ -161,11 +164,18 @@ test('income source: create, update, and delete', async () => {
   assert.equal(updated.body.person_id, null);
   assert.equal(updated.body.start_month, '2027-04');
   assert.equal(updated.body.end_month, null);
+  const patchRecurring = await call('PATCH', `/api/income/sources/${created.body.id}`, {
+    recurring: false,
+  });
+  assert.equal(patchRecurring.status, 400);
   const invalid = await call('PATCH', `/api/income/sources/${created.body.id}`, {
     start_month: '2028-01',
     end_month: '2027-12',
   });
   assert.equal(invalid.status, 400);
+  // Actual writes outside the period are refused; clearing is allowed.
+  const outOfPeriod = await call('PUT', '/api/income/2026-10/' + created.body.id, { amount: 500 });
+  assert.equal(outOfPeriod.status, 400);
   const deleted = await call('DELETE', `/api/income/sources/${created.body.id}`);
   assert.equal(deleted.status, 200);
 });

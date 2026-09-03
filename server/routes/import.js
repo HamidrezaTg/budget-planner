@@ -770,7 +770,8 @@ router.post(
       // books should count it once.
       const recurrences = req.impDb
         .prepare(
-          `SELECT id, name, amount, account_id, last_posted_month FROM recurrences WHERE active = 1`,
+          `SELECT id, name, amount, account_id, last_posted_month, start_month, end_month
+           FROM recurrences WHERE active = 1`,
         )
         .all();
       const matchedRecurrenceByIndex = new Array(withCats.length).fill(null);
@@ -783,6 +784,16 @@ router.post(
             continue;
           if (r.account_id != null && tx.account_id == null) continue;
           if (r.account_id == null && tx.account_id != null) continue;
+          // Respect the schedule: never fold an import into a month the user
+          // excluded (skip list) or that lies outside the item's start/end.
+          if (r.start_month && txMonth < r.start_month) continue;
+          if (r.end_month && txMonth > r.end_month) continue;
+          if (
+            req.impDb
+              .prepare('SELECT 1 FROM recurrence_skips WHERE recurrence_id = ? AND month = ?')
+              .get(r.id, txMonth)
+          )
+            continue;
           const rname = String(r.name).toLowerCase().replace(/\s+/g, ' ').trim();
           if (rname !== desc) continue;
           if (r.last_posted_month && r.last_posted_month >= txMonth) continue;
@@ -806,8 +817,8 @@ router.post(
       });
 
       const ins = req.impDb.prepare(`
-      INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, source_file, dedup_key, transfer_group)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO transactions (date, description, amount, tx_type, currency, account_id, category_id, needs_review, review_reason, source_file, dedup_key, transfer_group)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(dedup_key) DO NOTHING`);
       // One transaction for the whole file: row-by-row autocommit means a WAL
       // fsync per row (minutes on large statements) and a partially imported
@@ -829,6 +840,7 @@ router.post(
             accId,
             isTransfer ? null : tx.suggested_category_id,
             isTransfer ? 0 : tx.needs_review,
+            isTransfer ? null : (tx.review_reason ?? null),
             path.basename(filePath),
             dedupKey,
             transferGroup,

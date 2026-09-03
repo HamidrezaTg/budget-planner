@@ -1,8 +1,22 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { project, currentMonth, accountBalanceAt } from '../services/model.js';
+import {
+  project,
+  currentMonth,
+  accountBalanceAt,
+  convertCurrency,
+  baseCurrency,
+} from '../services/model.js';
 
 const router = Router();
+
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const round2 = (n) => Math.round(n * 100) / 100;
+const addMonths = (month, n) => {
+  const [y, m] = month.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1 + n, 1));
+  return date.toISOString().slice(0, 7);
+};
 
 // Observations + reconciliation view. Account CRUD moved to routes/accounts.js
 // in v3.12.
@@ -25,12 +39,13 @@ router.get('/', (_req, res) => {
       return {
         ...o,
         predicted: perAccountPredicted,
-        variance: Math.round((perAccountPredicted - o.balance) * 100) / 100,
+        variance: perAccountPredicted === null ? null : round2(perAccountPredicted - o.balance),
       };
     });
 
-  // Per-account summary: each account's running balance (opening + txns) at
-  // the current month, plus the latest observation and variance.
+  // Per-account summary: the latest observation is compared with the model AT
+  // THE OBSERVATION MONTH (not the current month), using one consistent
+  // variance sign everywhere: calculated − observed.
   const month = currentMonth();
   const perAccount = accounts.map((a) => {
     const predicted = accountBalanceAt(a.id, month);
@@ -39,25 +54,92 @@ router.get('/', (_req, res) => {
         'SELECT balance, month FROM balance_observations WHERE account_id = ? ORDER BY month DESC LIMIT 1',
       )
       .get(a.id);
-    const variance = latestObs ? Math.round((latestObs.balance - predicted) * 100) / 100 : null;
+    const predictedAtObservation = latestObs ? accountBalanceAt(a.id, latestObs.month) : null;
     return {
       id: a.id,
       name: a.name,
       kind: a.kind,
       is_spending_pot: !!a.is_spending_pot,
       opening_balance: a.opening_balance,
+      opening_balance_month: a.opening_balance_month ?? null,
       display_currency: a.display_currency,
-      predicted_at_month: Math.round(predicted * 100) / 100,
+      predicted_at_month: predicted === null ? null : round2(predicted),
       latest_observation: latestObs ? { month: latestObs.month, balance: latestObs.balance } : null,
-      variance,
+      latest_variance:
+        latestObs && predictedAtObservation !== null
+          ? round2(predictedAtObservation - latestObs.balance)
+          : null,
     };
   });
+
+  // Month-by-month history: every account's calculated balance next to the
+  // observed balance the user entered for that month. Months before an
+  // account's opening-balance month are "unavailable" (calculated: null), and
+  // totals are only offered when every account has an observation for the
+  // month (a missing observation is never silently treated as zero).
+  const observationByAccountMonth = new Map(
+    observations.map((o) => [`${o.account_id}|${o.month}`, o.balance]),
+  );
+  const earliestObservation = observations.reduce(
+    (min, o) => (min === null || o.month < min ? o.month : min),
+    null,
+  );
+  const earliestBaseline = accounts.reduce(
+    (min, a) =>
+      a.opening_balance_month && (min === null || a.opening_balance_month < min)
+        ? a.opening_balance_month
+        : min,
+    null,
+  );
+  // Window: last 24 months, extended back to cover the earliest observation
+  // and the earliest baseline so nothing the user entered is hidden.
+  const windowStart = addMonths(month, -23);
+  let from = [windowStart, earliestObservation, earliestBaseline]
+    .filter(Boolean)
+    .reduce((min, m) => (m < min ? m : min), windowStart);
+  if (from > month) from = month;
+
+  const history = [];
+  for (let m = from; m <= month; m = addMonths(m, 1)) {
+    const rows = accounts.map((a) => {
+      const calculated = accountBalanceAt(a.id, m);
+      const observed = observationByAccountMonth.get(`${a.id}|${m}`) ?? null;
+      return {
+        account_id: a.id,
+        display_currency: a.display_currency,
+        calculated: calculated === null ? null : round2(calculated),
+        observed,
+        variance: calculated !== null && observed !== null ? round2(calculated - observed) : null,
+      };
+    });
+    const allObserved = rows.every((r) => r.observed !== null && r.calculated !== null);
+    const totals = allObserved
+      ? (() => {
+          const calculated = round2(
+            rows.reduce(
+              (sum, r) =>
+                sum + convertCurrency(r.calculated, r.display_currency, baseCurrency(), m),
+              0,
+            ),
+          );
+          const observed = round2(
+            rows.reduce(
+              (sum, r) => sum + convertCurrency(r.observed, r.display_currency, baseCurrency(), m),
+              0,
+            ),
+          );
+          return { calculated, observed, variance: round2(calculated - observed) };
+        })()
+      : null;
+    history.push({ month: m, accounts: rows, total: totals });
+  }
 
   res.json({
     accounts,
     observations,
     reconciled,
     per_account: perAccount,
+    history,
     anchored_at: proj.anchored_at,
   });
 });
@@ -65,7 +147,7 @@ router.get('/', (_req, res) => {
 // Enter/replace the observed balance for one account+month
 router.post('/', (req, res) => {
   const { account_id, month, balance } = req.body ?? {};
-  if (!account_id || !/^\d{4}-\d{2}$/.test(month ?? '') || isNaN(Number(balance)))
+  if (!account_id || !MONTH_RE.test(month ?? '') || isNaN(Number(balance)))
     return res.status(400).json({ error: 'account_id, month (YYYY-MM), balance required' });
   const acc = db.prepare('SELECT id FROM accounts WHERE id = ?').get(account_id);
   if (!acc) return res.status(404).json({ error: 'Account not found' });

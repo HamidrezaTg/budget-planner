@@ -28,6 +28,36 @@ export function categorizeTransaction(tx) {
       return { category_id: rule.category_id, category_name: rule.category_name, rule };
   }
 
+  // Category Choice rules: a keyword that may legitimately belong to several
+  // categories. They override learned keyword rules so the transaction is
+  // never silently auto-categorized; the caller must send it to review with
+  // the candidate list. Most specific (longest) keyword wins.
+  const choiceRules = db
+    .prepare('SELECT * FROM category_choice_rules WHERE enabled = 1')
+    .all()
+    .map((rule) => ({
+      ...rule,
+      candidates: db
+        .prepare(
+          `SELECT cc.category_id, c.name AS category_name
+           FROM category_choice_rule_categories cc JOIN categories c ON c.id = cc.category_id
+           WHERE cc.rule_id = ? ORDER BY c.name`,
+        )
+        .all(rule.id),
+    }))
+    .filter((rule) => rule.candidates.length >= 2);
+  for (const rule of choiceRules) {
+    const kw = normalizeDesc(rule.keyword);
+    if (!kw) continue;
+    if (norm !== kw && !norm.includes(kw)) continue;
+    if (!matches(rule, tx)) continue;
+    return {
+      choice: true,
+      rule: { ...rule, type: 'choice' },
+      candidates: rule.candidates,
+    };
+  }
+
   // exact rule match first
   const exact = db
     .prepare(
@@ -70,19 +100,24 @@ export function applyCategorization(transactions) {
   const cache = new Map();
   const result = [];
   for (const tx of transactions) {
-    let catId;
+    let outcome;
     const cacheKey = [tx.description, tx.amount, tx.account_id, tx.tx_type].join('\u0000');
     if (cache.has(cacheKey)) {
-      catId = cache.get(cacheKey);
+      outcome = cache.get(cacheKey);
     } else {
-      catId = categorizeTransaction(tx)?.category_id ?? null;
-      cache.set(cacheKey, catId);
+      outcome = categorizeTransaction(tx);
+      cache.set(cacheKey, outcome);
     }
-    result.push({
+    const ambiguous = outcome?.choice === true;
+    const catId = ambiguous ? null : (outcome?.category_id ?? null);
+    const row = {
       ...tx,
       suggested_category_id: catId,
       needs_review: catId === null ? 1 : 0,
-    });
+      review_reason: ambiguous ? 'choice_rule' : null,
+    };
+    if (ambiguous) row.choice_candidates = outcome.candidates;
+    result.push(row);
   }
   return result;
 }
@@ -114,26 +149,33 @@ export function createAutomationRule({
   return db.prepare('SELECT * FROM category_automation_rules WHERE id = ?').get(r.lastInsertRowid);
 }
 
-// Retro-apply a learned keyword to uncategorized transactions. Matching uses
-// the same normalizeDesc semantics (exact or substring) as import-time
-// categorization, so the retro-fix and future imports always agree — a SQL
-// LIKE would both over-match on %/_ in the keyword and miss normalized rows.
-// Both category_id and needs_review are set: clearing the review flag without
-// categorizing would silently drop rows from the review queue.
-export function retroApplyKeyword(keyword, categoryId) {
+// Retro-apply rule changes to uncategorized transactions. Matching goes
+// through categorizeTransaction so the retro-fix and future imports always
+// agree: rows that now resolve to a definite category are categorized, rows
+// captured by a Category Choice rule are left in review with their candidate
+// list. category_id and needs_review are set together: clearing the review
+// flag without categorizing would silently drop rows from the review queue.
+export function retroApplyKeyword(keyword, _categoryId) {
   const kw = normalizeDesc(keyword);
   if (!kw) return 0;
-  const rows = db.prepare('SELECT id, description FROM transactions WHERE needs_review = 1').all();
-  const upd = db.prepare('UPDATE transactions SET category_id = ?, needs_review = 0 WHERE id = ?');
+  const rows = db
+    .prepare(
+      'SELECT id, description, amount, account_id, tx_type FROM transactions WHERE needs_review = 1',
+    )
+    .all();
+  const upd = db.prepare(
+    'UPDATE transactions SET category_id = ?, needs_review = 0, review_reason = NULL WHERE id = ?',
+  );
   let n = 0;
   db.exec('BEGIN');
   try {
     for (const row of rows) {
       const nd = normalizeDesc(row.description);
-      if (nd === kw || nd.includes(kw)) {
-        upd.run(categoryId, row.id);
-        n++;
-      }
+      if (nd !== kw && !nd.includes(kw)) continue;
+      const outcome = categorizeTransaction(row);
+      if (!outcome || outcome.choice === true) continue;
+      upd.run(outcome.category_id, row.id);
+      n++;
     }
     db.exec('COMMIT');
   } catch (e) {
@@ -144,12 +186,40 @@ export function retroApplyKeyword(keyword, categoryId) {
 }
 
 // Create a learned rule and retro-apply it to unmatched transactions.
-export function learnRule(keyword, categoryId, applyToExisting = true) {
+// origin: 'learned' (Remember checkbox / import approval) or 'manual'
+// (Rules Manager). Only learned rules may be removed by unchecking Remember.
+export function learnRule(keyword, categoryId, applyToExisting = true, origin = 'learned') {
   const kw = normalizeDesc(keyword);
   if (!kw) throw new Error('Keyword is empty');
   db.prepare(
-    'INSERT INTO category_rules (keyword, category_id) VALUES (?, ?) ON CONFLICT(keyword) DO UPDATE SET category_id = excluded.category_id',
-  ).run(kw, categoryId);
+    `INSERT INTO category_rules (keyword, category_id, origin) VALUES (?, ?, ?)
+     ON CONFLICT(keyword) DO UPDATE SET category_id = excluded.category_id, origin = excluded.origin`,
+  ).run(kw, categoryId, origin === 'manual' ? 'manual' : 'learned');
 
   if (applyToExisting) retroApplyKeyword(kw, categoryId);
+}
+
+// Remove the rule learned from one transaction when the user unchecks
+// Remember. Conservative by design: the rule must exist, point at the same
+// category the transaction is being saved with, be origin='learned', and not
+// still categorize any other transaction. Returns true only when deleted.
+export function unlearnRule(description, categoryId, excludeTxId = null) {
+  const kw = normalizeDesc(description);
+  if (!kw || !categoryId) return false;
+  const rule = db.prepare('SELECT * FROM category_rules WHERE keyword = ?').get(kw);
+  if (!rule) return false;
+  if (Number(rule.category_id) !== Number(categoryId)) return false;
+  if (rule.origin === 'manual') return false;
+  const others = excludeTxId
+    ? db
+        .prepare('SELECT id, description FROM transactions WHERE category_id = ? AND id != ?')
+        .all(categoryId, excludeTxId)
+    : db.prepare('SELECT id, description FROM transactions WHERE category_id = ?').all(categoryId);
+  const stillUsed = others.some((row) => {
+    const nd = normalizeDesc(row.description);
+    return nd === kw || nd.includes(kw);
+  });
+  if (stillUsed) return false;
+  db.prepare('DELETE FROM category_rules WHERE id = ?').run(rule.id);
+  return true;
 }

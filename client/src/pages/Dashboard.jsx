@@ -269,8 +269,12 @@ export default function Dashboard() {
                   : budgetActual > 0
                     ? 100
                     : 0;
+              const overBudget = r.planned > 0 && budgetActual > r.planned;
+              const target = `/transactions?month=${encodeURIComponent(month)}&category_id=${r.id}${
+                overBudget ? '&context=over-budget' : ''
+              }`;
               return (
-                <div key={r.id} className="category-row">
+                <Link key={r.id} to={target} className="category-row category-row-link">
                   <div className="category-name">
                     <i style={{ background: color }} />
                     <span>{r.name}</span>
@@ -280,8 +284,7 @@ export default function Dashboard() {
                     <i
                       style={{
                         width: `${pct}%`,
-                        background:
-                          r.planned > 0 && budgetActual > r.planned ? 'var(--red)' : color,
+                        background: overBudget ? 'var(--red)' : color,
                       }}
                     />
                   </div>
@@ -303,7 +306,7 @@ export default function Dashboard() {
                             : ''}
                     </span>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

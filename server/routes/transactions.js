@@ -3,11 +3,19 @@ import { db, DATA_DIR, safeDbFilename } from '../db.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { learnRule, categorizeTransaction, createAutomationRule } from '../services/categorizer.js';
+import {
+  learnRule,
+  unlearnRule,
+  categorizeTransaction,
+  createAutomationRule,
+} from '../services/categorizer.js';
 
 const router = Router();
 const DEFAULT_TRANSACTION_LIMIT = 500;
 const MAX_TRANSACTION_LIMIT = 1000;
+// Hard ceiling for `limit=all` (the single-page Transactions table). Bounds
+// memory even if a user has imported tens of thousands of rows.
+const MAX_ALL_ROWS = 10000;
 
 function paginationParams(query, res) {
   const parse = (name, fallback, minimum, maximum) => {
@@ -28,6 +36,8 @@ function paginationParams(query, res) {
     return value;
   };
 
+  // limit=all fetches the whole filtered set for the single-page table.
+  if (query.limit === 'all') return { limit: MAX_ALL_ROWS, offset: 0 };
   const limit = parse('limit', DEFAULT_TRANSACTION_LIMIT, 1, MAX_TRANSACTION_LIMIT);
   if (limit === null) return null;
   const offset = parse('offset', 0, 0);
@@ -35,22 +45,81 @@ function paginationParams(query, res) {
   return { limit, offset };
 }
 
-router.get('/', (req, res) => {
-  const { month, review, category_id } = req.query;
-  const pagination = paginationParams(req.query, res);
-  if (!pagination) return;
+// Column filters for the Transactions table. Returns { where, params } or
+// null (after responding 400) when a value is malformed.
+function transactionFilters(query, res) {
   const where = [];
   const params = [];
+  const likeEscape = (s) => String(s).replace(/[\\%_]/g, (m) => `\\${m}`);
+
+  if (query.q !== undefined && String(query.q).trim() !== '') {
+    where.push(`LOWER(t.description) LIKE ? ESCAPE '\\'`);
+    params.push(`%${likeEscape(String(query.q).trim().toLowerCase())}%`);
+  }
+  if (query.account_id !== undefined && String(query.account_id) !== '') {
+    const id = Number(query.account_id);
+    if (!Number.isInteger(id) || id < 1) {
+      res.status(400).json({ error: 'account_id must be a positive integer' });
+      return null;
+    }
+    where.push('t.account_id = ?');
+    params.push(id);
+  }
+  if (query.category_id !== undefined && String(query.category_id) !== '') {
+    const id = Number(query.category_id);
+    if (!Number.isInteger(id) || id < 1) {
+      res.status(400).json({ error: 'category_id must be a positive integer' });
+      return null;
+    }
+    where.push('t.category_id = ?');
+    params.push(id);
+  }
+  if (query.tx_type !== undefined && String(query.tx_type).trim() !== '') {
+    where.push('LOWER(COALESCE(t.tx_type, "")) = LOWER(?)');
+    params.push(String(query.tx_type).trim());
+  }
+  for (const [field, column, cmp] of [
+    ['date_from', 't.date', '>='],
+    ['date_to', 't.date', '<='],
+  ]) {
+    if (query[field] !== undefined && String(query[field]) !== '') {
+      if (!/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(String(query[field]))) {
+        res.status(400).json({ error: `${field} must be a date in YYYY-MM-DD format` });
+        return null;
+      }
+      where.push(`${column} ${cmp} ?`);
+      params.push(String(query[field]));
+    }
+  }
+  for (const field of ['amount_min', 'amount_max']) {
+    if (query[field] !== undefined && String(query[field]) !== '') {
+      const value = Number(query[field]);
+      if (!Number.isFinite(value)) {
+        res.status(400).json({ error: `${field} must be a number` });
+        return null;
+      }
+      where.push(`ABS(t.amount) ${field === 'amount_min' ? '>=' : '<='} ?`);
+      params.push(Math.abs(value));
+    }
+  }
+  if (query.transfer === '1') where.push('t.transfer_group IS NOT NULL');
+  else if (query.transfer === '0') where.push('t.transfer_group IS NULL');
+  return { where, params };
+}
+
+router.get('/', (req, res) => {
+  const { month, review } = req.query;
+  const pagination = paginationParams(req.query, res);
+  if (!pagination) return;
+  const filters = transactionFilters(req.query, res);
+  if (!filters) return;
+  const { where, params } = filters;
 
   if (month) {
     where.push(`substr(date, 1, 7) = ?`);
     params.push(month);
   }
   if (review === '1') where.push(`needs_review = 1`);
-  if (category_id) {
-    where.push(`category_id = ?`);
-    params.push(Number(category_id));
-  }
 
   const sql = `
     SELECT t.*, c.name AS category_name, f.name AS fund_name, cm.name AS commitment_name,
@@ -178,8 +247,14 @@ router.patch('/:id', (req, res) => {
   args.push(req.params.id);
   db.prepare(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`).run(...args);
 
-  if (b.remember && b.category_id) {
-    learnRule(b.keyword || tx.description, b.category_id);
+  if (b.remember === true && b.category_id) {
+    learnRule(b.keyword || tx.description, b.category_id, true, 'learned');
+  } else if (b.remember === false) {
+    // Unchecking Remember removes the rule this transaction taught — but only
+    // when the rule is genuinely its own: learned (not manual), still pointing
+    // at the category being saved, and not shared with other transactions.
+    const targetCategory = b.category_id ?? tx.category_id;
+    if (targetCategory) unlearnRule(tx.description, targetCategory, tx.id);
   }
 
   res.json(
@@ -728,6 +803,78 @@ router.post('/:id/unsplit', (req, res) => {
 });
 
 // Rules management
+const choiceRuleCategories = (ruleId) =>
+  db
+    .prepare(
+      `SELECT cc.category_id, c.name AS category_name
+       FROM category_choice_rule_categories cc JOIN categories c ON c.id = cc.category_id
+       WHERE cc.rule_id = ? ORDER BY c.name`,
+    )
+    .all(ruleId);
+
+// Filtered rule search: q matches keyword/condition text, type filters
+// keyword|advanced|choice, category_id and enabled narrow further. Returns all
+// matches (the Rules Manager shows every rule on one page).
+router.get('/rules', (req, res) => {
+  const { q, type, category_id, enabled } = req.query;
+  const needle = (q ?? '').trim().toLowerCase();
+
+  const keywordRules = db
+    .prepare(
+      `SELECT r.*, c.name AS category_name,
+                (SELECT COUNT(*) FROM transactions t WHERE LOWER(t.description) LIKE '%' || r.keyword || '%') AS matches
+         FROM category_rules r JOIN categories c ON c.id = r.category_id
+         ORDER BY r.keyword`,
+    )
+    .all()
+    .map((r) => ({ ...r, rule_type: 'keyword' }));
+
+  const automationRules = db
+    .prepare(
+      `SELECT r.*, c.name AS category_name,
+              (SELECT COUNT(*) FROM transactions t
+               WHERE (r.description_contains IS NULL OR LOWER(t.description) LIKE '%' || LOWER(r.description_contains) || '%')
+                 AND (r.amount_min IS NULL OR ABS(t.amount) >= r.amount_min)
+                 AND (r.amount_max IS NULL OR ABS(t.amount) <= r.amount_max)
+                 AND (r.account_id IS NULL OR t.account_id = r.account_id)
+                 AND (r.tx_type IS NULL OR LOWER(COALESCE(t.tx_type, '')) = LOWER(r.tx_type))) AS matches
+       FROM category_automation_rules r JOIN categories c ON c.id = r.category_id
+       ORDER BY r.priority DESC, r.id`,
+    )
+    .all()
+    .map((r) => ({ ...r, rule_type: 'advanced' }));
+
+  const choiceRules = db
+    .prepare('SELECT r.* FROM category_choice_rules r ORDER BY r.id')
+    .all()
+    .map((r) => ({ ...r, rule_type: 'choice', categories: choiceRuleCategories(r.id) }));
+
+  let all = [...automationRules, ...choiceRules, ...keywordRules];
+  if (type) all = all.filter((r) => r.rule_type === type);
+  if (category_id)
+    all = all.filter((r) =>
+      r.rule_type === 'choice'
+        ? r.categories.some((c) => c.category_id === Number(category_id))
+        : r.category_id === Number(category_id),
+    );
+  if (enabled === '1' || enabled === '0')
+    all = all.filter((r) => (enabled === '1' ? r.enabled !== 0 : r.enabled === 0));
+  if (needle)
+    all = all.filter((r) => {
+      const haystack = [
+        r.keyword,
+        r.description_contains,
+        r.category_name,
+        ...(r.categories ?? []).map((c) => c.category_name),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(needle);
+    });
+  res.json(all);
+});
+
 router.get('/rules/all', (_req, res) => {
   const keywordRules = db
     .prepare(
@@ -752,14 +899,20 @@ router.get('/rules/all', (_req, res) => {
     )
     .all()
     .map((r) => ({ ...r, rule_type: 'advanced' }));
-  res.json([...automationRules, ...keywordRules]);
+  const choiceRules = db
+    .prepare('SELECT r.* FROM category_choice_rules r ORDER BY r.id')
+    .all()
+    .map((r) => ({ ...r, rule_type: 'choice', categories: choiceRuleCategories(r.id) }));
+  res.json([...automationRules, ...choiceRules, ...keywordRules]);
 });
 
 router.post('/rules', (req, res) => {
   const { keyword, category_id } = req.body ?? {};
   if (!keyword?.trim() || !category_id)
     return res.status(400).json({ error: 'keyword and category_id required' });
-  learnRule(keyword, category_id);
+  // Rules created from the Rules Manager are manual: unchecking Remember on a
+  // transaction never deletes them.
+  learnRule(keyword, category_id, true, 'manual');
   res.json({ ok: true });
 });
 
@@ -798,6 +951,13 @@ router.post('/rules/test', (req, res) => {
     account_id: req.body?.account_id || null,
     tx_type: req.body?.tx_type || '',
   });
+  if (result?.choice === true) {
+    return res.json({
+      choice: true,
+      candidates: result.candidates,
+      rule: result.rule,
+    });
+  }
   res.json(
     result
       ? {
@@ -807,6 +967,197 @@ router.post('/rules/test', (req, res) => {
         }
       : { category_id: null, category_name: null, rule: null },
   );
+});
+
+// Category Choice rules: "this keyword may belong to several categories —
+// always ask". Requires a keyword and at least two candidate categories.
+const validateChoicePayload = (b, { partial = false } = {}) => {
+  if (!partial || b.category_ids !== undefined) {
+    if (!Array.isArray(b.category_ids) || b.category_ids.length < 2)
+      return 'At least two candidate categories are required';
+    const unique = [...new Set(b.category_ids.map(Number))];
+    for (const id of unique) {
+      if (!db.prepare('SELECT id FROM categories WHERE id = ?').get(id)) return 'Unknown category';
+    }
+  }
+  if (!partial || b.keyword !== undefined) {
+    if (!String(b.keyword ?? '').trim()) return 'keyword is required';
+  }
+  for (const field of ['amount_min', 'amount_max']) {
+    if (b[field] !== undefined && b[field] !== '' && b[field] !== null) {
+      if (!Number.isFinite(Number(b[field]))) return `${field} must be numeric`;
+    }
+  }
+  if (
+    b.amount_min != null &&
+    b.amount_max != null &&
+    b.amount_min !== '' &&
+    b.amount_max !== '' &&
+    Number(b.amount_min) > Number(b.amount_max)
+  )
+    return 'Minimum amount cannot exceed maximum amount';
+  if (b.account_id != null && b.account_id !== '') {
+    if (!db.prepare('SELECT id FROM accounts WHERE id = ?').get(Number(b.account_id)))
+      return 'Unknown account';
+  }
+  return null;
+};
+
+router.post('/rules/choice', (req, res) => {
+  const b = req.body ?? {};
+  const invalid = validateChoicePayload(b);
+  if (invalid) return res.status(400).json({ error: invalid });
+  const tx = db.transaction(() => {
+    const r = db
+      .prepare(
+        `INSERT INTO category_choice_rules (keyword, amount_min, amount_max, account_id, tx_type, enabled)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        String(b.keyword).trim(),
+        b.amount_min == null || b.amount_min === '' ? null : Number(b.amount_min),
+        b.amount_max == null || b.amount_max === '' ? null : Number(b.amount_max),
+        b.account_id ? Number(b.account_id) : null,
+        b.tx_type?.trim() || null,
+        b.enabled === 0 ? 0 : 1,
+      );
+    const ins = db.prepare(
+      'INSERT OR IGNORE INTO category_choice_rule_categories (rule_id, category_id) VALUES (?, ?)',
+    );
+    for (const id of new Set(b.category_ids.map(Number))) ins.run(r.lastInsertRowid, id);
+    return r.lastInsertRowid;
+  });
+  const id = tx();
+  const rule = db.prepare('SELECT * FROM category_choice_rules WHERE id = ?').get(id);
+  res.json({ ...rule, rule_type: 'choice', categories: choiceRuleCategories(id) });
+});
+
+router.patch('/rules/choice/:id', (req, res) => {
+  const rule = db.prepare('SELECT * FROM category_choice_rules WHERE id = ?').get(req.params.id);
+  if (!rule) return res.status(404).json({ error: 'Rule not found' });
+  const b = req.body ?? {};
+  const invalid = validateChoicePayload(b, { partial: true });
+  if (invalid) return res.status(400).json({ error: invalid });
+
+  db.transaction(() => {
+    const sets = [];
+    const args = [];
+    if (b.keyword !== undefined) {
+      sets.push('keyword = ?');
+      args.push(String(b.keyword).trim());
+    }
+    for (const field of ['amount_min', 'amount_max']) {
+      if (b[field] !== undefined) {
+        sets.push(`${field} = ?`);
+        args.push(b[field] === '' || b[field] === null ? null : Number(b[field]));
+      }
+    }
+    if (b.account_id !== undefined) {
+      sets.push('account_id = ?');
+      args.push(b.account_id ? Number(b.account_id) : null);
+    }
+    if (b.tx_type !== undefined) {
+      sets.push('tx_type = ?');
+      args.push(b.tx_type?.trim() || null);
+    }
+    if (b.enabled !== undefined) {
+      sets.push('enabled = ?');
+      args.push(b.enabled ? 1 : 0);
+    }
+    if (sets.length) {
+      args.push(rule.id);
+      db.prepare(`UPDATE category_choice_rules SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+    }
+    if (b.category_ids !== undefined) {
+      const del = db.prepare('DELETE FROM category_choice_rule_categories WHERE rule_id = ?');
+      const ins = db.prepare(
+        'INSERT OR IGNORE INTO category_choice_rule_categories (rule_id, category_id) VALUES (?, ?)',
+      );
+      del.run(rule.id);
+      for (const id of new Set(b.category_ids.map(Number))) ins.run(rule.id, id);
+    }
+  })();
+
+  const updated = db.prepare('SELECT * FROM category_choice_rules WHERE id = ?').get(rule.id);
+  res.json({ ...updated, rule_type: 'choice', categories: choiceRuleCategories(rule.id) });
+});
+
+router.delete('/rules/choice/:id', (req, res) => {
+  db.prepare('DELETE FROM category_choice_rules WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// Edit an advanced rule (conditions, category, priority, enabled).
+router.patch('/rules/advanced/:id', (req, res) => {
+  const rule = db
+    .prepare('SELECT * FROM category_automation_rules WHERE id = ?')
+    .get(req.params.id);
+  if (!rule) return res.status(404).json({ error: 'Rule not found' });
+  const b = req.body ?? {};
+  const sets = [];
+  const args = [];
+  if (b.description_contains !== undefined) {
+    sets.push('description_contains = ?');
+    args.push(String(b.description_contains).trim() || null);
+  }
+  for (const field of ['amount_min', 'amount_max']) {
+    if (b[field] !== undefined) {
+      const value = b[field] === '' || b[field] === null ? null : Number(b[field]);
+      if (value !== null && !Number.isFinite(value))
+        return res.status(400).json({ error: `${field} must be numeric` });
+      sets.push(`${field} = ?`);
+      args.push(value);
+    }
+  }
+  if (b.account_id !== undefined) {
+    sets.push('account_id = ?');
+    args.push(b.account_id ? Number(b.account_id) : null);
+  }
+  if (b.tx_type !== undefined) {
+    sets.push('tx_type = ?');
+    args.push(String(b.tx_type).trim() || null);
+  }
+  if (b.priority !== undefined) {
+    sets.push('priority = ?');
+    args.push(Number(b.priority) || 0);
+  }
+  if (b.enabled !== undefined) {
+    sets.push('enabled = ?');
+    args.push(b.enabled ? 1 : 0);
+  }
+  if (b.category_id !== undefined) {
+    if (!db.prepare('SELECT id FROM categories WHERE id = ?').get(Number(b.category_id)))
+      return res.status(400).json({ error: 'Unknown category' });
+    sets.push('category_id = ?');
+    args.push(Number(b.category_id));
+  }
+  if (!sets.length) return res.status(400).json({ error: 'No editable fields provided' });
+  args.push(rule.id);
+  db.prepare(`UPDATE category_automation_rules SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+  res.json(db.prepare('SELECT * FROM category_automation_rules WHERE id = ?').get(rule.id));
+});
+
+// Retarget a keyword rule (keyword itself is immutable — delete + recreate).
+router.patch('/rules/:id', (req, res) => {
+  const rule = db.prepare('SELECT * FROM category_rules WHERE id = ?').get(req.params.id);
+  if (!rule) return res.status(404).json({ error: 'Rule not found' });
+  const { category_id, enabled } = req.body ?? {};
+  if (category_id === undefined && enabled === undefined)
+    return res.status(400).json({ error: 'No editable fields provided' });
+  if (category_id !== undefined) {
+    if (!db.prepare('SELECT id FROM categories WHERE id = ?').get(Number(category_id)))
+      return res.status(400).json({ error: 'Unknown category' });
+    db.prepare('UPDATE category_rules SET category_id = ? WHERE id = ?').run(
+      Number(category_id),
+      rule.id,
+    );
+  }
+  if (enabled !== undefined) {
+    // Keyword rules have no enabled column; disabling a keyword rule is
+    // expressed by deleting it, so reject silently-impossible toggles.
+    return res.status(400).json({ error: 'Keyword rules cannot be disabled — delete instead' });
+  }
+  res.json(db.prepare('SELECT * FROM category_rules WHERE id = ?').get(rule.id));
 });
 
 router.delete('/rules/:id', (req, res) => {

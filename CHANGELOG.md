@@ -3,6 +3,25 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.22.0] — 2026-09-03
+
+### Added
+
+- Category choice rules: keywords that may belong to several categories never auto-assign; matching transactions wait in review with the rule's candidate categories and a "choice rule" badge.
+- Rules Manager search and filters (keyword, type, category, enabled state), rule editing, enable/disable for advanced and choice rules, and inline keyword retargeting.
+- Unchecking "Remember" on a transaction now removes only the keyword rule that transaction taught — manually created or shared rules are protected via rule provenance.
+- Scheduled Transactions (formerly Recurring): optional start/end months, skip months, and a per-month status (due, posted, paused, not scheduled). Posting, auto-post, the dashboard due insight, and import folding all respect the schedule.
+- Balance history: month-by-month comparison of calculated vs observed balances with inline observed editing, consistent `calculated − observed` variance, and totals only when every account is observed.
+- Opening-balance month on accounts: the balance is true at the end of the chosen month; only later transactions are added on top, and months before it show n/a.
+- Transactions on one page: pagination removed in favor of `limit=all` (server-capped) with per-column filters (date range, description search, type, account, amount range, category, transfers), URL-backed filter state, and removable filter chips.
+- Dashboard category rows and over-budget insights drill down into the filtered transaction view.
+- Release gate workflow and Windows desktop release job (MSI/NSIS with Authenticode signing and SHA256 manifest updates); version sync/consistency scripts with tests.
+
+### Changed
+
+- Income sources are governed purely by start/end months (no end month = ongoing); the recurring toggle is retired, and out-of-period actual income counts as zero.
+- Import previews and confirmations mark choice-rule rows consistently, and review rows carry their reason.
+
 ## [3.21.0] — 2026-09-03
 
 ### Added

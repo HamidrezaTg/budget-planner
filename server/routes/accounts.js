@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, getSetting } from '../db.js';
+import { currentMonth } from '../services/model.js';
 
 const router = Router();
 
@@ -8,6 +9,7 @@ const router = Router();
 const VALID_KINDS = ['bank', 'card', 'cash', 'other', 'sparkasse', 'revolut'];
 const VALID_CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
 const NAME_RE = /^.{1,60}$/;
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 function validateAccount(body, currentId = null, { partial = false } = {}) {
   // The body is the raw request (not spread over the existing row) so
@@ -25,6 +27,11 @@ function validateAccount(body, currentId = null, { partial = false } = {}) {
     return `kind must be one of ${VALID_KINDS.join(', ')}`;
   if (body.opening_balance !== undefined && !Number.isFinite(Number(body.opening_balance)))
     return 'opening_balance must be a number';
+  if (body.opening_balance_month !== undefined && body.opening_balance_month !== null) {
+    const value = String(body.opening_balance_month);
+    if (!MONTH_RE.test(value)) return 'opening_balance_month must be a month in YYYY-MM format';
+    if (value > currentMonth()) return 'opening_balance_month cannot be in the future';
+  }
   if (body.is_spending_pot !== undefined && typeof body.is_spending_pot !== 'boolean')
     return 'is_spending_pot must be a boolean';
   if (body.display_currency !== undefined && !VALID_CURRENCIES.includes(body.display_currency))
@@ -43,14 +50,15 @@ router.post('/', (req, res) => {
   if (err) return res.status(400).json({ error: err });
   const r = db
     .prepare(
-      `INSERT INTO accounts (name, kind, is_spending_pot, opening_balance, display_currency)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO accounts (name, kind, is_spending_pot, opening_balance, opening_balance_month, display_currency)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
     .run(
       String(b.name).trim(),
       String(b.kind ?? 'other'),
       b.is_spending_pot ? 1 : 0,
       Number(b.opening_balance ?? 0),
+      b.opening_balance_month ?? null,
       b.display_currency ?? getSetting('currency') ?? 'EUR',
     );
   res.json(db.prepare('SELECT * FROM accounts WHERE id = ?').get(r.lastInsertRowid));
@@ -79,6 +87,10 @@ router.patch('/:id', (req, res) => {
   if (b.opening_balance !== undefined) {
     sets.push('opening_balance = ?');
     args.push(Number(b.opening_balance));
+  }
+  if (b.opening_balance_month !== undefined) {
+    sets.push('opening_balance_month = ?');
+    args.push(b.opening_balance_month === '' ? null : b.opening_balance_month);
   }
   if (b.display_currency !== undefined) {
     sets.push('display_currency = ?');
