@@ -43,7 +43,7 @@ test('login, import, review, and dashboard flow', async ({ page }) => {
     });
 
   await expect(page.getByText('Coffee')).toBeVisible();
-  await expect(page.getByText('Needs review', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Need a category', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: /Confirm import \(1\)/ }).click();
 
   await expect(page.getByText('Imported 1 transaction(s)')).toBeVisible();
