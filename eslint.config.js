@@ -19,7 +19,7 @@ export default [
     files: [
       'server/**/*.{js,mjs}',
       'tests/**/*.js',
-      'scripts/**/*.js',
+      'scripts/**/*.{js,mjs}',
       '*.config.js',
       'client/*.config.js',
     ],

@@ -45,6 +45,16 @@ if [ -z "${ANDROID_HOME:-}" ] && [ ! -d "$HOME/Android/Sdk/cmdline-tools" ]; the
   echo "==> Android SDK not found — downloading cmdline-tools (~150 MB)"
   mkdir -p "$HOME/Android/Sdk/cmdline-tools"
   ZIP="$HOME/Android/Sdk/cmdline-tools.zip"
+  # Android command-line tools are pinned by URL. Update the URL and the
+  # matching SHA-256 below together when bumping the tools version.
+  EXPECTED_CMDLINE_TOOLS_SHA256=2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258
+  if [ -z "${BP_SKIP_CMDLINE_TOOLS_CHECKSUM:-}" ]; then
+    ACTUAL=$(curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" | sha256sum | cut -d' ' -f1)
+    if [ "$ACTUAL" != "$EXPECTED_CMDLINE_TOOLS_SHA256" ]; then
+      echo "ERROR: cmdline-tools SHA-256 mismatch (expected $EXPECTED_CMDLINE_TOOLS_SHA256, got $ACTUAL)" >&2
+      exit 1
+    fi
+  fi
   curl -fL --retry 2 -o "$ZIP" \
     https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
   unzip -q -o "$ZIP" -d "$HOME/Android/Sdk/cmdline-tools"
