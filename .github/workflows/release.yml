@@ -292,13 +292,19 @@ jobs:
             & $signtool.FullName sign /fd SHA256 /f "$env:RUNNER_TEMP\budget-planner-release.pfx" /p $env:WINDOWS_CERT_PASSWORD /tr http://timestamp.digicert.com /td SHA256 $file.FullName
             if ($LASTEXITCODE -ne 0) { throw "Signing failed for $($file.Name)" }
             # Authenticode verification: require a signature and a timestamp.
-            # Status 'NotTrusted' (untrusted root) is only expected for
-            # self-signed bootstrap certificates; a production CA cert
-            # reports 'Valid'. Anything else fails the job.
+            # Untrusted-root results ('NotTrusted', or 'UnknownError' whose
+            # message is the classic "root certificate which is not trusted")
+            # only occur with self-signed bootstrap certificates; a production
+            # CA cert reports 'Valid'. Anything else fails the job.
             $sig = Get-AuthenticodeSignature -FilePath $file.FullName
             if ($null -eq $sig.SignerCertificate) { throw "No signature present on $($file.Name)" }
             if ($null -eq $sig.TimeStamperCertificate) { throw "No timestamp on $($file.Name)" }
-            if ($sig.Status -notin @('Valid', 'NotTrusted')) { throw "Signature status '$($sig.Status)' for $($file.Name)" }
+            if ($sig.Status -eq 'UnknownError' -and $sig.StatusMessage -match 'root certificate[^.]*not trusted') {
+              Write-Host "$($file.Name): signed with a self-signed certificate (untrusted root) — accepted for bootstrap releases"
+            }
+            elseif ($sig.Status -notin @('Valid', 'NotTrusted')) {
+              throw "Signature status '$($sig.Status)' for $($file.Name): $($sig.StatusMessage)"
+            }
           }
 
       - name: Stage Windows installers
