@@ -424,8 +424,8 @@ CREATE TABLE IF NOT EXISTS ai_audit_log (
   status TEXT NOT NULL DEFAULT 'ok'
 );
 
--- Per-user mappings learned from an AI-approved CSV statement. The header
--- signature prevents a template from being applied to a different export.
+-- Per-user mappings learned from an AI-approved CSV or XLSX statement. The
+-- format-aware header signature prevents a template from crossing file types.
 CREATE TABLE IF NOT EXISTS import_templates (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,

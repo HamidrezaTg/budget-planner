@@ -61,6 +61,7 @@ const expectedOperations = [
   ['POST', '/import/smart'],
   ['POST', '/import/analyze'],
   ['GET', '/import/templates'],
+  ['PATCH', '/import/templates/{id}'],
   ['DELETE', '/import/templates/{id}'],
   ['POST', '/import/preview'],
   ['POST', '/import/confirm'],

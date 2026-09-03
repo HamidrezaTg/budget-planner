@@ -624,16 +624,27 @@
     "/import/templates": {
       "get": {
         "tags": ["Resources"],
-        "summary": "List the current user's saved CSV import templates",
+        "summary": "List the current user's saved CSV and XLSX import templates",
         "operationId": "listImportTemplates",
         "responses": { "200": { "$ref": "#/components/responses/JsonResponse" } }
       }
     },
     "/import/templates/{id}": {
       "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "patch": {
+        "tags": ["Resources"],
+        "summary": "Rename a saved CSV or XLSX import template",
+        "operationId": "renameImportTemplate",
+        "requestBody": { "$ref": "#/components/requestBodies/ImportTemplatePatch" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
       "delete": {
         "tags": ["Resources"],
-        "summary": "Delete a saved CSV import template",
+        "summary": "Delete a saved CSV or XLSX import template",
         "operationId": "deleteImportTemplate",
         "responses": {
           "204": { "description": "Template deleted" },
@@ -1797,6 +1808,12 @@
           "application/json": { "schema": { "$ref": "#/components/schemas/ImportAnalyze" } }
         }
       },
+      "ImportTemplatePatch": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ImportTemplatePatch" } }
+        }
+      },
       "ImportPreview": {
         "required": true,
         "content": {
@@ -2275,6 +2292,12 @@
         "type": "object",
         "required": ["token"],
         "properties": { "token": { "type": "string" } }
+      },
+      "ImportTemplatePatch": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 160 } }
       },
       "ImportConfirm": {
         "type": "object",

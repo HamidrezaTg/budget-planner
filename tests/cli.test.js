@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const root = path.join(import.meta.dirname, '..');
+const packageVersion = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 
 test('administrative CLI prints help without loading application data', () => {
   const result = spawnSync(process.execPath, ['server/cli.mjs', '--help'], {
@@ -25,7 +26,7 @@ test('administrative CLI reports status as JSON', () => {
   });
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
-  assert.equal(status.version, '3.20.5');
+  assert.equal(status.version, packageVersion);
   assert.equal(status.data_dir, '/tmp/budget-planner-cli-test-data');
 });
 

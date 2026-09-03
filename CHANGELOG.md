@@ -3,6 +3,17 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.21.0] — 2026-09-03
+
+### Added
+
+- AI-approved CSV and XLSX import mappings are saved privately per user and reused for matching files without another AI request.
+- Import templates can be listed, renamed, and deleted from the Import page or API, with usage and timestamp metadata.
+
+### Fixed
+
+- Native numeric XLSX amount cells are preserved correctly when applying reusable mappings.
+
 ## [3.20.5] — 2026-09-03
 
 ### Fixed

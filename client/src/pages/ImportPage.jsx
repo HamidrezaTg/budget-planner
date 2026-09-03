@@ -67,6 +67,14 @@ export default function ImportPage() {
         template_mode: templateMode,
         ...(online ? { ocr_mode: 'online' } : {}),
       });
+      const matchedTemplate = data.csv_check?.template || data.template_check?.template;
+      if (matchedTemplate) {
+        setTemplates((previous) =>
+          previous.map((item) =>
+            item.id === matchedTemplate.id ? { ...item, ...matchedTemplate } : item,
+          ),
+        );
+      }
       if (accountId && data.token && data.summary) {
         try {
           const preview = await api.post('/import/preview', {
@@ -106,6 +114,10 @@ export default function ImportPage() {
 
   const smartAnalyze = async (e) => {
     await processFile(e.target.files?.[0], '/import/smart');
+    try {
+      const saved = await api.get('/import/templates');
+      setTemplates(saved.templates || []);
+    } catch {}
     e.target.value = '';
   };
 
@@ -175,6 +187,44 @@ export default function ImportPage() {
     }
   };
 
+  const renameTemplate = async (template) => {
+    const name = window.prompt('Template name', template.name);
+    if (name === null || name.trim() === template.name) return;
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await api.patch(`/import/templates/${template.id}`, { name });
+      setTemplates((previous) =>
+        previous.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)),
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteTemplate = async (template) => {
+    if (
+      !window.confirm(
+        `Delete the saved "${template.name}" template? Existing transactions are not changed.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.del(`/import/templates/${template.id}`);
+      setTemplates((previous) => previous.filter((item) => item.id !== template.id));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const templateCheck = result?.csv_check || result?.template_check;
+
   return (
     <div>
       <h1>Import statement</h1>
@@ -229,7 +279,7 @@ export default function ImportPage() {
           </select>
         </label>
         <label className="muted tiny" style={{ display: 'block', marginTop: 10 }}>
-          CSV template handling
+          CSV and Excel template handling
           <select
             value={templateMode}
             onChange={(e) => {
@@ -249,22 +299,63 @@ export default function ImportPage() {
           </p>
         )}
         <p className="muted tiny import-template-note">
-          PDF and image imports always require AI structuring after OCR. CSV imports use AI only
-          when preflight checks fail, or when you choose to start fresh.
+          PDF and image imports always require AI structuring after OCR. CSV and Excel imports use
+          AI only when needed, or when you choose to start fresh.
         </p>
         {templates.length > 0 && (
           <p className="muted tiny import-template-note">
-            Saved CSV templates: {templates.map((template) => template.name).join(', ')}. Matching
-            CSV headers are imported directly without AI.
+            {templates.length} saved CSV/Excel template(s). Matching files are imported directly
+            without AI. Manage them below.
           </p>
         )}
         {error && <div className="error">{error}</div>}
       </div>
 
-      {result?.csv_check?.status === 'needs_ai' && (
+      {templates.length > 0 && (
+        <div className="card import-template-manager">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Saved import memory</p>
+              <h2 style={{ fontSize: 18, margin: 0 }}>CSV and Excel templates</h2>
+            </div>
+            <span className="muted tiny">Mappings only, never bank files</span>
+          </div>
+          <p className="muted tiny">
+            A template remembers how to read columns. Renaming or deleting one does not change
+            transactions already imported.
+          </p>
+          <div className="import-template-list">
+            {templates.map((template) => (
+              <div className="import-template-item" key={template.id}>
+                <div>
+                  <strong>{template.name}</strong>
+                  <div className="muted tiny">
+                    {template.format === 'xlsx' ? 'Excel' : 'CSV'} · used {template.use_count}{' '}
+                    time(s)
+                  </div>
+                  <div className="muted tiny">
+                    Created {template.created_at} · last used {template.updated_at}
+                  </div>
+                  <div className="muted tiny">Headers: {template.headers.join(' · ')}</div>
+                </div>
+                <div className="inline-form">
+                  <button className="btn" onClick={() => renameTemplate(template)} disabled={busy}>
+                    Rename
+                  </button>
+                  <button className="btn" onClick={() => deleteTemplate(template)} disabled={busy}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {templateCheck?.status === 'needs_ai' && (
         <div className="card warn-box" role="status">
           <b>AI analysis recommended for this CSV.</b>
-          <span>{result.csv_check.issues.join(' ')}</span>
+          <span>{templateCheck.issues.join(' ')}</span>
           <button
             className="btn primary"
             onClick={analyzeCsv}
@@ -278,21 +369,26 @@ export default function ImportPage() {
         </div>
       )}
 
-      {result?.csv_check?.status === 'ready' && (
+      {templateCheck?.status === 'ready' && (
         <div className="card success-box" role="status">
           <b>CSV is ready to import directly.</b> {result.csv_check.instruction}
         </div>
       )}
 
-      {result?.csv_check?.status === 'template' && (
+      {templateCheck?.status === 'template' && (
         <div className="card success-box" role="status">
-          <b>Saved CSV template matched.</b> {result.csv_check.instruction}
+          <b>Saved {templateCheck.format === 'xlsx' ? 'Excel' : 'CSV'} template matched.</b>{' '}
+          {templateCheck.instruction}
         </div>
       )}
 
-      {result?.csv_check?.status === 'analyzed' && (
+      {templateCheck?.status === 'analyzed' && (
         <div className="card success-box" role="status">
-          <b>AI approved and saved this CSV structure.</b> {result.ai_instruction}
+          <b>
+            AI approved and saved this {templateCheck.format === 'xlsx' ? 'Excel' : 'CSV'}
+            structure.
+          </b>{' '}
+          {result.ai_instruction}
         </div>
       )}
 

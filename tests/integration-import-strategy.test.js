@@ -5,6 +5,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { freshDataDir, cleanup, startServer } from './helpers.js';
+import xlsxModule from 'xlsx';
+
+const XLSX = xlsxModule.default ?? xlsxModule;
 
 const dataDir = freshDataDir();
 let app;
@@ -49,15 +52,16 @@ async function api(method, route, body) {
   return { status: response.status, data: await response.json().catch(() => ({})) };
 }
 
-async function upload(filename, content, templateMode = 'reuse') {
+async function upload(filename, content, templateMode = 'reuse', endpoint = '/api/import/upload') {
   const form = new FormData();
-  form.append(
-    'file',
-    new Blob([content], { type: filename.endsWith('.pdf') ? 'application/pdf' : 'text/csv' }),
-    filename,
-  );
+  const type = filename.endsWith('.xlsx')
+    ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    : filename.endsWith('.pdf')
+      ? 'application/pdf'
+      : 'text/csv';
+  form.append('file', new Blob([content], { type }), filename);
   form.append('template_mode', templateMode);
-  const response = await fetch(`${app.url}/api/import/upload`, {
+  const response = await fetch(`${app.url}${endpoint}`, {
     method: 'POST',
     headers: { Cookie: cookies },
     body: form,
@@ -177,4 +181,48 @@ test('PDF import always sends OCR output through AI structuring', async () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('AI-approved XLSX mappings are reused and manageable', async () => {
+  const rows = [
+    ['Date', 'Description', 'Amount', 'Currency'],
+    ['2026-09-01', 'Groceries', -12.5, 'EUR'],
+  ];
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Statement');
+  const content = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+  const callsBefore = aiCalls;
+
+  const analyzed = await upload('bank-export.xlsx', content, 'reuse', '/api/import/smart');
+  assert.equal(analyzed.status, 200, JSON.stringify(analyzed.data));
+  assert.equal(analyzed.data.template_check.status, 'analyzed');
+  assert.equal(analyzed.data.template_check.template_saved, true);
+  assert.equal(analyzed.data.preview[0].amount, -12.5);
+  assert.equal(aiCalls, callsBefore + 1);
+
+  const second = await upload('bank-export-again.xlsx', content);
+  assert.equal(second.status, 200, JSON.stringify(second.data));
+  assert.equal(second.data.template_used, true);
+  assert.equal(second.data.template_check.status, 'template');
+  assert.equal(second.data.preview[0].amount, -12.5);
+  assert.equal(aiCalls, callsBefore + 1, 'matching XLSX template should avoid another AI request');
+
+  const listed = await api('GET', '/api/import/templates');
+  const template = listed.data.templates.find((item) => item.format === 'xlsx');
+  assert.ok(template);
+
+  const renamed = await api('PATCH', `/api/import/templates/${template.id}`, {
+    name: 'Monthly Excel statement',
+  });
+  assert.equal(renamed.status, 200);
+  assert.equal(renamed.data.name, 'Monthly Excel statement');
+
+  const deleted = await api('DELETE', `/api/import/templates/${template.id}`);
+  assert.equal(deleted.status, 204);
+  const afterDelete = await api('GET', '/api/import/templates');
+  assert.equal(
+    afterDelete.data.templates.some((item) => item.id === template.id),
+    false,
+  );
 });

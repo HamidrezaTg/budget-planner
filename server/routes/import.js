@@ -102,20 +102,27 @@ function templateFromRow(row) {
   }
 }
 
-function findCsvTemplate(conn, grid) {
+function templateSignature(format, grid, headerRow) {
+  const signature = csvHeaderSignature(grid, headerRow);
+  // Existing CSV templates use the unprefixed signature. Namespace new XLSX
+  // signatures so identical CSV and XLSX headers can coexist in old databases.
+  return format === 'xlsx' ? `xlsx:${signature}` : signature;
+}
+
+function findImportTemplate(conn, format, grid) {
   for (let i = 0; i < Math.min(grid.length, 25); i++) {
-    const signature = csvHeaderSignature(grid, i);
+    const signature = templateSignature(format, grid, i);
     if (!signature) continue;
     const row = conn
       .prepare('SELECT * FROM import_templates WHERE format = ? AND header_signature = ?')
-      .get('csv', signature);
+      .get(format, signature);
     const template = templateFromRow(row);
     if (template) return { ...template, header_row_index: i, signature };
   }
   return null;
 }
 
-function touchCsvTemplate(conn, id) {
+function touchImportTemplate(conn, id) {
   conn
     .prepare(
       `UPDATE import_templates
@@ -125,7 +132,7 @@ function touchCsvTemplate(conn, id) {
     .run(id);
 }
 
-function saveCsvTemplate(conn, { name, headers, signature, spec }) {
+function saveImportTemplate(conn, { name, format, headers, signature, spec }) {
   if (!signature || !spec) return null;
   const cleanName =
     String(name || 'CSV statement')
@@ -134,23 +141,29 @@ function saveCsvTemplate(conn, { name, headers, signature, spec }) {
   const result = conn
     .prepare(
       `INSERT INTO import_templates (name, format, header_signature, headers, spec)
-       VALUES (?, 'csv', ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(header_signature) DO UPDATE SET
          name = excluded.name,
          headers = excluded.headers,
          spec = excluded.spec,
          updated_at = datetime('now')`,
     )
-    .run(cleanName, signature, JSON.stringify(headers || []), JSON.stringify(spec));
+    .run(cleanName, format, signature, JSON.stringify(headers || []), JSON.stringify(spec));
   const id =
     result.lastInsertRowid ||
     conn.prepare('SELECT id FROM import_templates WHERE header_signature = ?').get(signature)?.id;
   return id ? conn.prepare('SELECT * FROM import_templates WHERE id = ?').get(id) : null;
 }
 
+function validTemplateParse(parsed) {
+  const validRows = parsed.stats.imported + parsed.stats.skippedCancelled;
+  return validRows > 0 && parsed.stats.invalid / Math.max(parsed.stats.total, 1) <= 0.1;
+}
+
 function csvCheckResponse(preflight, status, extra = {}) {
   return {
     status,
+    format: 'csv',
     can_import_directly: status === 'ready' || status === 'template',
     headers: preflight.headers,
     sample_rows: preflight.sample_rows,
@@ -369,18 +382,17 @@ router.post(
       if (format === 'csv') {
         const preflight = csvPreflight(req.file.path);
         const template =
-          templateMode === 'reuse' ? findCsvTemplate(req.impDb, preflight.grid) : null;
+          templateMode === 'reuse' ? findImportTemplate(req.impDb, 'csv', preflight.grid) : null;
         if (template) {
           const grid = rawGrid(req.file.path, 1_000_000);
           // Header position belongs to this file, not to the reusable mapping.
           // Older templates may contain a stale position from their original export.
           const templateSpec = { ...template.spec, header_row_index: template.header_row_index };
           const parsed = transactionsFromGrid(grid, templateSpec);
-          const validRows = parsed.stats.imported + parsed.stats.skippedCancelled;
-          if (!validRows || parsed.stats.invalid / Math.max(parsed.stats.total, 1) > 0.1) {
+          if (!validTemplateParse(parsed)) {
             // Do not trust a template that fails against the complete file.
           } else {
-            touchCsvTemplate(req.impDb, template.id);
+            touchImportTemplate(req.impDb, template.id);
             const token = stageStructuredFile(req.file, req.username, grid, templateSpec);
             return res.json(
               directImportResponse(token, parsed, req.impDb, null, {
@@ -437,6 +449,49 @@ router.post(
         );
       }
 
+      if (format === 'xlsx') {
+        const grid = rawGrid(req.file.path, 1_000_000);
+        const template =
+          templateMode === 'reuse' ? findImportTemplate(req.impDb, 'xlsx', grid) : null;
+        if (template) {
+          const templateSpec = { ...template.spec, header_row_index: template.header_row_index };
+          const parsed = transactionsFromGrid(grid, templateSpec);
+          if (validTemplateParse(parsed)) {
+            touchImportTemplate(req.impDb, template.id);
+            const token = stageStructuredFile(req.file, req.username, grid, templateSpec);
+            return res.json(
+              directImportResponse(token, parsed, req.impDb, null, {
+                file_type: 'xlsx',
+                template_check: {
+                  status: 'template',
+                  format: 'xlsx',
+                  can_import_directly: true,
+                  template: {
+                    id: template.id,
+                    name: template.name,
+                    use_count: template.use_count + 1,
+                  },
+                  instruction: `This Excel file matches the saved "${template.name}" template and was imported directly without AI analysis.`,
+                },
+                ai_spec: null,
+                template_used: true,
+                template_mode: templateMode,
+              }),
+            );
+          }
+        }
+
+        const parsed = parseStatement(req.file.path);
+        const token = stageFile(req.file, req.username);
+        return res.json(
+          directImportResponse(token, parsed, req.impDb, null, {
+            file_type: 'xlsx',
+            template_mode: templateMode,
+            ai_spec: null,
+          }),
+        );
+      }
+
       if (format === 'pdf' || format === 'png' || format === 'jpeg') {
         const cfg = getAiConfig(req.username);
         const grid = await gridForFile(req.file.path, online, cfg);
@@ -488,11 +543,12 @@ router.post(
       const { spec, parsed } = await aiMapGrid(cfg, grid);
       const token = stageStructuredFile(req.file, req.username, grid, spec);
       let template = null;
-      if (format === 'csv' && spec.header_row_index >= 0) {
-        template = saveCsvTemplate(req.impDb, {
+      if ((format === 'csv' || format === 'xlsx') && spec.header_row_index >= 0) {
+        template = saveImportTemplate(req.impDb, {
           name: req.file.originalname,
+          format,
           headers: grid[spec.header_row_index],
-          signature: csvHeaderSignature(grid, spec.header_row_index),
+          signature: templateSignature(format, grid, spec.header_row_index),
           spec,
         });
       }
@@ -512,8 +568,8 @@ router.post(
         template_mode: 'fresh',
         model: cfg.model,
         ai_instruction:
-          format === 'csv'
-            ? `Template "${template?.name || req.file.originalname}" was saved. Future CSV files with the same columns can be imported directly without AI analysis.`
+          format === 'csv' || format === 'xlsx'
+            ? `Template "${template?.name || req.file.originalname}" was saved. Future ${format === 'xlsx' ? 'Excel' : 'CSV'} files with the same columns can be imported directly without AI analysis.`
             : 'The OCR text was structured by AI and validated before it was shown for import.',
         csv_check:
           format === 'csv'
@@ -524,6 +580,19 @@ router.post(
                 template_saved: !!template,
                 template_mode: 'fresh',
                 instruction: `Future CSV files with the same columns can be imported directly without AI analysis.`,
+              }
+            : undefined,
+        template_check:
+          format === 'xlsx'
+            ? {
+                status: 'analyzed',
+                format: 'xlsx',
+                can_import_directly: true,
+                headers: grid[spec.header_row_index] || [],
+                template_saved: !!template,
+                template_mode: 'fresh',
+                instruction:
+                  'Future Excel files with the same columns can be imported directly without AI analysis.',
               }
             : undefined,
         ocr_structured_by_ai: format === 'pdf' || format === 'png' || format === 'jpeg',
@@ -551,10 +620,11 @@ router.post(
       stagedEntry.requires_ai = false;
       let template = null;
       if (spec.header_row_index >= 0) {
-        template = saveCsvTemplate(req.impDb, {
+        template = saveImportTemplate(req.impDb, {
           name: stagedEntry.originalName,
+          format: 'csv',
           headers: grid[spec.header_row_index],
-          signature: csvHeaderSignature(grid, spec.header_row_index),
+          signature: templateSignature('csv', grid, spec.header_row_index),
           spec,
         });
       }
@@ -596,6 +666,27 @@ router.get(
       .all()
       .map((row) => ({ ...row, headers: JSON.parse(row.headers) }));
     res.json({ templates });
+  }),
+);
+
+router.patch(
+  '/templates/:id',
+  withCtx((req, res) => {
+    const name = String(req.body?.name ?? '')
+      .trim()
+      .slice(0, 160);
+    if (!name) return res.status(400).json({ error: 'Template name is required' });
+    const result = req.impDb
+      .prepare('UPDATE import_templates SET name = ? WHERE id = ?')
+      .run(name, Number(req.params.id));
+    if (!result.changes) return res.status(404).json({ error: 'Import template not found' });
+    const row = req.impDb
+      .prepare(
+        `SELECT id, name, format, headers, created_at, updated_at, use_count
+         FROM import_templates WHERE id = ?`,
+      )
+      .get(Number(req.params.id));
+    res.json({ ...row, headers: JSON.parse(row.headers) });
   }),
 );
 

@@ -923,6 +923,28 @@ kbd {
 .panel-head .eyebrow {
   margin-bottom: 4px;
 }
+.import-template-manager {
+  margin-top: 14px;
+}
+.import-template-list {
+  display: grid;
+  gap: 8px;
+}
+.import-template-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.import-template-item .inline-form {
+  flex-shrink: 0;
+}
+.import-template-item .btn {
+  white-space: nowrap;
+}
 .insight-section {
   margin: 0 0 18px;
 }
@@ -2751,6 +2773,16 @@ select.missing {
 }
 
 @media (max-width: 720px) {
+  .import-template-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .import-template-item .inline-form {
+    width: 100%;
+  }
+  .import-template-item .inline-form .btn {
+    flex: 1;
+  }
   .chat-hero {
     align-items: flex-start;
     flex-direction: column;

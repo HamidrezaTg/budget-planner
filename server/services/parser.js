@@ -935,6 +935,7 @@ export function transactionsFromGrid(grid, spec) {
 
   const parseAmount = (v) => {
     if (v === '' || v == null) return NaN;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : NaN;
     if (decimal === ',') {
       let s = String(v).trim().replace(/[€\s]/g, '').replace(/\./g, '').replace(',', '.');
       return parseFloat(s);
