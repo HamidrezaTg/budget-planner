@@ -30,9 +30,12 @@ import { runNotificationSweep } from './services/notifications.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 2026;
-// Optional interface binding: e.g. 127.0.0.1 (localhost only) or a Tailscale IP.
-// Unset = all interfaces (LAN).
-const BIND_IP = process.env.BIND_IP || '';
+// Loopback by default: the planner holds financial data. Exposing it to the
+// LAN (or beyond) is an explicit opt-in via BIND_IP (0.0.0.0 or an interface
+// IP). Remote access is expected to run through Tailscale Serve or an HTTPS
+// reverse proxy — set TRUST_PROXY=1 there so session cookies get the Secure
+// flag automatically (SECURE_COOKIE=1 forces it as well).
+const BIND_IP = process.env.BIND_IP || '127.0.0.1';
 
 const app = express();
 app.disable('x-powered-by');
@@ -215,9 +218,10 @@ runNotificationSweep().catch((error) =>
 );
 setInterval(runNotificationSweep, 24 * 3600 * 1000).unref();
 
-app.listen(PORT, BIND_IP || undefined, () => {
-  const shown = BIND_IP || '0.0.0.0';
+app.listen(PORT, BIND_IP, () => {
+  const shown = BIND_IP === '0.0.0.0' ? '<this-machine>' : BIND_IP;
   console.log(
-    `Budget planner running at http://${shown === '0.0.0.0' ? '<this-machine>' : shown}:${PORT}`,
+    `Budget planner running at http://${shown}:${PORT}` +
+      (BIND_IP === '127.0.0.1' ? ' (loopback only — set BIND_IP to expose it, see README)' : ''),
   );
 });

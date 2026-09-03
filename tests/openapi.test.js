@@ -128,6 +128,8 @@ const expectedOperations = [
   ['GET', '/settings/ntfy'],
   ['PUT', '/settings/ntfy'],
   ['POST', '/settings/ntfy/test'],
+  ['GET', '/settings/egress'],
+  ['PUT', '/settings/egress'],
   ['GET', '/settings/fx'],
   ['PUT', '/settings/fx'],
   ['DELETE', '/settings/fx'],

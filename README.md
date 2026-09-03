@@ -176,22 +176,26 @@ are processed and removed after import.
 Packaged installs read `/etc/default/budget-planner`. Source installs can use shell
 environment variables.
 
-| Variable          | Default        | Purpose                                             |
-| ----------------- | -------------- | --------------------------------------------------- |
-| `PORT`            | `2026`         | HTTP listening port                                 |
-| `DATA_DIR`        | `./data`       | Database and upload directory                       |
-| `BIND_IP`         | all interfaces | Use `127.0.0.1` for localhost-only binding          |
-| `SECURE_COOKIE`   | off            | Set to `1` behind HTTPS                             |
-| `TRUST_PROXY`     | off            | Set to `1` behind a trusted reverse proxy           |
-| `METRICS_ENABLED` | off            | Expose unauthenticated `/metrics` counters          |
-| `SETUP_TOKEN`     | unset          | `X-Setup-Token` required for remote first-run setup |
-| `AI_BASE_URL`     | unset          | Optional server-level AI fallback URL               |
-| `AI_API_KEY`      | unset          | Optional server-level AI fallback key               |
-| `AI_MODEL`        | `gpt-4o-mini`  | Optional server-level AI fallback model             |
+| Variable          | Default       | Purpose                                                                                 |
+| ----------------- | ------------- | --------------------------------------------------------------------------------------- |
+| `PORT`            | `2026`        | HTTP listening port                                                                     |
+| `DATA_DIR`        | `./data`      | Database and upload directory                                                           |
+| `BIND_IP`         | `127.0.0.1`   | Loopback only; set `0.0.0.0` or an interface IP to expose the server                    |
+| `SECURE_COOKIE`   | auto          | Set to `1` to force the Secure cookie flag; automatic behind HTTPS with `TRUST_PROXY=1` |
+| `TRUST_PROXY`     | off           | Set to `1` behind a trusted reverse proxy                                               |
+| `METRICS_ENABLED` | off           | Expose unauthenticated `/metrics` counters                                              |
+| `SETUP_TOKEN`     | unset         | `X-Setup-Token` required for remote first-run setup                                     |
+| `AI_BASE_URL`     | unset         | Optional server-level AI fallback URL                                                   |
+| `AI_API_KEY`      | unset         | Optional server-level AI fallback key                                                   |
+| `AI_MODEL`        | `gpt-4o-mini` | Optional server-level AI fallback model                                                 |
 
-For public or untrusted networks, bind the server locally and use Caddy or another
-HTTPS reverse proxy. Follow [HTTPS With Caddy](docs/HTTPS_CADDY.md). Do not expose
-plain port `2026` directly to the internet.
+The server binds to loopback by default so financial data is never exposed
+accidentally. To reach it from other devices, either set `BIND_IP` explicitly or
+(Recommended) keep it local and put Tailscale Serve or an HTTPS reverse proxy in
+front — see [HTTPS With Caddy](docs/HTTPS_CADDY.md) and set `TRUST_PROXY=1` so
+session cookies gain the `Secure` flag automatically. Do not expose plain port
+`2026` directly to the internet. Administrators can also restrict the server's
+outbound requests (AI and ntfy endpoints) to an allowlist in Settings.
 
 ## Security Model
 
@@ -200,6 +204,10 @@ plain port `2026` directly to the internet.
   and expire server-side after 30 days.
 - Security headers include a strict Content-Security-Policy, frame and MIME
   protection, Referrer-Policy, and Permissions-Policy.
+- The server binds to loopback by default; LAN or remote exposure is explicit
+  (`BIND_IP`) and is expected to run behind Tailscale Serve or an HTTPS proxy.
+- Outbound requests (AI providers, online OCR, ntfy) can be restricted by an
+  administrator-managed egress allowlist (Settings → Outbound requests).
 - Imports have size limits, real calendar-date validation, invalid-row reporting,
   and database duplicate protection.
 - The AI read-only query path cannot access settings, API keys, authentication, or

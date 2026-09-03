@@ -1,5 +1,6 @@
 // Shared OpenAI-compatible chat client + per-user AI configuration.
 import { currentProfileConfig } from './ai-profiles.js';
+import { assertEgressAllowed } from './egress.js';
 
 // Base URLs of the built-in providers, whose error bodies are safe to surface
 // verbatim (their hosts are fixed, not user-chosen). Anything else is a custom
@@ -38,6 +39,9 @@ export function getAiConfig(username) {
 }
 
 async function post(path, body, cfg, extra = {}) {
+  // SSRF guard: in allowlist mode an admin-configured policy decides which
+  // hosts the server may contact. Throws before any request is made.
+  assertEgressAllowed(cfg.baseUrl);
   const res = await fetch(`${cfg.baseUrl}${path}`, {
     method: 'POST',
     headers: {

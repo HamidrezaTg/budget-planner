@@ -32,15 +32,25 @@ Please include:
   traversal-guarded.
 - **Headers**: CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`;
   no `X-Powered-By`; production error responses never expose stack traces.
+- **Binding**: the server binds to loopback by default; exposing it to a LAN or
+  VPN is an explicit `BIND_IP` decision, and HTTPS deployments via reverse proxy
+  or Tailscale Serve get the session-cookie `Secure` flag automatically
+  (`TRUST_PROXY=1`).
+- **Egress**: AI provider endpoints (chat and online OCR) and ntfy servers are
+  the only user-configured outbound URLs. An administrator can restrict all of
+  them to an allowlist (Settings → Outbound requests); custom endpoints are
+  validated against the policy at save time and again before every request.
 
 ## Transport
 
-The server runs plain HTTP for home LAN / Tailscale use. The Android client supports
-that mode after an explicit warning; use it only on a trusted private network.
-Over untrusted networks (public Wi-Fi, the open internet) HTTP exposes credentials
+The server binds to loopback by default. LAN or Tailscale use over plain HTTP is
+an explicit opt-in (`BIND_IP`). The Android client supports that mode after an
+explicit warning; use it only on a trusted private network. Over untrusted
+networks (public Wi-Fi, the open internet) HTTP exposes credentials
 and permits application tampering. Use an HTTPS reverse proxy
-(`SECURE_COOKIE=1`, `TRUST_PROXY=1`) or Tailscale HTTPS. A raw encrypted Tailscale
-tunnel does not make the HTTP URL itself safe from all endpoint/network risks.
+(`TRUST_PROXY=1` — the cookie `Secure` flag is then applied automatically) or
+Tailscale HTTPS. A raw encrypted Tailscale tunnel does not make the HTTP URL
+itself safe from all endpoint/network risks.
 
 ## Spreadsheet dependency
 

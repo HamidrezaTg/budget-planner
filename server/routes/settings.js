@@ -30,6 +30,12 @@ import path from 'node:path';
 import multer from 'multer';
 import { DatabaseSync } from 'node:sqlite';
 import { ntfyConfig, publishNtfy, validateNtfyConfig } from '../services/notifications.js';
+import {
+  egressConfig,
+  setEgressConfig,
+  validateAllowlistEntries,
+  assertEgressAllowed,
+} from '../services/egress.js';
 import { getVersionStatus } from '../version.js';
 
 const router = Router();
@@ -245,6 +251,9 @@ router.put('/ntfy', (req, res) => {
     return res.status(400).json({ error: 'enabled must be a boolean' });
   try {
     if (req.body?.enabled || next.topic) validateNtfyConfig(next);
+    // Fail at save time when the administrator's egress policy forbids this
+    // ntfy server — same policy the publisher enforces at request time.
+    if (req.body?.enabled || next.topic) assertEgressAllowed(next.server);
   } catch (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -271,6 +280,29 @@ router.post('/ntfy/test', async (_req, res) => {
   } catch (error) {
     res.status(502).json({ ok: false, error: error.message });
   }
+});
+
+// ------------------------------------------------- outbound policy (admin)
+// Global SSRF guard for AI + ntfy endpoints. 'all' preserves the default
+// behavior; 'allowlist' restricts every outbound fetch to approved hosts.
+router.get('/egress', requireAdmin, (_req, res) => {
+  res.json(egressConfig());
+});
+
+router.put('/egress', requireAdmin, (req, res) => {
+  const mode = req.body?.mode;
+  if (!['all', 'allowlist'].includes(mode))
+    return res.status(400).json({ error: "mode must be 'all' or 'allowlist'" });
+  if (req.body?.allowlist !== undefined && !Array.isArray(req.body.allowlist))
+    return res.status(400).json({ error: 'allowlist must be an array of hostnames' });
+  let allowlist;
+  try {
+    allowlist = validateAllowlistEntries(req.body?.allowlist ?? []);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  setEgressConfig({ mode, allowlist });
+  res.json(egressConfig());
 });
 
 // ------------------------------------------------------------ exchange rates

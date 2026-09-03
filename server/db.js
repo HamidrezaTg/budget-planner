@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(username);
+CREATE TABLE IF NOT EXISTS master_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
 CREATE TABLE IF NOT EXISTS share_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -815,4 +819,20 @@ export function setSetting(key, value) {
   db.prepare(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
   ).run(key, String(value));
+}
+
+// Global (server-wide) settings stored in the master database — used for
+// server-level policy such as the outbound-request allowlist. These are NOT
+// per-user and must never hold user data.
+export function getMasterSetting(key) {
+  const row = master.prepare('SELECT value FROM master_settings WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+
+export function setMasterSetting(key, value) {
+  master
+    .prepare(
+      'INSERT INTO master_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    )
+    .run(key, value == null ? null : String(value));
 }

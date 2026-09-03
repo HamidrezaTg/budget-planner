@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { als } from '../db.js';
 import { master, getUserDb } from '../db.js';
+import { assertEgressAllowed } from './egress.js';
 
 // These providers all speak the chat-completions dialect used by the app.
 // 9Router is normally a local gateway; OpenCode Zen documents its compatible
@@ -30,6 +31,9 @@ export function baseUrlFor(provider, customUrl) {
     if (!url) throw new Error('Custom provider needs a Base URL');
     if (!/^https?:\/\//i.test(url))
       throw new Error('Custom Base URL must start with http:// or https://');
+    // Fail at save time when the administrator's egress policy forbids this
+    // host — a profile that can never be used is worse than a clear error.
+    assertEgressAllowed(url);
     return url;
   }
   return definition.base_url;

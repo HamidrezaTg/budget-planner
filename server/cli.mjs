@@ -66,7 +66,8 @@ function serverConfig() {
     ...values,
     PORT: values.PORT && /^\d+$/.test(values.PORT) ? values.PORT : '2026',
     DATA_DIR: values.DATA_DIR?.startsWith('/') ? values.DATA_DIR : DEFAULT_DATA_DIR,
-    BIND_IP: values.BIND_IP || '0.0.0.0',
+    // Match the server default: loopback unless explicitly configured.
+    BIND_IP: values.BIND_IP || '127.0.0.1',
   };
 }
 

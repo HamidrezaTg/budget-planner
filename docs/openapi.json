@@ -1530,6 +1530,43 @@
         }
       }
     },
+    "/settings/egress": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Show the outbound request policy (admin only)",
+        "operationId": "getEgressPolicy",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "403": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Set the outbound request policy (admin only)",
+        "description": "mode 'all' permits every outbound AI/ntfy request; 'allowlist' restricts them to the listed hosts (bare hostname or *.domain, a URL also works).",
+        "operationId": "setEgressPolicy",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": { "type": "string", "enum": ["all", "allowlist"] },
+                  "allowlist": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "403": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
     "/settings/fx": {
       "get": {
         "tags": ["Settings"],

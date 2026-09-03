@@ -1,5 +1,6 @@
 import { db, getSetting, getUserDb, listUsernames, als } from '../db.js';
 import { currentMonth, monthView } from './model.js';
+import { assertEgressAllowed } from './egress.js';
 
 const SERVER_RE = /^https?:\/\//i;
 const TOPIC_RE = /^[A-Za-z0-9._-]{1,128}$/;
@@ -27,6 +28,8 @@ export function ntfyConfig() {
 
 export async function publishNtfy({ server, topic, token, title, message }) {
   const target = validateNtfyConfig({ server, topic });
+  // SSRF guard: same administrator policy as AI endpoints.
+  assertEgressAllowed(target.server);
   const headers = { 'Content-Type': 'text/plain; charset=utf-8', Title: title };
   if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${target.server}/${encodeURIComponent(target.topic)}`, {

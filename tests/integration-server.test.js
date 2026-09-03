@@ -1099,6 +1099,85 @@ test('scheduled transactions honor start/end months and skip months', async () =
   await api(`/recurrences/${rec.id}`, 'DELETE', null, cookies);
 });
 
+test('egress policy is admin-only and enforced at save time', async () => {
+  // Non-admin users cannot read or change the policy.
+  const bobLogin = await fetch(`${srv.url}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'bob', password: 'another-secure-pw' }),
+  });
+  const bobCookie = bobLogin.headers.get('set-cookie').split(';')[0];
+  const bobView = await fetch(`${srv.url}/api/settings/egress`, { headers: { Cookie: bobCookie } });
+  assert.equal(bobView.status, 403);
+  const bobWrite = await fetch(`${srv.url}/api/settings/egress`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Cookie: bobCookie },
+    body: JSON.stringify({ mode: 'allowlist', allowlist: [] }),
+  });
+  assert.equal(bobWrite.status, 403);
+
+  // Admin can set the policy; malformed input is rejected.
+  const bad = await fetch(`${srv.url}/api/settings/egress`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ mode: 'sometimes' }),
+  });
+  assert.equal(bad.status, 400);
+  const badEntry = await fetch(`${srv.url}/api/settings/egress`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ mode: 'allowlist', allowlist: ['!'] }),
+  });
+  assert.equal(badEntry.status, 400);
+
+  const saved = await fetch(`${srv.url}/api/settings/egress`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({
+      mode: 'allowlist',
+      allowlist: ['ntfy.sh', 'https://api.openai.com/v1'],
+    }),
+  });
+  assert.equal(saved.status, 200);
+  assert.deepEqual((await saved.json()).allowlist.sort(), ['api.openai.com', 'ntfy.sh']);
+
+  // A custom AI profile pointing outside the allowlist is refused at save.
+  const profile = await fetch(`${srv.url}/api/settings/ai-profiles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({
+      name: 'Blocked custom',
+      provider: 'custom',
+      base_url: 'https://secret-internal.example.net/v1',
+      model: 'm',
+    }),
+  });
+  assert.equal(profile.status, 400);
+  assert.match((await profile.json()).error, /allowlist/i);
+
+  // Same for ntfy servers; allowlisted ones still save.
+  const ntfyBlocked = await fetch(`${srv.url}/api/settings/ntfy`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ enabled: true, server: 'https://ntfy.example.net', topic: 'bp' }),
+  });
+  assert.equal(ntfyBlocked.status, 400);
+  const ntfyOk = await fetch(`${srv.url}/api/settings/ntfy`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ enabled: false, server: 'https://ntfy.sh', topic: '' }),
+  });
+  assert.equal(ntfyOk.status, 200);
+
+  // Restore the permissive default so other tests are unaffected.
+  const reset = await fetch(`${srv.url}/api/settings/egress`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Cookie: cookies },
+    body: JSON.stringify({ mode: 'all', allowlist: [] }),
+  });
+  assert.equal(reset.status, 200);
+});
+
 test('restore rejects garbage and table-less files without touching live data', async () => {
   const before = (await api('/transactions?limit=1', 'GET', null, cookies)).total;
 

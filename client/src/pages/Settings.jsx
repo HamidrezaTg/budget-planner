@@ -38,6 +38,9 @@ export default function Settings({ me }) {
     topic: '',
     token: '',
   });
+  const [egress, setEgress] = useState(null); // admin-only; null hides the card
+  const [egressMode, setEgressMode] = useState('all');
+  const [egressDraft, setEgressDraft] = useState('');
   const [versionInfo, setVersionInfo] = useState(null);
   const [versionBusy, setVersionBusy] = useState(false);
 
@@ -86,6 +89,14 @@ export default function Settings({ me }) {
         setNtfyForm((previous) => ({ ...previous, ...settings }));
       })
       .catch(() => {});
+    api
+      .get('/settings/egress')
+      .then((policy) => {
+        setEgress(policy);
+        setEgressMode(policy.mode);
+        setEgressDraft((policy.allowlist ?? []).join('\n'));
+      })
+      .catch(() => {}); // 403 for non-admins — card stays hidden
     checkVersion(true);
   }, [checkVersion]);
 
@@ -346,6 +357,24 @@ export default function Settings({ me }) {
     try {
       await api.post('/settings/ntfy/test');
       toast('Test notification sent.', 'ok');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
+  const saveEgress = async () => {
+    try {
+      const saved = await api.put('/settings/egress', {
+        mode: egressMode,
+        allowlist: egressDraft
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean),
+      });
+      setEgress(saved);
+      setEgressMode(saved.mode);
+      setEgressDraft((saved.allowlist ?? []).join('\n'));
+      toast('Outbound request policy saved.', 'ok');
     } catch (err) {
       toast(err.message, 'error');
     }
@@ -791,6 +820,51 @@ export default function Settings({ me }) {
           </p>
         </form>
       </div>
+
+      {/* Outbound request policy (admin only — hidden when the API refuses) */}
+      {egress && (
+        <div className="card settings-card">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Security</p>
+              <h2 style={{ fontSize: 18, margin: 0 }}>Outbound requests</h2>
+            </div>
+            <span className="muted tiny">
+              {egress.mode === 'allowlist' ? 'allowlist active' : 'all hosts allowed'}
+            </span>
+          </div>
+          <div className="settings-section">
+            <p className="muted tiny">
+              Controls where this server may connect for AI providers (chat and online OCR) and ntfy
+              notifications. In allowlist mode, localhost services (Ollama, LM Studio) must be
+              listed explicitly.
+            </p>
+            <label className="check-label">
+              <input
+                type="checkbox"
+                checked={egressMode === 'allowlist'}
+                onChange={(e) => setEgressMode(e.target.checked ? 'allowlist' : 'all')}
+              />
+              Restrict outbound requests to the allowlist below
+            </label>
+            <label className="muted tiny">
+              Allowed hosts (one per line — example.com or *.example.com; a URL also works)
+              <textarea
+                rows={4}
+                value={egressDraft}
+                onChange={(e) => setEgressDraft(e.target.value)}
+                placeholder={'ntfy.sh\n*.example.com\nlocalhost'}
+                disabled={egressMode !== 'allowlist'}
+              />
+            </label>
+            <div className="btn-row">
+              <button className="btn primary" onClick={saveEgress}>
+                Save policy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI connection */}
       <div className="card settings-card">

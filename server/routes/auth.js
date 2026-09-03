@@ -101,7 +101,7 @@ router.post(
     try {
       const name = await createUser(username, password, 'admin');
       als.run(getUserDb(name), () => setSetting('currency', 'EUR'));
-      createSession(res, name);
+      createSession(res, name, req);
       res.json({ ok: true });
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -135,7 +135,7 @@ router.post('/login', async (req, res) => {
   }
   clear(key);
   clearLoginFailures(key);
-  createSession(res, user);
+  createSession(res, user, req);
   res.json({ ok: true });
 });
 
@@ -189,7 +189,7 @@ router.patch(
         const newName = await renameUser(oldName, newUsername, current_password);
         // All old sessions are invalidated. Issue a fresh one for the new
         // username so the caller stays signed in.
-        createSession(res, newName);
+        createSession(res, newName, req);
         res.json({ ok: true, username: newName });
       } finally {
         if (acquired) resumeRequests();
@@ -215,7 +215,7 @@ router.patch('/users/:username', requireAuth, requireAdmin, async (req, res) => 
       const newName = await renameUser(target, newUsername);
       // The target's sessions are invalidated; if the renamed user happens
       // to be the caller, re-issue a session cookie so the admin stays in.
-      if (req.username === target) createSession(res, newName);
+      if (req.username === target) createSession(res, newName, req);
       res.json({ ok: true, username: newName });
     } finally {
       if (acquired) resumeRequests();

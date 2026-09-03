@@ -11,9 +11,19 @@ export const PASSWORD_MIN = 8;
 // Absolute server-side session lifetime (matches the cookie maxAge).
 export const SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
 
-// Cookie Secure flag: the app runs over plain HTTP on a home LAN by default.
-// Enable `Secure` explicitly when serving behind HTTPS (e.g. a reverse proxy).
-const COOKIE_SECURE = process.env.SECURE_COOKIE === '1';
+// Cookie Secure flag. The app runs over plain HTTP on a trusted home LAN by
+// default, so `Secure` cannot be set unconditionally (it would break login).
+// It is applied when explicitly configured via SECURE_COOKIE=1, or
+// automatically when the request itself is TLS — including behind a reverse
+// proxy or Tailscale Serve with TRUST_PROXY=1 and X-Forwarded-Proto: https.
+export function sessionCookieOptions(req) {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.SECURE_COOKIE === '1' || Boolean(req?.secure),
+    maxAge: SESSION_TTL_MS,
+  };
+}
 
 export function hashPasswordAsync(password) {
   return new Promise((resolve, reject) => {
@@ -229,15 +239,10 @@ export async function changePassword(username, currentPassword, newPassword) {
   master.prepare('DELETE FROM sessions WHERE username = ?').run(username);
 }
 
-export function createSession(res, username) {
+export function createSession(res, username, req = null) {
   const token = crypto.randomBytes(32).toString('hex');
   master.prepare('INSERT INTO sessions (token, username) VALUES (?, ?)').run(token, username);
-  res.cookie(COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: COOKIE_SECURE,
-    maxAge: SESSION_TTL_MS,
-  });
+  res.cookie(COOKIE, token, sessionCookieOptions(req));
 }
 
 export function destroySession(req, res) {
