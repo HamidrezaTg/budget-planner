@@ -351,9 +351,11 @@ router.post(
     try {
       const format = detectFileFormat(req.file.path);
       const online = req.body?.ocr_mode === 'online';
+      const templateMode = req.body?.template_mode === 'fresh' ? 'fresh' : 'reuse';
       if (format === 'csv') {
         const preflight = csvPreflight(req.file.path);
-        const template = findCsvTemplate(req.impDb, preflight.grid);
+        const template =
+          templateMode === 'reuse' ? findCsvTemplate(req.impDb, preflight.grid) : null;
         if (template) {
           const grid = rawGrid(req.file.path, 1_000_000);
           const parsed = transactionsFromGrid(grid, template.spec);
@@ -371,6 +373,7 @@ router.post(
               }),
               ai_spec: null,
               template_used: true,
+              template_mode: templateMode,
             }),
           );
         }
@@ -378,6 +381,7 @@ router.post(
           const token = stageFile(req.file, req.username);
           staged.get(token).grid = rawGrid(req.file.path, 1_000_000);
           staged.get(token).requires_ai = true;
+          staged.get(token).template_mode = templateMode;
           return res.json({
             token,
             file_type: 'csv',
@@ -387,9 +391,13 @@ router.post(
             preview: [],
             csv_check: csvCheckResponse(preflight, 'needs_ai', {
               instruction:
-                'AI analysis is recommended before importing this CSV because the preflight checks did not pass.',
+                templateMode === 'fresh'
+                  ? 'Fresh mode is active, so saved templates are being ignored. AI analysis is recommended because the preflight checks did not pass.'
+                  : 'AI analysis is recommended before importing this CSV because the preflight checks did not pass.',
+              template_mode: templateMode,
             }),
             ai_spec: null,
+            template_mode: templateMode,
           });
         }
         const grid = rawGrid(req.file.path, 1_000_000);
@@ -402,6 +410,7 @@ router.post(
                 'This CSV passed the preflight checks and is ready to import directly without AI analysis.',
             }),
             ai_spec: null,
+            template_mode: templateMode,
           }),
         );
       }
@@ -476,6 +485,7 @@ router.post(
         summary,
         preview,
         ai_spec: spec,
+        template_mode: 'fresh',
         model: cfg.model,
         ai_instruction:
           format === 'csv'
@@ -488,6 +498,7 @@ router.post(
                 can_import_directly: true,
                 headers: grid[spec.header_row_index] || [],
                 template_saved: !!template,
+                template_mode: 'fresh',
                 instruction: `Future CSV files with the same columns can be imported directly without AI analysis.`,
               }
             : undefined,
@@ -532,6 +543,7 @@ router.post(
         summary,
         preview,
         ai_spec: spec,
+        template_mode: stagedEntry.template_mode || 'fresh',
         model: cfg.model,
         ai_instruction: `Template "${template?.name || 'CSV statement'}" was saved. Future CSV files with the same columns can be imported directly without AI analysis.`,
         csv_check: {
@@ -539,6 +551,7 @@ router.post(
           can_import_directly: true,
           headers: grid[spec.header_row_index] || [],
           template_saved: !!template,
+          template_mode: stagedEntry.template_mode || 'fresh',
           instruction: 'This AI-approved mapping is now saved for matching CSV files.',
         },
       });

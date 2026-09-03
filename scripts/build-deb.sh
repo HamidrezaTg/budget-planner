@@ -18,6 +18,7 @@ echo "==> staging budget-planner $VERSION"
 [ -f client/dist/index.html ] || { echo "==> client/dist missing — building client"; }
 npm --prefix client run build
 mkdir -p "$STAGE/opt/budget-planner" "$STAGE/DEBIAN" "$STAGE/lib/systemd/system" "$STAGE/etc/default"
+mkdir -p "$STAGE/usr/bin"
 cp -r server "$STAGE/opt/budget-planner/server"
 cp -r client/dist "$STAGE/opt/budget-planner/client-dist-tmp"
 mkdir -p "$STAGE/opt/budget-planner/client"
@@ -38,6 +39,8 @@ chmod 644 "$STAGE/DEBIAN/conffiles"
 sed -i "s/^Version: .*/Version: $VERSION/" "$STAGE/DEBIAN/control"
 cp packaging/budget-planner.service "$STAGE/lib/systemd/system/"
 cp packaging/budget-planner.default "$STAGE/etc/default/budget-planner"
+cp packaging/budget-planner-cli "$STAGE/usr/bin/budget-planner"
+chmod 755 "$STAGE/usr/bin/budget-planner"
 chmod 644 "$STAGE/etc/default/budget-planner"
 
 mkdir -p dist

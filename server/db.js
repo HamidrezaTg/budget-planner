@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT NOT NULL UNIQUE,
   display_name TEXT,
   password_hash TEXT NOT NULL,
+  disabled INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -76,6 +77,9 @@ CREATE TABLE IF NOT EXISTS ai_active_profiles (
 try {
   master.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
 } catch {}
+try {
+  master.exec('ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0');
+} catch {}
 const firstUser = master.prepare('SELECT id FROM users ORDER BY id LIMIT 1').get();
 if (firstUser) {
   master.prepare('UPDATE users SET role = ? WHERE id = ?').run('admin', firstUser.id);
@@ -101,7 +105,7 @@ export function isAdmin(username) {
 }
 
 export function listUsers() {
-  return master.prepare('SELECT username, role, created_at FROM users ORDER BY id').all();
+  return master.prepare('SELECT username, role, disabled, created_at FROM users ORDER BY id').all();
 }
 
 export function deleteUser(username) {

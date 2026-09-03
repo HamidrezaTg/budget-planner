@@ -35,6 +35,9 @@ export default function ImportPage() {
   const [ocrMode, setOcrMode] = useState('local');
   const [aiSettings, setAiSettings] = useState(null);
   const [templates, setTemplates] = useState([]);
+  const [templateMode, setTemplateMode] = useState(
+    () => localStorage.getItem('bp-import-template-mode') || 'reuse',
+  );
 
   useEffect(() => {
     api
@@ -60,7 +63,10 @@ export default function ImportPage() {
     setBusy(true);
     try {
       const online = ocrMode === 'online' && /\.(pdf|jpe?g|png)$/i.test(file.name || '');
-      const data = await api.upload(endpoint, file, online ? { ocr_mode: 'online' } : {});
+      const data = await api.upload(endpoint, file, {
+        template_mode: templateMode,
+        ...(online ? { ocr_mode: 'online' } : {}),
+      });
       if (accountId && data.token && data.summary) {
         try {
           const preview = await api.post('/import/preview', {
@@ -222,6 +228,20 @@ export default function ImportPage() {
             </option>
           </select>
         </label>
+        <label className="muted tiny" style={{ display: 'block', marginTop: 10 }}>
+          CSV template handling
+          <select
+            value={templateMode}
+            onChange={(e) => {
+              setTemplateMode(e.target.value);
+              localStorage.setItem('bp-import-template-mode', e.target.value);
+            }}
+            disabled={busy}
+          >
+            <option value="reuse">Reuse matching saved templates</option>
+            <option value="fresh">Start fresh and ignore saved templates</option>
+          </select>
+        </label>
         {ocrMode === 'online' && (
           <p className="muted tiny">
             The selected statement pages will be sent to your active AI provider for OCR. Use local
@@ -230,7 +250,7 @@ export default function ImportPage() {
         )}
         <p className="muted tiny import-template-note">
           PDF and image imports always require AI structuring after OCR. CSV imports use AI only
-          when preflight checks fail or no saved template matches.
+          when preflight checks fail, or when you choose to start fresh.
         </p>
         {templates.length > 0 && (
           <p className="muted tiny import-template-note">

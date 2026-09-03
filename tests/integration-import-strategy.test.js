@@ -49,13 +49,14 @@ async function api(method, route, body) {
   return { status: response.status, data: await response.json().catch(() => ({})) };
 }
 
-async function upload(filename, content) {
+async function upload(filename, content, templateMode = 'reuse') {
   const form = new FormData();
   form.append(
     'file',
     new Blob([content], { type: filename.endsWith('.pdf') ? 'application/pdf' : 'text/csv' }),
     filename,
   );
+  form.append('template_mode', templateMode);
   const response = await fetch(`${app.url}/api/import/upload`, {
     method: 'POST',
     headers: { Cookie: cookies },
@@ -154,6 +155,13 @@ test('failed CSV preflight can be AI-approved and reused as a private template',
   assert.equal(second.data.csv_check.status, 'template');
   assert.equal(second.data.preview[0].amount, -12.5);
   assert.equal(aiCalls, 1, 'matching template should avoid another AI request');
+
+  const fresh = await upload('bank-export-fresh.csv', csv, 'fresh');
+  assert.equal(fresh.status, 200);
+  assert.equal(fresh.data.template_mode, 'fresh');
+  assert.equal(fresh.data.csv_check.status, 'needs_ai');
+  assert.equal(fresh.data.template_used, undefined);
+  assert.equal(aiCalls, 1, 'fresh mode should ignore the saved template');
 });
 
 test('PDF import always sends OCR output through AI structuring', async () => {

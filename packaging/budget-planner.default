@@ -1,3 +1,4 @@
 # Budget Planner service overrides
 # PORT=2026
 # DATA_DIR=/var/lib/budget-planner
+# BIND_IP=127.0.0.1

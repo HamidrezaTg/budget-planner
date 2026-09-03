@@ -11,7 +11,7 @@ desktop clients are user interfaces that connect to the server.
 ## What It Does
 
 - Imports CSV, XLS, XLSX, PDF, JPG, and PNG bank statements with preview-first
-  confirmation and database-level duplicate protection.
+  confirmation, selectable saved-template reuse, and database-level duplicate protection.
 - Learns merchant categorization rules and supports advanced rules, rule testing,
   AI category suggestions, splits, attachments, and transfer pairing.
 - Plans monthly budgets with standing plans, one-month overrides, account
@@ -51,9 +51,28 @@ use `--restore-server-data /absolute/path` where the source contains `master.db`
 `users/`; the installer validates the SQLite files and retains the old destination
 before swapping it.
 
+When upgrading an existing installation and only changing the listen address or port,
+answer `y` to reconfigure and then choose **Network only**. The current database and
+all other settings are kept. If you choose the full reconfiguration path, the database
+step explicitly offers **Keep the existing database** or **Restore a complete server-data
+directory**. Leaving the restore choice at its default keeps the current database; it
+only creates a new database when the selected data directory is empty.
+
 The default port is `2026`. Open `http://<server-ip>:2026` in a browser, create the
 first account, and follow the setup path in the [User Guide](docs/USER_GUIDE.md).
 The first account becomes the administrator.
+
+The Debian package also installs the `budget-planner` administration CLI:
+
+```bash
+sudo budget-planner status
+sudo budget-planner doctor
+sudo budget-planner backup create
+```
+
+Run `budget-planner --help` for user management, configuration, logs, backup listing,
+and validated restore commands. Restores require an explicit confirmation and retain
+the previous data directory.
 
 ### Install a release package manually
 
@@ -125,6 +144,10 @@ and [Troubleshooting](docs/TROUBLESHOOTING.md) for client-specific details.
 6. Review unknown transactions, transfers, duplicates, and attachments.
 7. Enter actual income and observed balances as the month progresses.
 8. Use Dashboard for the monthly check-in, then Projection and Reports for planning.
+
+On the Import page, choose **Reuse matching saved templates** for known CSV exports,
+or **Start fresh and ignore saved templates** when you want the file checked without
+applying an earlier mapping. AI-approved mappings remain available for later imports.
 
 The complete, searchable guide is available publicly at `/help`, including before
 login, and in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md).

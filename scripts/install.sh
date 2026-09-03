@@ -169,6 +169,7 @@ PORT=2026
 BIND_IP=""
 ADMIN_NAME=""
 ADMIN_PW=""
+NETWORK_ONLY=0
 [ -n "$OCR_MODE" ] || OCR_MODE="full"
 
 if [ -f "$DEFAULTS_FILE" ]; then
@@ -190,6 +191,16 @@ if [ "$WANT_CLIENT" != "1" ] && [ "$QUIET" != "1" ] && { [ -t 0 ] || [ "${BP_WAN
     RECONFIGURE="$reconf"
   fi
   if [ ! -f "$DEFAULTS_FILE" ] || [ "${RECONFIGURE:-n}" = "y" ] || [ "${RECONFIGURE:-n}" = "Y" ]; then
+    if [ -f "$DEFAULTS_FILE" ]; then
+      echo
+      echo "  Reconfigure network only, keeping the existing database and other settings? [Y/n]"
+      read -rp "  Choice [Y]: " network_only
+      case "${network_only:-y}" in
+        n|N) NETWORK_ONLY=0 ;;
+        *) NETWORK_ONLY=1 ;;
+      esac
+    fi
+
     EXISTING_TS=""
     command -v tailscale >/dev/null 2>&1 && EXISTING_TS=$(tailscale ip -4 -1 2>/dev/null || true)
 
@@ -206,47 +217,62 @@ if [ "$WANT_CLIENT" != "1" ] && [ "$QUIET" != "1" ] && { [ -t 0 ] || [ "${BP_WAN
       *) BIND_IP="0.0.0.0" ;;
     esac
 
-    read -rp "  Port [2026]: " port_in
-    PORT="${port_in:-2026}"
+    read -rp "  Port [$PORT]: " port_in
+    PORT="${port_in:-$PORT}"
     case "$PORT" in ''|*[!0-9]*) PORT=2026 ;; esac
     [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || PORT=2026
 
-    read -rp "  Data directory [$DATA_DIR]: " data_dir_in
-    DATA_DIR="${data_dir_in:-$DATA_DIR}"
-    case "$DATA_DIR" in
-      /*) ;;
-      *) echo "  Data directory must be absolute; keeping $DATA_DIR"; DATA_DIR="/var/lib/budget-planner" ;;
-    esac
+    if [ "$NETWORK_ONLY" != "1" ]; then
+      read -rp "  Data directory [$DATA_DIR] (press Enter to keep): " data_dir_in
+      DATA_DIR="${data_dir_in:-$DATA_DIR}"
+      case "$DATA_DIR" in
+        /*) ;;
+        *) echo "  Data directory must be absolute; keeping $DATA_DIR"; DATA_DIR="/var/lib/budget-planner" ;;
+      esac
 
-    if [ -z "$RESTORE_DIR" ]; then
-      read -rp "  Complete server-data directory to restore (blank for fresh setup): " RESTORE_DIR
-    fi
+      if [ -z "$RESTORE_DIR" ]; then
+        echo
+        echo "  Database handling:"
+        if [ -f "$DATA_DIR/master.db" ] && [ -d "$DATA_DIR/users" ]; then
+          echo "   1) Keep the existing database in $DATA_DIR (recommended)"
+        else
+          echo "   1) Use $DATA_DIR (creates a new database if it is empty)"
+        fi
+        echo "   2) Restore a complete server-data directory instead"
+        read -rp "  Choice [1]: " database_choice
+        if [ "${database_choice:-1}" = "2" ]; then
+          read -rp "  Server-data directory to restore (contains master.db and users/): " RESTORE_DIR
+        else
+          RESTORE_DIR=""
+        fi
+      fi
 
-    echo
-    echo "  Local OCR tools (CSV/XLSX imports work without them):"
-    echo "   1) Full OCR — PDF and JPG/PNG (recommended)"
-    echo "   2) PDF text extraction only"
-    echo "   3) None"
-    read -rp "  Choice [1]: " ocr_choice
-    case "${ocr_choice:-1}" in
-      2) OCR_MODE="pdf" ;;
-      3) OCR_MODE="none" ;;
-      *) OCR_MODE="full" ;;
-    esac
+      echo
+      echo "  Local OCR tools (CSV/XLSX imports work without them):"
+      echo "   1) Full OCR — PDF and JPG/PNG (recommended)"
+      echo "   2) PDF text extraction only"
+      echo "   3) None"
+      read -rp "  Choice [1]: " ocr_choice
+      case "${ocr_choice:-1}" in
+        2) OCR_MODE="pdf" ;;
+        3) OCR_MODE="none" ;;
+        *) OCR_MODE="full" ;;
+      esac
 
-    echo
-    read -rp "  Create the first admin account now? [Y/n] " mkadmin
-    if [ "${mkadmin:-y}" != "n" ] && [ "${mkadmin:-y}" != "N" ]; then
-      while true; do
-        read -rp "  Admin username (letters/numbers, 2-32 chars): " ADMIN_NAME
-        ADMIN_NAME=$(echo "$ADMIN_NAME" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_.-')
-        [ "${#ADMIN_NAME}" -ge 2 ] && break
-        echo "  Username must be at least 2 valid characters."
-      done
-      while [ -z "$ADMIN_PW" ]; do
-        read -rsp "  Admin password (min 8 chars): " ADMIN_PW; echo
-        [ "${#ADMIN_PW}" -ge 8 ] || { echo "  Too short."; ADMIN_PW=""; }
-      done
+      echo
+      read -rp "  Create the first admin account now? [Y/n] " mkadmin
+      if [ "${mkadmin:-y}" != "n" ] && [ "${mkadmin:-y}" != "N" ]; then
+        while true; do
+          read -rp "  Admin username (letters/numbers, 2-32 chars): " ADMIN_NAME
+          ADMIN_NAME=$(echo "$ADMIN_NAME" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_.-')
+          [ "${#ADMIN_NAME}" -ge 2 ] && break
+          echo "  Username must be at least 2 valid characters."
+        done
+        while [ -z "$ADMIN_PW" ]; do
+          read -rsp "  Admin password (min 8 chars): " ADMIN_PW; echo
+          [ "${#ADMIN_PW}" -ge 8 ] || { echo "  Too short."; ADMIN_PW=""; }
+        done
+      fi
     fi
   fi
 fi

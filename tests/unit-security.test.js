@@ -51,6 +51,16 @@ test('changing a password invalidates every session', async () => {
   );
 });
 
+test('disabled users cannot log in and disabling the only admin is rejected', async () => {
+  await authm.createUser('pwadmin', 'another-admin-password', 'admin');
+  await authm.createUser('pwuser2', 'another-secure-password');
+  authm.setUserDisabled('pwuser2', true);
+  assert.equal(await authm.verifyLogin('pwuser2', 'another-secure-password'), null);
+  authm.setUserDisabled('pwuser2', false);
+  assert.equal(await authm.verifyLogin('pwuser2', 'another-secure-password'), 'pwuser2');
+  assert.throws(() => authm.setUserDisabled('pwadmin', true), /only enabled admin/);
+});
+
 test('rate limiter returns 429 after exceeding the limit and clears on success', () => {
   const key = '127.0.0.1|testuser';
   for (let i = 0; i < 10; i++) assert.equal(consume(key, 60_000, 10), false);

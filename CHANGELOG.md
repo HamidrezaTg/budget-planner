@@ -3,6 +3,15 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.20.4] — 2026-09-02
+
+### Changed
+
+- Existing installations now offer a clear Network-only reconfiguration path that preserves the database.
+- Full reconfiguration explicitly distinguishes keeping the existing database from restoring another server-data directory.
+- Added the `budget-planner` administration CLI for service diagnostics, configuration, users, logs, and validated server-data backups.
+- CSV imports can now explicitly reuse a matching saved template or start fresh without applying saved templates.
+
 ## [3.20.3] — 2026-09-02
 
 ### Added

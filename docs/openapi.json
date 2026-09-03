@@ -1988,6 +1988,12 @@
             "type": "string",
             "enum": ["local", "online"],
             "description": "For /import/smart only. Online sends bounded PDF page renders or image bytes to the active AI provider."
+          },
+          "template_mode": {
+            "type": "string",
+            "enum": ["reuse", "fresh"],
+            "default": "reuse",
+            "description": "For CSV /import/upload. Reuse a matching saved mapping or ignore saved mappings and start fresh."
           }
         }
       },

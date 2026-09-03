@@ -186,8 +186,9 @@ inflate income just to make a spending category look correct.
 
 ## Importing Statements
 
-Open **Import**, choose CSV/XLS/XLSX/PDF/JPG/PNG, and select the destination account. Import is
-always preview-first:
+Open **Import**, choose CSV/XLS/XLSX/PDF/JPG/PNG, and select the destination account. For CSV
+files, choose **Reuse matching saved templates** or **Start fresh and ignore saved templates**.
+Import is always preview-first:
 
 1. Select or drop the statement.
 2. For an unfamiliar format, optionally use **Analyze format with AI**.
@@ -195,6 +196,11 @@ always preview-first:
    rows, duplicates, and transfer candidates.
 4. Correct the account choice if necessary.
 5. Press **Confirm import** only after reviewing the preview.
+
+Reuse mode applies a saved mapping only when the CSV header signature matches exactly. Fresh mode
+does not use any saved mapping, so an unfamiliar or ambiguous file can be sent through AI analysis
+again. An AI-approved mapping is still saved after analysis for future reuse; nothing is imported
+until the preview is confirmed.
 
 Nothing is saved before confirmation. Standard handling includes:
 
@@ -406,6 +412,13 @@ service is stopped. The existing destination is retained as a timestamped
 `.before-restore` directory and the validated data is installed with an atomic directory
 swap. Do not use a single user's SQLite backup as a server-data restore source.
 
+During an upgrade, choose **Network only** after selecting reconfigure if you only need
+to change the listen address or port. This keeps the existing database and skips the
+restore prompt. Full reconfiguration offers an explicit database choice: **Keep the
+existing database** or **Restore a complete server-data directory**. A blank restore
+source is no longer described as a fresh setup; it keeps existing data when the target
+directory already contains `master.db` and `users/`.
+
 **Reset spending data** removes transactions and attachments while retaining planning
 configuration. Treat it as destructive and back up first.
 
@@ -426,6 +439,12 @@ delivery later. The configured ntfy server receives the notification content.
 Administrators use **Admin → Users** to create users, reset passwords, rename users,
 and delete another user with that user's private database. Regular users do not see
 the Admin route.
+
+Debian packages also provide `sudo budget-planner`. Use `budget-planner status` and
+`budget-planner doctor` for service checks, `budget-planner users list` for account
+status, and `budget-planner users disable USERNAME` or `enable USERNAME` to control
+login without deleting data. `budget-planner backup create` snapshots the complete
+server data; `backup restore` validates the source and requires explicit confirmation.
 
 Filesystem access to the server data directory is equivalent to access to the
 financial data. Protect the host, service account, backups, and reverse proxy.

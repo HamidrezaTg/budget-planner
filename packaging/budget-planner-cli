@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /usr/bin/node /opt/budget-planner/server/cli.mjs "$@"

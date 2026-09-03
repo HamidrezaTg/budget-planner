@@ -58,6 +58,34 @@ export async function createUser(username, password, role = 'user') {
   return name;
 }
 
+export async function adminResetPassword(username, newPassword) {
+  const target = normalizeUsername(username);
+  if (!newPassword || newPassword.length < PASSWORD_MIN)
+    throw new Error(`New password must be at least ${PASSWORD_MIN} characters`);
+  const row = master.prepare('SELECT username FROM users WHERE username = ?').get(target);
+  if (!row) throw new Error('User not found');
+  master
+    .prepare('UPDATE users SET password_hash = ? WHERE username = ?')
+    .run(await hashPasswordAsync(newPassword), target);
+  master.prepare('DELETE FROM sessions WHERE username = ?').run(target);
+}
+
+export function setUserDisabled(username, disabled) {
+  const target = normalizeUsername(username);
+  const row = master
+    .prepare('SELECT username, role, disabled FROM users WHERE username = ?')
+    .get(target);
+  if (!row) throw new Error('User not found');
+  if (disabled && row.role === 'admin' && !row.disabled) {
+    const enabledAdmins = master
+      .prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND disabled = 0")
+      .get().count;
+    if (enabledAdmins <= 1) throw new Error('Cannot disable the only enabled admin account');
+  }
+  master.prepare('UPDATE users SET disabled = ? WHERE username = ?').run(disabled ? 1 : 0, target);
+  if (disabled) master.prepare('DELETE FROM sessions WHERE username = ?').run(target);
+}
+
 // Constant-time-ish login: an unknown username must cost the same scrypt work
 // as a known one, or response timing reveals which usernames exist.
 // Format matches hashPasswordAsync (`salt:hash`) so it runs full scrypt work
@@ -65,17 +93,19 @@ export async function createUser(username, password, role = 'user') {
 const DUMMY_HASH =
   'TgUqIPyhFmzoIhLhX8FGyw==:5fd9cd424d71a2c3f48e4566788ab09d12e3f4a5b6c7d8910e2f4c3adeaf90b2';
 export async function verifyLogin(username, password) {
-  const row = master.prepare('SELECT username, password_hash FROM users WHERE username = ?').get(
-    String(username ?? '')
-      .trim()
-      .toLowerCase(),
-  );
+  const row = master
+    .prepare('SELECT username, password_hash, disabled FROM users WHERE username = ?')
+    .get(
+      String(username ?? '')
+        .trim()
+        .toLowerCase(),
+    );
   if (!row) {
     await verifyPasswordAsync(password ?? '', DUMMY_HASH);
     return null;
   }
   const ok = await verifyPasswordAsync(password ?? '', row.password_hash);
-  return ok ? row.username : null;
+  return ok && !row.disabled ? row.username : null;
 }
 
 // Admin-only guard, used after requireAuth.
@@ -222,9 +252,16 @@ export function requireAuth(req, res, next) {
   const token = req.cookies?.[COOKIE];
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   const sess = master
-    .prepare('SELECT username, created_at FROM sessions WHERE token = ?')
+    .prepare(
+      `SELECT s.username, s.created_at, u.disabled
+       FROM sessions s JOIN users u ON u.username = s.username
+       WHERE s.token = ?`,
+    )
     .get(token);
-  if (!sess) return res.status(401).json({ error: 'Unauthorized' });
+  if (!sess || sess.disabled) {
+    master.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   if (Date.now() - Date.parse(sess.created_at.replace(' ', 'T') + 'Z') > SESSION_TTL_MS) {
     master.prepare('DELETE FROM sessions WHERE token = ?').run(token);
     return res.status(401).json({ error: 'Unauthorized' });
