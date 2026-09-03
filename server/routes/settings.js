@@ -36,6 +36,7 @@ import {
   validateAllowlistEntries,
   assertEgressAllowed,
 } from '../services/egress.js';
+import { createZip, readZip, isZip } from '../services/zip.js';
 import { getVersionStatus } from '../version.js';
 
 const router = Router();
@@ -420,18 +421,39 @@ router.post('/fx/fetch', async (req, res) => {
   res.json({ ok: failed.length === 0, filled, attempted: rows.length, remaining, failed });
 });
 
-// Download a full backup of this user's database.
+// Download a full backup: the user's database PLUS every attachment file.
+// Attachment blobs live on disk under data/uploads/<user>/, so a bare .db
+// copy restored attachment metadata rows pointing at files no backup had.
+// The ZIP contains budget.db + attachments/<generated-name>; restore accepts
+// both this ZIP and the legacy bare .db.
 router.get('/backup', (req, res) => {
   const inst = als.getStore();
   // flush WAL so the file copy is complete
   inst.exec('PRAGMA wal_checkpoint(TRUNCATE);');
   const row = db.prepare('SELECT file FROM pragma_database_list()').get();
-  res.setHeader('Content-Type', 'application/octet-stream');
+  const entries = [{ name: 'budget.db', data: fs.readFileSync(row.file) }];
+  const dir = path.join(DATA_DIR, 'uploads', safeDbFilename(req.username));
+  const dirResolved = path.resolve(dir) + path.sep;
+  let attachmentCount = 0;
+  for (const att of db.prepare('SELECT filename FROM attachments ORDER BY id').all()) {
+    const resolved = path.resolve(dir, att.filename);
+    if (!resolved.startsWith(dirResolved)) continue; // traversal guard
+    try {
+      entries.push({ name: `attachments/${att.filename}`, data: fs.readFileSync(resolved) });
+      attachmentCount++;
+    } catch {
+      // The file is already gone; the backup keeps the rest. Nothing is
+      // deleted here — the metadata may still be wanted for reference.
+    }
+  }
+  const zip = createZip(entries);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('X-Attachment-Count', String(attachmentCount));
   res.setHeader(
     'Content-Disposition',
-    `attachment; filename="budget-backup-${new Date().toISOString().slice(0, 10)}.db"`,
+    `attachment; filename="budget-backup-${new Date().toISOString().slice(0, 10)}.zip"`,
   );
-  fs.createReadStream(row.file).pipe(res);
+  res.send(zip);
 });
 
 // Danger zone: delete all spending data, keep budgets/rules/funds/income.
@@ -464,14 +486,45 @@ router.delete('/spending', (req, res) => {
   res.json({ ok: true, deleted: n });
 });
 
-// Restore a previously downloaded backup (.db). Validates the file, keeps a
-// timestamped copy of the current database as <name>.db.pre-restore-<ts>, then
-// swaps it in via an atomic rename. On reopen failure the previous database is
-// restored, so a failed copy can never leave the live database truncated.
+// Restore a previously downloaded backup (.db or the new .zip that also
+// carries attachment files). Validates the database, keeps a timestamped copy
+// of the current database as <name>.db.pre-restore-<ts>, then swaps it in via
+// an atomic rename. On reopen failure the previous database is restored, so a
+// failed copy can never leave the live database truncated.
 let restoreBusy = false;
 router.post('/restore', restoreUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   if (restoreBusy) return res.status(409).json({ error: 'A restore is already in progress' });
+
+  // Split the upload: a ZIP backup carries budget.db + attachments/*; the
+  // legacy format is the bare SQLite file itself. Entry names are path-guarded
+  // before anything is written to disk.
+  let dbBuffer = req.file.buffer;
+  let attachmentFiles = null; // Map<generatedName, Buffer> or null for legacy
+  if (isZip(req.file.buffer)) {
+    let files;
+    try {
+      files = readZip(req.file.buffer);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+    dbBuffer = files.get('budget.db');
+    if (!dbBuffer) return res.status(400).json({ error: 'Backup ZIP has no budget.db entry' });
+    attachmentFiles = new Map();
+    const dirResolved = path.resolve(path.join(DATA_DIR, 'uploads')) + path.sep;
+    for (const [name, data] of files) {
+      if (!name.startsWith('attachments/')) continue;
+      const base = name.slice('attachments/'.length);
+      if (!base || base.includes('/') || base.includes('\\') || base.startsWith('.'))
+        return res.status(400).json({ error: `Unsafe attachment name in backup: ${name}` });
+      const resolved = path.resolve(
+        path.join(DATA_DIR, 'uploads', safeDbFilename(req.username), base),
+      );
+      if (!resolved.startsWith(dirResolved))
+        return res.status(400).json({ error: `Unsafe attachment name in backup: ${name}` });
+      attachmentFiles.set(base, data);
+    }
+  }
 
   const dataDir = DATA_DIR;
   fs.mkdirSync(dataDir, { recursive: true });
@@ -479,7 +532,7 @@ router.post('/restore', restoreUpload.single('file'), async (req, res) => {
     dataDir,
     `restore-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`,
   );
-  fs.writeFileSync(tmp, req.file.buffer);
+  fs.writeFileSync(tmp, dbBuffer);
 
   let check;
   try {
@@ -511,6 +564,7 @@ router.post('/restore', restoreUpload.single('file'), async (req, res) => {
     // inode after the rename (silently lost data) or crash on the closed
     // handle. New requests queue until the swap is done.
     restoreBusy = true;
+    let attachmentsRestored = 0;
     await pauseRequests();
     try {
       const username = req.username;
@@ -565,11 +619,31 @@ router.post('/restore', restoreUpload.single('file'), async (req, res) => {
           'Restore failed while reopening the database — previous data was rolled back',
         );
       }
+
+      // Attachment files are written only after the database swap and reopen
+      // succeeded, so a failed restore never leaves new blobs next to old
+      // metadata. Names were path-guarded during parsing.
+      if (attachmentFiles?.size) {
+        const uploadsDir = path.join(dataDir, 'uploads', safeDbFilename(req.username));
+        fs.mkdirSync(uploadsDir, { recursive: true });
+        const uploadsResolved = path.resolve(uploadsDir) + path.sep;
+        for (const [name, data] of attachmentFiles) {
+          const resolved = path.resolve(uploadsDir, name);
+          if (!resolved.startsWith(uploadsResolved)) continue;
+          fs.writeFileSync(resolved, data);
+          attachmentsRestored++;
+        }
+      }
     } finally {
       resumeRequests();
       restoreBusy = false;
     }
-    res.json({ ok: true, transactions: txCount, categories: catCount });
+    res.json({
+      ok: true,
+      transactions: txCount,
+      categories: catCount,
+      attachments: attachmentsRestored,
+    });
   } catch (e) {
     try {
       fs.unlinkSync(tmp);

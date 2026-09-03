@@ -50,13 +50,7 @@ function verifyPasswordAsync(password, storedHash) {
 }
 
 export async function createUser(username, password, role = 'user') {
-  const name = String(username ?? '')
-    .trim()
-    .toLowerCase();
-  // "." and "-" are excluded: they collided with "_" under the legacy
-  // filename sanitizer and must never enter the system again (new usernames).
-  if (!/^[a-z0-9_]{2,32}$/.test(name))
-    throw new Error('Username must be 2–32 chars: letters, numbers, _');
+  const name = normalizeUsername(username);
   if (!password || password.length < PASSWORD_MIN)
     throw new Error(`Password must be at least ${PASSWORD_MIN} characters`);
   master
@@ -65,6 +59,32 @@ export async function createUser(username, password, role = 'user') {
   // admin-created users start from a neutral setup; the first (admin) account
   // gets the household seed
   getUserDb(name, { generic: role !== 'admin' });
+  return name;
+}
+
+// First-run setup must be atomic against concurrent requests: two parallel
+// /auth/setup calls both pass the hasAnyUser() precheck before either has
+// inserted, which would create TWO admin accounts. BEGIN IMMEDIATE takes the
+// write lock up front, so exactly one caller wins; the loser sees the
+// committed user and is refused.
+export async function createInitialAdmin(username, password) {
+  const name = normalizeUsername(username);
+  if (!password || password.length < PASSWORD_MIN)
+    throw new Error(`Password must be at least ${PASSWORD_MIN} characters`);
+  const hash = await hashPasswordAsync(password);
+  master.exec('BEGIN IMMEDIATE');
+  try {
+    if (master.prepare('SELECT COUNT(*) AS c FROM users').get().c > 0)
+      throw new Error('An account already exists — please log in');
+    master
+      .prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)')
+      .run(name, hash, 'admin');
+    master.exec('COMMIT');
+  } catch (e) {
+    master.exec('ROLLBACK');
+    throw e;
+  }
+  getUserDb(name);
   return name;
 }
 

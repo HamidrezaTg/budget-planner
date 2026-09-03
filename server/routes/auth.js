@@ -12,6 +12,7 @@ import {
   DATA_DIR,
 } from '../db.js';
 import {
+  createInitialAdmin,
   createUser,
   verifyLogin,
   createSession,
@@ -99,7 +100,9 @@ router.post(
       return res.status(400).json({ error: 'An account already exists — please log in' });
     const { username, password } = req.body ?? {};
     try {
-      const name = await createUser(username, password, 'admin');
+      // Atomic against concurrent setups: the winner is decided by the
+      // database write lock, not by this precheck.
+      const name = await createInitialAdmin(username, password);
       als.run(getUserDb(name), () => setSetting('currency', 'EUR'));
       createSession(res, name, req);
       res.json({ ok: true });
@@ -269,7 +272,7 @@ router.delete('/users/:username', requireAuth, requireAdmin, (req, res) => {
   if (!row) return res.status(404).json({ error: 'User not found' });
   closeUserDb(target);
   deleteUser(target);
-  // remove their database file as well
+  // remove their database file and any uploaded attachment files
   const safe = safeDbFilename(target);
   const dataDir = DATA_DIR;
   for (const suffix of ['', '-wal', '-shm']) {
@@ -277,6 +280,9 @@ router.delete('/users/:username', requireAuth, requireAdmin, (req, res) => {
       fs.unlinkSync(path.join(dataDir, 'users', `${safe}.db${suffix}`));
     } catch {}
   }
+  try {
+    fs.rmSync(path.join(dataDir, 'uploads', safe), { recursive: true, force: true });
+  } catch {}
   res.json({ ok: true });
 });
 

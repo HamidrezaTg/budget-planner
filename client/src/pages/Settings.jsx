@@ -675,16 +675,16 @@ export default function Settings({ me }) {
             <a
               className="btn"
               href="/api/settings/backup"
-              title="Download your database file — store it somewhere safe"
+              title="Download your database plus every attachment file — store it somewhere safe"
             >
-              Download full backup (.db)
+              Download full backup (.zip)
             </a>
             <label
               className="btn file-btn"
-              title="Replace your data with a backup file (a .pre-restore copy is kept)"
+              title="Replace your data with a backup file (.zip with attachments, or a legacy .db); a .pre-restore copy is kept"
             >
-              Restore backup (.db)
-              <input type="file" accept=".db" onChange={restoreBackup} hidden />
+              Restore backup
+              <input type="file" accept=".zip,.db" onChange={restoreBackup} hidden />
             </label>
             <button
               className="btn danger"
@@ -695,9 +695,10 @@ export default function Settings({ me }) {
             </button>
           </div>
           <p className="muted tiny">
-            Backup downloads your complete database file. Restore replaces your current data with a
-            backup file (a .pre-restore copy is kept). To migrate to a new server: install there,
-            create an account, then restore your backup file.
+            Backup downloads your complete database together with all attachment files in one ZIP.
+            Restore accepts that ZIP or a legacy bare .db file and replaces your current data (a
+            .pre-restore copy is kept). To migrate to a new server: install there, create an
+            account, then restore your backup file.
           </p>
           {dataMsg && <div className={dataMsg.ok ? 'good' : 'error'}>{dataMsg.text}</div>}
         </div>

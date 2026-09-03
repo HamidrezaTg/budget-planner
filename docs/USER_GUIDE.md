@@ -412,12 +412,15 @@ session move with the account. Change password to invalidate existing sessions.
 
 ### Backups and restore
 
-**Download full backup** downloads the user's SQLite database. It includes budget
-data, settings, plans, and transactions, but not attachment files.
+**Download full backup** downloads a ZIP containing the user's SQLite database
+(budget data, settings, plans, transactions) plus every attachment file in an
+`attachments/` folder.
 
-**Restore backup** validates SQLite integrity, required tables, and references. A
-pre-restore copy is created and a failed restore rolls back. For a complete migration,
-restore the database and copy the matching `uploads/<username>/` directory separately.
+**Restore backup** accepts that ZIP or a legacy bare `.db` file (attachments of a
+legacy backup are not included — copy the matching `uploads/<username>/`
+directory separately). It validates SQLite integrity, required tables, and
+references. A pre-restore copy is created and a failed restore rolls back.
+Attachment files from a ZIP are written only after the database swap succeeded.
 
 For a complete server migration, use the release installer with
 `--restore-server-data /path/to/server-data`. The source must contain `master.db` and

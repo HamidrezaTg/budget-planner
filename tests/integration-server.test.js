@@ -1221,7 +1221,7 @@ test('backup → restore round trip preserves the data', async () => {
   const buf = Buffer.from(await backup.arrayBuffer());
 
   const restoreFd = new FormData();
-  restoreFd.append('file', new Blob([buf]), 'budget-backup.db');
+  restoreFd.append('file', new Blob([buf]), 'budget-backup.zip');
   const restore = await fetch(`${srv.url}/api/settings/restore`, {
     method: 'POST',
     headers: { Cookie: cookies },
@@ -1234,6 +1234,77 @@ test('backup → restore round trip preserves the data', async () => {
 
   const after = (await api('/transactions?limit=1', 'GET', null, cookies)).total;
   assert.equal(after, txBefore);
+});
+
+test('zip backups carry attachment files through delete + restore', async () => {
+  const created = await api(
+    '/transactions',
+    'POST',
+    { date: '2026-07-02', description: 'Backup attach', amount: -3 },
+    cookies,
+  );
+  const txId = created.ids[0];
+  const fd = new FormData();
+  fd.append('transaction_id', String(txId));
+  fd.append(
+    'file',
+    new Blob([Buffer.from('%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n')], {
+      type: 'application/pdf',
+    }),
+    'receipt.pdf',
+  );
+  const up = await fetch(`${srv.url}/api/attachments`, {
+    method: 'POST',
+    headers: { Cookie: cookies },
+    body: fd,
+  });
+  assert.equal(up.status, 200);
+  const att = await up.json();
+
+  const backup = await fetch(`${srv.url}/api/settings/backup`, { headers: { Cookie: cookies } });
+  assert.equal(backup.status, 200);
+  assert.match(backup.headers.get('content-type') ?? '', /zip/);
+  const zipBuf = Buffer.from(await backup.arrayBuffer());
+  const { readZip } = await import('../server/services/zip.js');
+  const entries = readZip(zipBuf);
+  assert.ok(entries.has('budget.db'));
+  const attEntry = [...entries.keys()].find((n) => n.startsWith('attachments/'));
+  assert.ok(attEntry, 'backup must include the attachment file');
+
+  // Deleting the attachment removes the row AND the file on disk.
+  await api(`/attachments/${att.id}`, 'DELETE', null, cookies);
+  const gone = await fetch(`${srv.url}/api/attachments/${att.id}/file`, {
+    headers: { Cookie: cookies },
+  });
+  assert.equal(gone.status, 404);
+
+  // Restoring the zip brings the metadata row and the file back.
+  const rFd = new FormData();
+  rFd.append('file', new Blob([zipBuf]), 'budget-backup.zip');
+  const restore = await fetch(`${srv.url}/api/settings/restore`, {
+    method: 'POST',
+    headers: { Cookie: cookies },
+    body: rFd,
+  });
+  assert.equal(restore.status, 200);
+  assert.equal((await restore.json()).attachments, 1);
+  const file = await fetch(`${srv.url}/api/attachments/${att.id}/file`, {
+    headers: { Cookie: cookies },
+  });
+  assert.equal(file.status, 200);
+
+  // A corrupt ZIP is refused without touching live data.
+  const corrupt = zipBuf.subarray(0, Math.max(8, zipBuf.length - 5));
+  const badFd = new FormData();
+  badFd.append('file', new Blob([corrupt]), 'corrupt.zip');
+  const bad = await fetch(`${srv.url}/api/settings/restore`, {
+    method: 'POST',
+    headers: { Cookie: cookies },
+    body: badFd,
+  });
+  assert.equal(bad.status, 400);
+
+  await api(`/attachments/${att.id}`, 'DELETE', null, cookies);
 });
 
 test('re-importing the same statement inserts nothing; duplicates within one file both import', async () => {
