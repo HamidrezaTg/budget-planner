@@ -813,10 +813,18 @@ body.privacy-mode .income,
 body.privacy-mode .expense,
 body.privacy-mode .good,
 body.privacy-mode .bad,
+body.privacy-mode .warn-text,
 body.privacy-mode .category-name strong,
 body.privacy-mode .category-meta,
 body.privacy-mode .count-pill,
-body.privacy-mode .chart-card {
+body.privacy-mode .chart-card,
+body.privacy-mode .insight-section,
+/* Money cells across every table (Funds, Budgets, Projection, Commitments,
+   Income, Accounts, Scheduled, Balances) use .num; some also carry income/
+   expense classes, but plenty do not — cover the cell itself, including the
+   budget/actual inputs inside it. */
+body.privacy-mode td.num,
+body.privacy-mode .budget-input {
   filter: blur(7px);
   user-select: none;
 }

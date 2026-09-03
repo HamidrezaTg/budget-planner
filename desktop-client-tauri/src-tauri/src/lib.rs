@@ -106,6 +106,22 @@ fn save_url(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Navigation guard: the shell must only ever render the bundled app,
+        // the user-configured planner server (http/https — LAN HTTP is the
+        // documented, explicit choice), or localhost. Anything else
+        // (file://, ftp://, javascript:, data:, custom schemes) is refused.
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
+                .on_navigation(|_webview, url| {
+                    let scheme = url.scheme();
+                    url.as_str().starts_with("about:")
+                        || scheme == "tauri"
+                        || scheme == "asset"
+                        || scheme == "http"
+                        || scheme == "https"
+                })
+                .build(),
+        )
         .on_menu_event(|app, event| {
             if event.id() == "quit" {
                 app.exit(0);

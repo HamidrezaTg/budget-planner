@@ -21,6 +21,18 @@ The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
 - Income sources are governed purely by start/end months (no end month = ongoing); the recurring toggle is retired, and out-of-period actual income counts as zero.
 - Import previews and confirmations mark choice-rule rows consistently, and review rows carry their reason.
+- The Recurring tab is presented as Scheduled Transactions, with per-month status and schedule (start/end/skip months) controls.
+
+### Security
+
+- The server binds to loopback by default; LAN or remote exposure now requires an explicit `BIND_IP` decision, and HTTPS deployments get the session-cookie `Secure` flag automatically (`TRUST_PROXY=1`).
+- New administrator-managed outbound-request policy (Settings → Outbound requests): AI, online-OCR, and ntfy endpoints can be restricted to an allowlist, enforced at request time and at save time.
+- Backups are now ZIP archives that include every attachment file; restore accepts the ZIP or the legacy bare `.db`, with checksum verification and path-traversal guards.
+- First-run setup is atomic against concurrent requests (only one admin account can be created).
+- Deleting a user removes their uploaded attachment files.
+- The desktop shell rejects webview navigation to non-http(s) schemes (file://, ftp://, javascript:, data:, custom schemes).
+- Release artifacts carry Sigstore build-provenance attestations (keyless, via GitHub Actions).
+- Privacy mode now obscures money cells in every table and input, plus the insights section.
 
 ## [3.21.0] — 2026-09-03
 

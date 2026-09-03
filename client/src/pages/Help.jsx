@@ -137,17 +137,17 @@ const SECTIONS = [
   },
   {
     id: 'recurring-funds-commitments',
-    title: 'Recurring items, funds, and commitments',
+    title: 'Scheduled items, funds, and commitments',
     eyebrow: 'Automate predictable money',
     route: '/recurring',
     summary:
       'Use these tools for predictable events, irregular bills, and obligations with an end date.',
     steps: [
-      'Create recurring income or expenses with a signed amount, day 1–28, account, category, and optional auto-post. Post now creates the current occurrence.',
-      'Pause a recurrence without deleting it. Posting is idempotent, so repeating the same action does not create duplicates. Split templates divide one recurring item across categories.',
+      'Create scheduled income or expenses with a signed amount, day 1–28, account, category, optional auto-post, and an optional schedule (start/end months, skip months). Post now creates the selected occurrence.',
+      'Pause a scheduled item without deleting it. Posting is idempotent, so repeating the same action does not create duplicates. Split templates divide one item across categories. Skip months prevent posting and import folding.',
       'Create a fund for irregular bills. Set its start month, opening balance, monthly contribution, and optional target amount/date. Record deposits, withdrawals, and linked bills.',
       'Use Commitments for dated obligations such as loans or instalments. Set start/end month, monthly amount, account, and optional category/fund links.',
-      'Review warnings for negative or underfunded funds and the Dashboard for recurring items due soon.',
+      'Review warnings for negative or underfunded funds and the Dashboard for scheduled items due soon.',
     ],
     notes: [
       'Commitments stop contributing after their end month. A fund balance can be negative temporarily; that is a visible warning, not hidden debt.',

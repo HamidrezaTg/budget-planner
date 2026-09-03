@@ -51,7 +51,7 @@ is remembered in the browser.
 - **Reports**: history, charts, exports, and frozen month-end snapshots.
 - **Import**: preview and confirm bank statements.
 - **Transactions**: actual rows, review, rules, transfers, splits, and attachments.
-- **Recurring**: expected monthly transactions.
+- **Scheduled**: expected monthly transactions.
 - **Budgets**: monthly category plans.
 - **Income**: income sources and monthly actuals.
 - **Accounts**: bank accounts, currencies, opening balances, and people.
@@ -107,7 +107,7 @@ In **Income**, add income sources, usual amounts, and optional people. Enter act
 income for a month when it arrives; actual income overrides the usual amount in that
 month's projection.
 
-Use **Recurring** for predictable monthly income or expenses. Use **Funds** for
+Use **Scheduled** for predictable monthly income or expenses. Use **Funds** for
 irregular bills that need money accrued over time. Use **Commitments** for fixed
 obligations with a start and end month.
 
@@ -276,14 +276,19 @@ or spending.
 After review, the Dashboard's spending-account transfer guidance should reflect the
 planned move without inflating the month's expenses.
 
-## Recurring Transactions
+## Scheduled Transactions
 
 Create expected monthly income or expenses with a signed amount, day 1–28, account,
-category, and optional auto-post.
+category, optional auto-post, and an optional schedule (start month, end month,
+skip months).
 
 - **Post now** creates the selected occurrence.
 - **Auto-post** posts on the scheduled day.
 - **Pause** retains the rule but stops posting.
+- **Schedule** limits the item to its start/end months and skips months it must
+  not post (a vacation pause, a cancelled month). Import folding respects the
+  schedule too — a bank row for a skipped month is imported as a normal
+  transaction instead of being folded in.
 - **Split template** posts one split transaction across multiple categories.
 - Posting is idempotent; repeating the same month does not create duplicates.
 

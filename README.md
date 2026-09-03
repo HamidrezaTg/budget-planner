@@ -139,7 +139,7 @@ and [Troubleshooting](docs/TROUBLESHOOTING.md) for client-specific details.
 1. Create the first user and sign in.
 2. Add real accounts, currencies, and opening balances in **Accounts**.
 3. Create groups and categories, assign paying accounts, and set standing plans.
-4. Add income sources, usual amounts, recurring items, funds, and commitments.
+4. Add income sources, usual amounts, scheduled items, funds, and commitments.
 5. Import a statement and inspect the full preview before confirming it.
 6. Review unknown transactions, transfers, duplicates, and attachments.
 7. Enter actual income and observed balances as the month progresses.

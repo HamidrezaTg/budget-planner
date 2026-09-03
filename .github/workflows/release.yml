@@ -30,6 +30,10 @@ jobs:
     needs: release-gate
     runs-on: ubuntu-22.04
     timeout-minutes: 45
+    permissions:
+      contents: write
+      id-token: write # Sigstore keyless provenance attestations
+      attestations: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -159,6 +163,16 @@ jobs:
             > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      - name: Attest build provenance (Sigstore)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/budget-planner-install.sh
+            dist/budget-planner-server_*_all.deb
+            dist/budget-planner-client_*.deb
+            dist/budget-planner-client_*.AppImage
+            dist/budget-planner-android.apk
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -216,6 +230,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+      id-token: write # Sigstore keyless provenance attestations
+      attestations: write
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
@@ -290,6 +306,13 @@ jobs:
           $exe = @(Get-ChildItem dist -Filter *.exe)
           if ($msi.Count -lt 1 -or $exe.Count -lt 1) { throw "Staged Windows installers are incomplete" }
 
+      - name: Attest build provenance (Sigstore)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.msi
+            dist/*.exe
+
       - name: Upload Windows installers and update checksums
         shell: pwsh
         env:
@@ -319,6 +342,8 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: write
+      id-token: write # Sigstore keyless provenance attestations
+      attestations: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -354,6 +379,11 @@ jobs:
           gh release upload "v${VERSION}" \
             "$RUNNER_TEMP/SHA256SUMS.txt" \
             --clobber
+
+      - name: Attest build provenance (Sigstore)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.dmg
 
       - name: Upload DMG to release
         env:
