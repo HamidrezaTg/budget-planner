@@ -3,6 +3,16 @@
 All notable changes to the Budget Planner are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.20.5] — 2026-09-03
+
+### Fixed
+
+- CSV imports now validate the complete file instead of sampling only the first 25 rows.
+- German Sparkasse exports, Windows-1252 files, two-digit dates, payees, zero-value rows, and explicit cancellation states are handled correctly.
+- Reusable CSV templates and AI mappings are validated against the complete file before import.
+- Local image OCR now uses word coordinates to associate dates, descriptions, and amounts, with extraction diagnostics shown in the import response.
+- Import previews now reconcile source rows, parsed rows, skipped cancellations, invalid rows, duplicates, and zero-value transactions.
+
 ## [3.20.4] — 2026-09-02
 
 ### Changed

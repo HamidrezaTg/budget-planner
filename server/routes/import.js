@@ -12,6 +12,7 @@ import {
   csvPreflight,
   csvHeaderSignature,
   detectFileFormat,
+  extractImageRows,
 } from '../services/parser.js';
 import { applyCategorization } from '../services/categorizer.js';
 import { getAiConfig, chatComplete, parseJsonLoose } from '../services/ai.js';
@@ -161,7 +162,7 @@ function csvCheckResponse(preflight, status, extra = {}) {
 const AI_IMPORT_PROMPT =
   'You map bank statement rows to a normalized transaction schema. Respond with ONLY a JSON object:\n' +
   '{"header_row_index": <row number of the header, or -1 if none>, ' +
-  '"col_date": <column index>, "col_description": <column index>, ' +
+  '"col_date": <column index>, "col_description": <column index>, "col_payee": <index or null>, ' +
   '"col_amount": <index or null if separate in/out columns>, ' +
   '"col_in": <index or null>, "col_out": <index or null>, ' +
   '"col_state": <index or null>, "ignore_states": ["reverted", ...], ' +
@@ -183,6 +184,7 @@ function validateAiSpec(spec, grid) {
   const columns = [
     'col_date',
     'col_description',
+    'col_payee',
     'col_amount',
     'col_in',
     'col_out',
@@ -215,9 +217,9 @@ function validateAiSpec(spec, grid) {
   return {
     ...spec,
     header_row_index: headerRow,
-    ignore_states: Array.isArray(spec.ignore_states)
-      ? spec.ignore_states.map((value) => String(value).toLowerCase()).slice(0, 20)
-      : [],
+    // Import policy is deliberately narrow: only explicitly cancelled rows
+    // are excluded. Refunded and reverted rows remain financial history.
+    ignore_states: ['cancelled', 'canceled'],
     notes: String(spec.notes || '').slice(0, 500),
     direct_import_instruction: String(
       spec.direct_import_instruction ||
@@ -238,8 +240,12 @@ async function aiMapGrid(cfg, grid) {
   ]);
   const spec = validateAiSpec(parseJsonLoose(msg.content), grid);
   const parsed = transactionsFromGrid(grid, spec);
-  const validRows = parsed.stats.imported + parsed.stats.skippedPendingCurrentMonth;
+  const validRows = parsed.stats.imported + parsed.stats.skippedCancelled;
   if (!validRows) throw new Error('AI mapping produced no valid transaction rows');
+  if (parsed.stats.invalid / Math.max(parsed.stats.total, 1) > 0.1)
+    throw new Error(
+      `AI mapping could not validate the full file: ${parsed.stats.invalid} of ${parsed.stats.total} rows were invalid`,
+    );
   return { spec, parsed };
 }
 
@@ -247,6 +253,13 @@ async function gridForFile(filePath, online, cfg) {
   if (online) {
     const extractedText = await onlineOcr(filePath, cfg);
     return [['Date', 'Description', 'Amount', 'Currency'], ...rowsFromExtractedText(extractedText)];
+  }
+  const format = detectFileFormat(filePath);
+  if (format === 'png' || format === 'jpeg') {
+    const extracted = extractImageRows(filePath);
+    const grid = [['Date', 'Description', 'Amount', 'Currency'], ...extracted.rows];
+    Object.defineProperty(grid, '__extraction', { value: extracted.diagnostics });
+    return grid;
   }
   return rawGrid(filePath, 1_000_000);
 }
@@ -329,6 +342,7 @@ function previewParsed(parsed, conn, accountId = null) {
       needsReview: preview.filter((p) => p.needs_review && !p.duplicate).length,
       income: preview.filter((p) => !p.duplicate && p.amount > 0).length,
       expenses: preview.filter((p) => !p.duplicate && p.amount < 0).length,
+      zero: preview.filter((p) => !p.duplicate && p.amount === 0).length,
       transferPairs: uniquePairs.length,
     },
   };
@@ -358,24 +372,32 @@ router.post(
           templateMode === 'reuse' ? findCsvTemplate(req.impDb, preflight.grid) : null;
         if (template) {
           const grid = rawGrid(req.file.path, 1_000_000);
-          const parsed = transactionsFromGrid(grid, template.spec);
-          touchCsvTemplate(req.impDb, template.id);
-          const token = stageStructuredFile(req.file, req.username, grid, template.spec);
-          return res.json(
-            directImportResponse(token, parsed, req.impDb, null, {
-              csv_check: csvCheckResponse(preflight, 'template', {
-                template: {
-                  id: template.id,
-                  name: template.name,
-                  use_count: template.use_count + 1,
-                },
-                instruction: `This CSV matches the saved "${template.name}" template and was imported directly without AI analysis.`,
+          // Header position belongs to this file, not to the reusable mapping.
+          // Older templates may contain a stale position from their original export.
+          const templateSpec = { ...template.spec, header_row_index: template.header_row_index };
+          const parsed = transactionsFromGrid(grid, templateSpec);
+          const validRows = parsed.stats.imported + parsed.stats.skippedCancelled;
+          if (!validRows || parsed.stats.invalid / Math.max(parsed.stats.total, 1) > 0.1) {
+            // Do not trust a template that fails against the complete file.
+          } else {
+            touchCsvTemplate(req.impDb, template.id);
+            const token = stageStructuredFile(req.file, req.username, grid, templateSpec);
+            return res.json(
+              directImportResponse(token, parsed, req.impDb, null, {
+                csv_check: csvCheckResponse(preflight, 'template', {
+                  template: {
+                    id: template.id,
+                    name: template.name,
+                    use_count: template.use_count + 1,
+                  },
+                  instruction: `This CSV matches the saved "${template.name}" template and was imported directly without AI analysis.`,
+                }),
+                ai_spec: null,
+                template_used: true,
+                template_mode: templateMode,
               }),
-              ai_spec: null,
-              template_used: true,
-              template_mode: templateMode,
-            }),
-          );
+            );
+          }
         }
         if (!preflight.can_import_directly) {
           const token = stageFile(req.file, req.username);
@@ -430,6 +452,7 @@ router.post(
             ai_spec: spec,
             ai_instruction:
               'OCR text was structured by AI and validated before it was shown for import.',
+            extraction: grid.__extraction,
             ocr_structured_by_ai: true,
           }),
         );
@@ -485,6 +508,7 @@ router.post(
         summary,
         preview,
         ai_spec: spec,
+        extraction: grid.__extraction,
         template_mode: 'fresh',
         model: cfg.model,
         ai_instruction:

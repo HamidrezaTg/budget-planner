@@ -25,7 +25,7 @@ test('administrative CLI reports status as JSON', () => {
   });
   assert.equal(result.status, 0, result.stderr);
   const status = JSON.parse(result.stdout);
-  assert.equal(status.version, '3.20.4');
+  assert.equal(status.version, '3.20.5');
   assert.equal(status.data_dir, '/tmp/budget-planner-cli-test-data');
 });
 

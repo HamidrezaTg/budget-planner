@@ -125,6 +125,147 @@ function runImageOcr(filePath) {
   }
 }
 
+function runImageOcrTsv(filePath) {
+  try {
+    return execFileSync(
+      'tesseract',
+      [filePath, 'stdout', '-l', process.env.TESSERACT_LANG || 'eng', '--psm', '3', 'tsv'],
+      {
+        encoding: 'utf8',
+        timeout: PDF_COMMAND_TIMEOUT_MS,
+        maxBuffer: MAX_PDF_TEXT_BYTES,
+      },
+    );
+  } catch (error) {
+    if (error.code === 'ENOENT')
+      throw new Error('Image OCR requires Tesseract. Install tesseract-ocr on the server');
+    if (error.killed || error.signal === 'SIGTERM') throw new Error('Image OCR timed out');
+    throw new Error('Image OCR failed');
+  }
+}
+
+function parseTsvWords(tsv) {
+  const words = [];
+  for (const line of tsv.split(/\r?\n/).slice(1)) {
+    const fields = line.split('\t');
+    if (fields.length < 12 || Number(fields[0]) !== 5) continue;
+    const text = fields[11].trim();
+    const confidence = Number(fields[10]);
+    if (!text || !Number.isFinite(confidence) || confidence < 20) continue;
+    words.push({
+      block: fields[2],
+      paragraph: fields[3],
+      line: fields[4],
+      text,
+      left: Number(fields[6]),
+      top: Number(fields[7]),
+      width: Number(fields[8]),
+      height: Number(fields[9]),
+    });
+  }
+  return words.filter((word) =>
+    [word.left, word.top, word.width, word.height].every((value) => Number.isFinite(value)),
+  );
+}
+
+const IMAGE_DATE_RE = /^\d{1,2}[./-]\d{1,2}[./-]\d{4}$/;
+const IMAGE_AMOUNT_RE = /^[+\-−]?(?:\d{1,3}(?:[.\s]\d{3})+|\d+)(?:,\d{2}|\.\d{2})[€$£]?$/;
+
+function imageAmountToken(value) {
+  return IMAGE_AMOUNT_RE.test(String(value).replace(/\s+/g, ''));
+}
+
+function imageLineText(words) {
+  const lines = [];
+  for (const word of [...words].sort((a, b) => a.top - b.top || a.left - b.left)) {
+    let line = lines.at(-1);
+    if (!line || Math.abs(line.top - word.top) > 18) {
+      line = { top: word.top, words: [] };
+      lines.push(line);
+    }
+    line.words.push(word);
+  }
+  return lines
+    .map((line) =>
+      line.words
+        .sort((a, b) => a.left - b.left)
+        .map((word) => word.text)
+        .join(' '),
+    )
+    .filter(Boolean)
+    .join(' · ');
+}
+
+export function rowsFromImageLayout(tsv, { width, height }) {
+  const words = parseTsvWords(tsv);
+  const dates = words
+    .filter(
+      (word) =>
+        IMAGE_DATE_RE.test(word.text.replace(/[()]/g, '')) &&
+        word.top > height * 0.09 &&
+        word.top < height * 0.9,
+    )
+    .sort((a, b) => a.top - b.top);
+  const amounts = words
+    .filter(
+      (word) =>
+        imageAmountToken(word.text) &&
+        word.left >= width * 0.65 &&
+        word.top > height * 0.09 &&
+        word.top < height * 0.9,
+    )
+    .sort((a, b) => a.top - b.top);
+  const rows = [];
+  const usedAmountTops = new Set();
+  for (const amount of amounts) {
+    const duplicateTop = [...usedAmountTops].some((top) => Math.abs(top - amount.top) < 30);
+    if (duplicateTop) continue;
+    usedAmountTops.add(amount.top);
+    const date = dates.filter((candidate) => candidate.top < amount.top).at(-1);
+    if (!date) continue;
+    const description = imageLineText(
+      words.filter(
+        (word) =>
+          word.left >= width * 0.17 &&
+          word.left < amount.left - 10 &&
+          word.top >= amount.top - 220 &&
+          word.top < amount.top - 25 &&
+          !IMAGE_DATE_RE.test(word.text.replace(/[()]/g, '')) &&
+          !imageAmountToken(word.text),
+      ),
+    );
+    if (!description) continue;
+    rows.push([date.text, description, amount.text.replace('−', '-'), 'EUR']);
+  }
+  return {
+    rows,
+    diagnostics: {
+      method: 'tesseract-tsv-layout',
+      words: words.length,
+      date_anchors: dates.length,
+      amount_candidates: amounts.length,
+      structured_rows: rows.length,
+    },
+  };
+}
+
+export function extractImageRows(filePath) {
+  const format = detectFormat(filePath);
+  if (format !== 'png' && format !== 'jpeg') throw new Error('File is not a PNG or JPEG image');
+  const dimensions = imageDimensions(filePath, format);
+  const layout = rowsFromImageLayout(runImageOcrTsv(filePath), dimensions);
+  if (layout.rows.length) return layout;
+  const fallback = rowsFromExtractedText(runImageOcr(filePath));
+  return {
+    rows: fallback,
+    diagnostics: {
+      ...layout.diagnostics,
+      method: 'tesseract-line-fallback',
+      structured_rows: fallback.length,
+    },
+  };
+}
+
 export function extractImageText(filePath) {
   const format = detectFormat(filePath);
   if (format !== 'png' && format !== 'jpeg') throw new Error('File is not a PNG or JPEG image');
@@ -255,6 +396,8 @@ function parseSheetRows(rows) {
     mapping.description =
       headers.find((h) => /desc|payee|merchant|name|details/i.test(h)) || headers[2];
   }
+  if (!mapping.payee)
+    mapping.payee = headers.find((h) => /beneficiary|payee|recipient|counterparty/i.test(h));
   if (!mapping.amount) {
     mapping.amount = headers.find((h) => /amount|value|sum/i.test(h));
   }
@@ -383,9 +526,10 @@ export function parseStatement(filePath) {
   if (format === 'pdf' || format === 'png' || format === 'jpeg') {
     parsedRows = {
       mapping: { date: 0, description: 1, amount: 2, currency: 3 },
-      raw: rowsFromExtractedText(
-        format === 'pdf' ? extractPdfText(filePath) : extractImageText(filePath),
-      ),
+      raw:
+        format === 'pdf'
+          ? rowsFromExtractedText(extractPdfText(filePath))
+          : extractImageRows(filePath).rows,
     };
   } else if (format === 'xlsx') {
     // no cellDates: keep raw serial numbers and convert with UTC math,
@@ -394,7 +538,7 @@ export function parseStatement(filePath) {
     const sheet = wb.Sheets[wb.SheetNames[0]];
     parsedRows = parseSheetRows(XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true }));
   } else {
-    const text = fs.readFileSync(filePath, 'utf8');
+    const text = readCsvText(filePath);
     const parsed = Papa.parse(text.trim(), {
       header: true,
       skipEmptyLines: true,
@@ -416,6 +560,19 @@ function validISODate(y, m, d) {
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
+function expandShortYear(value) {
+  const year = Number(value);
+  return String(value).length === 2 ? (year >= 70 ? 1900 + year : 2000 + year) : year;
+}
+
+function isCancelledState(state) {
+  return /\b(?:cancelled|canceled|storniert|storno|annulliert)\b/.test(
+    String(state ?? '')
+      .trim()
+      .toLowerCase(),
+  );
+}
+
 export function toISODate(value, _mode) {
   if (value instanceof Date && !isNaN(value)) {
     const y = value.getFullYear();
@@ -435,11 +592,11 @@ export function toISODate(value, _mode) {
     if (isNaN(d)) return null;
     return d.toISOString().slice(0, 10);
   }
-  const dmy = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
+  const dmy = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
   if (dmy) {
     const d1 = Number(dmy[1]);
     const d2 = Number(dmy[2]);
-    const y = Number(dmy[3]);
+    const y = expandShortYear(dmy[3]);
     // Default DMY; fall back to MDY only when DMY is an impossible calendar
     // date (e.g. 05/31/2026). Genuinely ambiguous dates stay DMY.
     if (validISODate(y, d2, d1)) return `${y}-${pad2(d2)}-${pad2(d1)}`;
@@ -517,15 +674,13 @@ function finalize({ mapping, raw }, mode) {
     );
   }
 
-  const now = new Date();
-  const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-
   const transactions = [];
   const errors = [];
   const MAX_PARSE_ERRORS = 50;
   const stats = {
     total: 0,
     imported: 0,
+    skippedCancelled: 0,
     skippedReverted: 0,
     skippedPendingCurrentMonth: 0,
     invalid: 0,
@@ -538,8 +693,8 @@ function finalize({ mapping, raw }, mode) {
     const state = String(row[mapping.state] ?? '')
       .trim()
       .toLowerCase();
-    if (state === 'reverted') {
-      stats.skippedReverted++;
+    if (isCancelledState(state)) {
+      stats.skippedCancelled++;
       continue;
     }
     const iso = toISODate(row[mapping.date], mode);
@@ -557,15 +712,16 @@ function finalize({ mapping, raw }, mode) {
       }
       continue;
     }
-    if (state === 'pending' && iso >= currentMonthStart) {
-      stats.skippedPendingCurrentMonth++;
-      continue;
-    }
     stats.imported++;
-    const currency = mapping.currency ? String(row[mapping.currency] ?? 'EUR') : 'EUR';
+    const currency = mapping.currency ? String(row[mapping.currency] ?? '').trim() || 'EUR' : 'EUR';
+    const descriptionParts = [String(row[mapping.description] ?? '').trim()];
+    if (mapping.payee) {
+      const payee = String(row[mapping.payee] ?? '').trim();
+      if (payee && !descriptionParts.includes(payee)) descriptionParts.push(payee);
+    }
     transactions.push({
       date: iso,
-      description,
+      description: descriptionParts.filter(Boolean).join(' · '),
       amount,
       revolut_type: mapping.type ? String(row[mapping.type] ?? '') : null,
       currency,
@@ -573,6 +729,9 @@ function finalize({ mapping, raw }, mode) {
     });
   }
   if (stats.invalid > errors.length) errors.push({ truncated: stats.invalid - errors.length });
+  stats.source_rows = raw.length + 1;
+  stats.header_row = 0;
+  stats.pre_header_rows = 0;
   return { transactions: assignDedupKeys(transactions), stats, errors, mapping };
 }
 
@@ -593,23 +752,24 @@ export function rawGrid(filePath, maxRows = 25) {
       .sheet_to_json(sheet, { header: 1, raw: true, defval: '' })
       .slice(0, Math.min(maxRows, MAX_IMPORT_ROWS + 1));
   }
-  const text = fs.readFileSync(filePath, 'utf8');
-  return Papa.parse(text, {
-    skipEmptyLines: false,
-    preview: Math.min(maxRows, MAX_IMPORT_ROWS + 1),
-  })
-    .data.filter((row) => row.some((value) => String(value ?? '').trim()))
-    .slice(0, Math.min(maxRows, MAX_IMPORT_ROWS + 1));
+  const text = readCsvText(filePath);
+  const parsed = Papa.parse(text, { skipEmptyLines: false });
+  const rows = parsed.data.filter((row) => row.some((value) => String(value ?? '').trim()));
+  const limit = Math.min(maxRows, MAX_IMPORT_ROWS + 1);
+  if (maxRows > MAX_IMPORT_ROWS && rows.length > limit)
+    throw new Error(`Import exceeds the ${MAX_IMPORT_ROWS}-row limit`);
+  return rows.slice(0, limit);
 }
 
 const CSV_HEADER_MATCHERS = {
-  date: /\b(date|datum|booking|value|buchung|started|completed)\b/i,
+  date: /\b(date|datum|booking|value|buchung|buchungstag|valutadatum|started|completed)\b/i,
   description:
-    /desc|memo|merchant|payee|name|details|narration|reference|purpose|verwendungszweck/i,
+    /desc|beschreibung|memo|merchant|payee|name|details|narration|reference|purpose|verwendungszweck/i,
+  payee: /beneficiary|payee|beguenstigter|zahlungspflichtiger|recipient|counterparty/i,
   amount: /\b(amount|sum|value|betrag|total|price)\b/i,
   in: /credit|deposit|income|incoming|money.?in|haben|gutschrift/i,
   out: /debit|withdraw|expense|outgoing|money.?out|soll|lastschrift/i,
-  state: /\b(state|status|zustand)\b/i,
+  state: /\b(state|status|zustand|info|buchungsstatus)\b/i,
   type: /\b(type|art|transaction type)\b/i,
   currency: /\b(currency|währung|waehrung|curr)\b/i,
 };
@@ -619,6 +779,18 @@ function normalizedHeader(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
+
+function readCsvText(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  if (buffer.length >= 3 && buffer.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])))
+    return buffer.subarray(3).toString('utf8');
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch {
+    // German bank exports are commonly ISO-8859-1/Windows-1252 encoded.
+    return new TextDecoder('windows-1252').decode(buffer);
+  }
 }
 
 export function csvHeaderSignature(grid, headerRow) {
@@ -664,11 +836,12 @@ function inferCsvSpec(grid) {
     header_row_index: best.rowIndex,
     col_date: scores.date,
     col_description: scores.description,
+    col_payee: scores.payee ?? null,
     col_amount: scores.amount ?? null,
     col_in: scores.amount === undefined ? (scores.in ?? null) : null,
     col_out: scores.amount === undefined ? (scores.out ?? null) : null,
     col_state: scores.state ?? null,
-    ignore_states: ['reverted', 'cancelled', 'canceled'],
+    ignore_states: ['cancelled', 'canceled'],
     col_type: scores.type ?? null,
     col_currency: scores.currency ?? null,
     date_format: 'auto',
@@ -706,7 +879,9 @@ function inferCsvSpec(grid) {
 }
 
 export function csvPreflight(filePath) {
-  const grid = rawGrid(filePath, 26);
+  // Parse the complete bounded file before taking the AI sample. This keeps
+  // blank lines from consuming the sample window and validates every row.
+  const grid = rawGrid(filePath, MAX_IMPORT_ROWS + 1);
   if (!grid.length || !grid.some((row) => row.some((value) => String(value ?? '').trim())))
     throw new Error('CSV file appears to be empty');
   const inferred = inferCsvSpec(grid);
@@ -715,7 +890,7 @@ export function csvPreflight(filePath) {
   if (inferred.spec) {
     const parsed = transactionsFromGrid(grid, inferred.spec);
     stats = parsed.stats;
-    const valid = stats.imported + stats.skippedPendingCurrentMonth;
+    const valid = stats.imported + stats.skippedCancelled + stats.skippedPendingCurrentMonth;
     const invalidRate = stats.total ? stats.invalid / stats.total : 1;
     if (!valid) issues.push('No valid transaction rows were found.');
     if (invalidRate > 0.1)
@@ -745,6 +920,7 @@ export function transactionsFromGrid(grid, spec) {
 
   const colDate = Number(spec.col_date);
   const colDesc = Number(spec.col_description);
+  const colPayee = spec.col_payee != null && spec.col_payee !== '' ? Number(spec.col_payee) : null;
   const colAmount =
     spec.col_amount != null && spec.col_amount !== '' ? Number(spec.col_amount) : null;
   const colIn = spec.col_in != null && spec.col_in !== '' ? Number(spec.col_in) : null;
@@ -753,9 +929,6 @@ export function transactionsFromGrid(grid, spec) {
   const colType = spec.col_type != null && spec.col_type !== '' ? Number(spec.col_type) : null;
   const colCurrency =
     spec.col_currency != null && spec.col_currency !== '' ? Number(spec.col_currency) : null;
-  const ignoreStates = Array.isArray(spec.ignore_states)
-    ? spec.ignore_states.map((s) => String(s).toLowerCase())
-    : [];
   const headerRow = Number(spec.header_row_index ?? 0);
   const decimal = spec.decimal_point === ',' ? ',' : '.';
   const dateFormat = String(spec.date_format || 'auto');
@@ -782,31 +955,34 @@ export function transactionsFromGrid(grid, spec) {
     let m;
     if (
       dateFormat === 'DD.MM.YYYY' ||
-      (dateFormat === 'auto' && (m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/)))
+      (dateFormat === 'auto' && (m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})/)))
     ) {
-      m = m || s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+      m = m || s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})/);
       if (m) {
-        if (validISODate(Number(m[3]), Number(m[2]), Number(m[1])))
-          return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        const year = expandShortYear(m[3]);
+        if (validISODate(year, Number(m[2]), Number(m[1])))
+          return `${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
         return null;
       }
     }
     if (
       dateFormat === 'DD/MM/YYYY' ||
-      (dateFormat === 'auto' && (m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)))
+      (dateFormat === 'auto' && (m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/)))
     ) {
-      m = m || s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      m = m || s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
       if (m) {
-        if (validISODate(Number(m[3]), Number(m[2]), Number(m[1])))
-          return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        const year = expandShortYear(m[3]);
+        if (validISODate(year, Number(m[2]), Number(m[1])))
+          return `${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
         return null;
       }
     }
     if (dateFormat === 'MM/DD/YYYY') {
       m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
       if (m) {
-        if (validISODate(Number(m[3]), Number(m[1]), Number(m[2])))
-          return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+        const year = expandShortYear(m[3]);
+        if (validISODate(year, Number(m[1]), Number(m[2])))
+          return `${year}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
         return null;
       }
     }
@@ -818,15 +994,13 @@ export function transactionsFromGrid(grid, spec) {
     return `${y}-${mo}-${dd}`;
   };
 
-  const now = new Date();
-  const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-
   const transactions = [];
   const errors = [];
   const MAX_PARSE_ERRORS = 50;
   const stats = {
     total: 0,
     imported: 0,
+    skippedCancelled: 0,
     skippedReverted: 0,
     skippedPendingCurrentMonth: 0,
     invalid: 0,
@@ -841,8 +1015,8 @@ export function transactionsFromGrid(grid, spec) {
             .trim()
             .toLowerCase()
         : '';
-    if (state && ignoreStates.includes(state)) {
-      stats.skippedReverted++;
+    if (isCancelledState(state)) {
+      stats.skippedCancelled++;
       continue;
     }
     const iso = parseDate(row[colDate]);
@@ -855,7 +1029,12 @@ export function transactionsFromGrid(grid, spec) {
       if (!isNaN(out) && out !== 0) amount = -Math.abs(out);
       else if (!isNaN(inn) && inn !== 0) amount = Math.abs(inn);
     }
-    const description = String(row[colDesc] ?? '').trim();
+    const descriptionParts = [String(row[colDesc] ?? '').trim()];
+    if (colPayee != null) {
+      const payee = String(row[colPayee] ?? '').trim();
+      if (payee && !descriptionParts.includes(payee)) descriptionParts.push(payee);
+    }
+    const description = descriptionParts.filter(Boolean).join(' · ');
     if (!iso || isNaN(amount) || !description) {
       stats.invalid++;
       if (errors.length < MAX_PARSE_ERRORS) {
@@ -868,12 +1047,8 @@ export function transactionsFromGrid(grid, spec) {
       }
       continue;
     }
-    if (state === 'pending' && iso >= currentMonthStart) {
-      stats.skippedPendingCurrentMonth++;
-      continue;
-    }
     stats.imported++;
-    const currency = colCurrency != null ? String(row[colCurrency] ?? 'EUR') : 'EUR';
+    const currency = colCurrency != null ? String(row[colCurrency] ?? '').trim() || 'EUR' : 'EUR';
     transactions.push({
       date: iso,
       description,
@@ -884,5 +1059,8 @@ export function transactionsFromGrid(grid, spec) {
     });
   }
   if (stats.invalid > errors.length) errors.push({ truncated: stats.invalid - errors.length });
+  stats.source_rows = grid.length;
+  stats.header_row = headerRow;
+  stats.pre_header_rows = Math.max(0, headerRow);
   return { transactions: assignDedupKeys(transactions), stats, errors };
 }

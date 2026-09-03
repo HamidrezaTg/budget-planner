@@ -182,8 +182,8 @@ export default function ImportPage() {
         Upload your bank export (.csv, .xlsx, PDF, JPG, or PNG — Revolut files are detected
         automatically). Local OCR is the private default; the optional online OCR choice sends PDF
         page renders or images to the active AI provider. Configured AI is used to map extracted
-        rows. Only COMPLETED transactions are imported; pendings from previous months count as
-        completed; duplicates are skipped.
+        rows. Cancelled transactions are skipped; zero-value rows, fees, refunds, reverted entries,
+        and pending entries remain available for review. Duplicates are skipped at confirmation.
       </p>
 
       <div
@@ -359,7 +359,7 @@ export default function ImportPage() {
               <div className="stat-value">{result.summary.duplicates}</div>
             </div>
             <div className="card stat">
-              <div className="stat-label">Needs review</div>
+              <div className="stat-label">Need a category</div>
               <div className="stat-value warn">{result.summary.needsReview}</div>
             </div>
             <div className="card stat">
@@ -367,8 +367,22 @@ export default function ImportPage() {
               <div className="stat-value small-value">
                 {result.summary.income} / {result.summary.expenses}
               </div>
+              {result.summary.zero > 0 && (
+                <div className="stat-note">{result.summary.zero} zero-value row(s)</div>
+              )}
             </div>
           </div>
+          {result.stats && (
+            <div className="card import-reconciliation" role="status">
+              <b>Import reconciliation</b> {result.stats.source_rows ?? result.stats.total} source
+              rows · {result.stats.total} checked · {result.stats.imported} transaction(s) parsed
+              {result.summary.duplicates > 0 && ` · ${result.summary.duplicates} duplicate(s)`}
+              {result.stats.skippedCancelled > 0 &&
+                ` · ${result.stats.skippedCancelled} cancelled row(s) skipped`}
+              {result.summary.zero > 0 && ` · ${result.summary.zero} zero-value row(s)`}
+              {result.stats.invalid > 0 && ` · ${result.stats.invalid} invalid row(s)`}
+            </div>
+          )}
           {transferCandidates(result.preview).length > 0 && (
             <div
               className="card transfer-review"
