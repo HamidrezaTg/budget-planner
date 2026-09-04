@@ -1,6 +1,6 @@
 [package]
 name = "gulden-client"
-version = "3.23.0"
+version = "3.23.1"
 description = "Desktop client for a self-hosted Gulden server (Tauri v2, no backend)"
 authors = ["HamidrezaTg"]
 edition = "2021"

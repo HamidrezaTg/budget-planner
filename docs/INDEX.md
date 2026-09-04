@@ -21,6 +21,10 @@ phones, and desktop applications connect to it as clients.
 - [HTTPS with Caddy](HTTPS_CADDY.md) - put the HTTP server behind HTTPS for public
   or untrusted networks.
 - [Security policy](../SECURITY.md) - security model and responsible disclosure.
+- [Hosted Service Terms](TERMS_OF_SERVICE.md) - draft terms for the hosted
+  subscription service; complete the marked business details before launch.
+- [Privacy Policy](PRIVACY_POLICY.md) - draft hosted-service privacy policy;
+  complete the marked provider and contact details before launch.
 
 ## Connect Clients
 
@@ -36,6 +40,8 @@ phones, and desktop applications connect to it as clients.
 - [OS test matrix](OS_TEST_MATRIX.md) - platform validation notes.
 - [Changelog](../CHANGELOG.md) - release history.
 - [Roadmap](../ROADMAP.md) - planned work.
+- [Contributing](../CONTRIBUTING.md) - development workflow and DCO policy.
+- [Trademark policy](../TRADEMARKS.md) - Gulden name and branding guidance.
 
 ## Documentation Rules
 

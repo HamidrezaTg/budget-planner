@@ -487,7 +487,7 @@ export default function Help() {
           Troubleshooting
         </a>
         <a href={`${GITHUB}/blob/main/LICENSE`} target="_blank" rel="noreferrer">
-          MIT License
+          AGPL-3.0 License
         </a>
       </footer>
     </div>

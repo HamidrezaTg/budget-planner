@@ -7,12 +7,12 @@
 #
 # To bump: update pkgver to match the GitHub release tag and `updpkgsums`.
 pkgname=gulden-client
-pkgver=3.23.0
+pkgver=3.23.1
 pkgrel=1
 pkgdesc="Desktop client for a self-hosted Gulden server (Tauri v2, no backend)"
 arch=('x86_64')
 url="https://github.com/HamidrezaTg/gulden"
-license=('MIT')
+license=('AGPL-3.0-only')
 depends=('gtk3' 'libsoup3' 'webkit2gtk-4.1' 'libappindicator' 'librsvg' 'hicolor-icon-theme' 'desktop-file-utils' 'xdg-utils')
 makedepends=('binutils')
 options=('!strip')

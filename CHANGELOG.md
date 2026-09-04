@@ -3,6 +3,16 @@
 All notable changes to Gulden are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
+## [3.23.1] — 2026-09-04
+
+### Changed
+
+- The project is now licensed under the GNU Affero General Public License,
+  version 3 (AGPL-3.0-only). The previously published `v3.23.0` release
+  remains under its original MIT license.
+- Added hosted-service terms and privacy documentation, a trademark policy, and
+  a Developer Certificate of Origin contribution policy.
+
 ## [3.23.0] — 2026-09-04
 
 ### Added

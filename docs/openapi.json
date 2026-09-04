@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Gulden API",
-    "version": "3.23.0",
+    "version": "3.23.1",
     "description": "Static contract for the Gulden HTTP API. JSON amounts are numbers and transaction expenses are negative. Unless an operation is marked public, send the bp_session cookie returned by login or setup."
   },
   "servers": [

@@ -225,6 +225,10 @@ outbound requests (AI and ntfy endpoints) to an allowlist in Settings.
 - [`docs/HTTPS_CADDY.md`](docs/HTTPS_CADDY.md) - HTTPS deployment
 - [`docs/MOBILE_CLIENTS.md`](docs/MOBILE_CLIENTS.md) - Android/iOS clients and network policy
 - [`docs/DESKTOP_CLIENT.md`](docs/DESKTOP_CLIENT.md) - desktop client
+- [`docs/TERMS_OF_SERVICE.md`](docs/TERMS_OF_SERVICE.md) - hosted-service terms draft
+- [`docs/PRIVACY_POLICY.md`](docs/PRIVACY_POLICY.md) - hosted-service privacy draft
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) - contribution workflow and DCO policy
+- [`TRADEMARKS.md`](TRADEMARKS.md) - Gulden branding policy
 - [`docs/openapi.json`](docs/openapi.json) - API schema
 - [`CHANGELOG.md`](CHANGELOG.md) - release history
 
@@ -247,6 +251,5 @@ service as required by section 13 of the license. The hosted Gulden service
 is provided separately under its own terms and may require a subscription.
 
 Versions published before this license was adopted, including `v3.23.0`,
-remain under the license included with those versions. This license applies to
-copies distributed with it and to future versions unless a later version
-states otherwise.
+remain under the license included with those versions. Version `v3.23.1` and
+future versions use AGPL-3.0-only unless a later version states otherwise.
