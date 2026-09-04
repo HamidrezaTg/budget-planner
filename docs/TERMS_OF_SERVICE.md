@@ -75,8 +75,8 @@ exports or backups you need. Gulden is not a bank, accountant, financial
 adviser, or source of tax advice. Review all calculations and imports before
 relying on them.
 
-The Service Privacy Policy explains how we handle personal data and is part of
-these Terms.
+The [Service Privacy Policy](PRIVACY_POLICY.md) explains how we handle personal
+data and is part of these Terms.
 
 ## 6. Open-Source Software and Feedback
 

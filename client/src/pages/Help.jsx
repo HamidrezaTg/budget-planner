@@ -480,14 +480,27 @@ export default function Help() {
 
       <footer className="help-footer">
         <span>Gulden · Self-hosted help</span>
+        <span>AGPL-3.0-only · Provided without warranty</span>
+        <a href={GITHUB} target="_blank" rel="noreferrer">
+          Source code
+        </a>
         <a href={`${GITHUB}/blob/main/SECURITY.md`} target="_blank" rel="noreferrer">
           Security
+        </a>
+        <a href={`${GITHUB}/blob/main/docs/TERMS_OF_SERVICE.md`} target="_blank" rel="noreferrer">
+          Terms
+        </a>
+        <a href={`${GITHUB}/blob/main/docs/PRIVACY_POLICY.md`} target="_blank" rel="noreferrer">
+          Privacy
+        </a>
+        <a href={`${GITHUB}/blob/main/TRADEMARKS.md`} target="_blank" rel="noreferrer">
+          Branding
         </a>
         <a href={`${GITHUB}/blob/main/docs/TROUBLESHOOTING.md`} target="_blank" rel="noreferrer">
           Troubleshooting
         </a>
         <a href={`${GITHUB}/blob/main/LICENSE`} target="_blank" rel="noreferrer">
-          AGPL-3.0 License
+          License
         </a>
       </footer>
     </div>
