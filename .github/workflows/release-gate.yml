@@ -151,6 +151,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install npm 11 for bulk audit endpoint
+        run: npm install --global npm@11
+
       - name: Audit production dependencies
         run: |
           audit() {
