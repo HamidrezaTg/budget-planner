@@ -237,4 +237,16 @@ outbound requests (AI and ntfy endpoints) to an allowlist in Settings.
 
 ## Contributing and License
 
-Issues and pull requests are welcome. Gulden is licensed under [MIT](LICENSE).
+Issues and pull requests are welcome. Gulden is free software licensed under
+the [GNU Affero General Public License, version 3](LICENSE).
+
+You may self-host Gulden, modify it, fork it, redistribute it, and use it
+commercially, subject to the AGPL-3.0 terms. If you run a modified version as
+a network service, you must provide its Corresponding Source to users of that
+service as required by section 13 of the license. The hosted Gulden service
+is provided separately under its own terms and may require a subscription.
+
+Versions published before this license was adopted, including `v3.23.0`,
+remain under the license included with those versions. This license applies to
+copies distributed with it and to future versions unless a later version
+states otherwise.
