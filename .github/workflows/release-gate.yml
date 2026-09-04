@@ -154,20 +154,36 @@ jobs:
       - name: Install npm 11 for bulk audit endpoint
         run: npm install --global npm@11
 
+      - name: Prepare OSV audit fallback
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          git show origin/main:scripts/audit-osv.mjs > "$RUNNER_TEMP/audit-osv.mjs"
+
       - name: Audit production dependencies
         run: |
           audit() {
             local directory="$1"
             local attempt
+            local output
+            local status
             for attempt in 1 2 3; do
-              if (cd "$directory" && npm audit --omit=dev --audit-level=high --package-lock-only --fetch-retries=0 --fetch-timeout=60000); then
+              if output=$(cd "$directory" && npm audit --omit=dev --audit-level=high --package-lock-only --fetch-retries=0 --fetch-timeout=60000 2>&1); then
+                printf '%s\n' "$output"
                 return 0
+              else
+                status=$?
+              fi
+              printf '%s\n' "$output" >&2
+              if [[ "$output" == *"audit endpoint returned an error"* || "$output" == *"network timeout"* || "$output" == *"Service Unavailable"* || "$output" == *"Internal Server Error"* || "$output" == *"ECONNRESET"* || "$output" == *"ETIMEDOUT"* ]]; then
+                echo "npm audit service unavailable; checking production packages with OSV" >&2
+                (cd "$directory" && node "$RUNNER_TEMP/audit-osv.mjs")
+                return $?
               fi
               if [ "$attempt" -lt 3 ]; then
                 sleep "$((attempt * 15))"
               fi
             done
-            return 1
+            return "$status"
           }
 
           audit .
