@@ -152,19 +152,25 @@ jobs:
           node-version: 22
 
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high --package-lock-only
-        continue-on-error: false
-      - name: Audit client production dependencies
-        working-directory: client
-        run: npm audit --omit=dev --audit-level=high --package-lock-only
+        run: |
+          audit() {
+            local directory="$1"
+            local attempt
+            for attempt in 1 2 3; do
+              if (cd "$directory" && npm audit --omit=dev --audit-level=high --package-lock-only --fetch-retries=0 --fetch-timeout=30000); then
+                return 0
+              fi
+              if [ "$attempt" -lt 3 ]; then
+                sleep "$((attempt * 15))"
+              fi
+            done
+            return 1
+          }
 
-      - name: Audit desktop production dependencies
-        working-directory: desktop-client-tauri
-        run: npm audit --omit=dev --audit-level=high --package-lock-only
-
-      - name: Audit mobile production dependencies
-        working-directory: mobile
-        run: npm audit --omit=dev --audit-level=high --package-lock-only
+          audit .
+          audit client
+          audit desktop-client-tauri
+          audit mobile
 
   shellcheck:
     name: Shellcheck (release-critical bash)
