@@ -1,4 +1,4 @@
-const CACHE = 'budget-planner-shell-v1';
+const CACHE = 'gulden-shell-v1';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

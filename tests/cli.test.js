@@ -14,7 +14,7 @@ test('administrative CLI prints help without loading application data', () => {
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /budget-planner <command>/);
+  assert.match(result.stdout, /gulden <command>/);
   assert.match(result.stdout, /backup restore DIRECTORY/);
 });
 

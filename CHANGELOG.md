@@ -1,7 +1,20 @@
 # Changelog
 
-All notable changes to the Budget Planner are documented here.
+All notable changes to Gulden are documented here.
 The project follows semantic versioning (`MAJOR.MINOR.PATCH`).
+
+## [3.23.0] — 2026-09-04
+
+### Added
+
+- Balance history now shows separate observed, calculated, and variance columns for every account and month.
+- Categorization rules now have their own Rules tab instead of expanding the Categories page.
+- Unmatched transfer rows can wait as excluded pending transfers and are automatically paired when the counterpart account is imported.
+
+### Changed
+
+- The application is now branded Gulden. Existing discovery paths, browser storage keys, mobile application IDs, and database locations remain compatible.
+- New packages, services, commands, release assets, and the packaged data directory use the Gulden name. The installer migrates the default Budget Planner installation.
 
 ## [3.22.0] — 2026-09-03
 

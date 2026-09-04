@@ -86,7 +86,7 @@
     });
     if (!response.ok) throw new Error('Not a planner server');
     const info = await response.json();
-    if (info.name !== 'Budget Planner' || info.api !== '/api') {
+    if (info.name !== 'Gulden' || info.api !== '/api') {
       throw new Error('Not a planner server');
     }
     return info;

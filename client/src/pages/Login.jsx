@@ -23,7 +23,7 @@ export default function Login({ setup = false }) {
   return (
     <div className="login-wrap">
       <form onSubmit={submit} className="card login-card">
-        <h1>Budget Planner</h1>
+        <h1>Gulden</h1>
         <p className="muted">
           {setup
             ? 'Welcome! Create the first account. Each account gets its own private database.'

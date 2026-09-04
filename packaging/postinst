@@ -1,32 +1,51 @@
 #!/bin/bash
 set -e
 
+# Migrate the default data/config locations from the pre-Gulden package before
+# the new service starts. Custom DATA_DIR values remain in the old defaults.
+if [ -d /run/systemd/system ]; then
+  # The old unit may still own the configured port while dpkg replaces the
+  # package. Stop it before starting Gulden below.
+  deb-systemd-invoke stop budget-planner.service >/dev/null 2>&1 || true
+  deb-systemd-helper disable budget-planner.service >/dev/null 2>&1 || true
+fi
+if [ -e /etc/default/budget-planner ] && {
+  [ ! -e /etc/default/gulden ] ||
+  { ! grep -qE '^(PORT|DATA_DIR|BIND_IP)=' /etc/default/gulden && grep -qE '^(PORT|DATA_DIR|BIND_IP)=' /etc/default/budget-planner; }
+}; then
+  cp -p /etc/default/budget-planner /etc/default/gulden
+fi
+if [ ! -e /var/lib/gulden/master.db ] && [ -e /var/lib/budget-planner/master.db ]; then
+  mkdir -p /var/lib/gulden
+  cp -a /var/lib/budget-planner/. /var/lib/gulden/
+fi
+
 # dedicated system user owns the data directory
 if ! id budget >/dev/null 2>&1; then
   adduser --system --group --home /nonexistent --no-create-home --quiet budget
 fi
-mkdir -p /var/lib/budget-planner
-chown budget:budget /var/lib/budget-planner
-chmod 750 /var/lib/budget-planner
+mkdir -p /var/lib/gulden
+chown -R budget:budget /var/lib/gulden
+chmod 750 /var/lib/gulden
 
 systemctl daemon-reload || true
-deb-systemd-helper enable budget-planner.service >/dev/null || true
+deb-systemd-helper enable gulden.service >/dev/null || true
 
 echo "-------------------------------------------------------------"
-echo " Budget Planner installed."
-echo "   Service:  systemctl status budget-planner"
+echo " Gulden installed."
+echo "   Service:  systemctl status gulden"
 echo "   URL:      http://localhost:2026"
-echo "   Data dir: /var/lib/budget-planner   (SQLite — back it up!)"
+echo "   Data dir: /var/lib/gulden   (SQLite — back it up!)"
 echo
 echo " To reuse data from a manual installation, stop the service, copy"
 echo " your old data/ contents here and fix ownership, then start:"
-echo "   sudo systemctl stop budget-planner"
-echo "   sudo cp -a /path/to/old/data/. /var/lib/budget-planner/"
-echo "   sudo chown -R budget:budget /var/lib/budget-planner"
-echo "   sudo systemctl start budget-planner"
+echo "   sudo systemctl stop gulden"
+echo "   sudo cp -a /path/to/old/data/. /var/lib/gulden/"
+echo "   sudo chown -R budget:budget /var/lib/gulden"
+echo "   sudo systemctl start gulden"
 echo "-------------------------------------------------------------"
 
 # start on fresh install and restart on upgrade
 if [ -d /run/systemd/system ]; then
-  deb-systemd-invoke restart budget-planner.service || true
+  deb-systemd-invoke restart gulden.service || true
 fi

@@ -1,23 +1,23 @@
-# PKGBUILD for budget-planner-client (Tauri v2, Arch Linux).
+# PKGBUILD for gulden-client (Tauri v2, Arch Linux).
 # Maintainer: HamidrezaTg <hamidreza@users.noreply.github.com>
-# AUR package name: budget-planner-client
+# AUR package name: gulden-client
 # Built from the GitHub release artifacts (the official .deb or AppImage)
 # rather than from source so the Rust toolchain isn't required at install
 # time. The .deb path is preferred; AppImage is the fallback.
 #
 # To bump: update pkgver to match the GitHub release tag and `updpkgsums`.
-pkgname=budget-planner-client
-pkgver=3.22.0
+pkgname=gulden-client
+pkgver=3.23.0
 pkgrel=1
-pkgdesc="Desktop client for a self-hosted Budget Planner server (Tauri v2, no backend)"
+pkgdesc="Desktop client for a self-hosted Gulden server (Tauri v2, no backend)"
 arch=('x86_64')
-url="https://github.com/HamidrezaTg/budget-planner"
+url="https://github.com/HamidrezaTg/gulden"
 license=('MIT')
 depends=('gtk3' 'libsoup3' 'webkit2gtk-4.1' 'libappindicator' 'librsvg' 'hicolor-icon-theme' 'desktop-file-utils' 'xdg-utils')
 makedepends=('binutils')
 options=('!strip')
-install=budget-planner-client.install
-source=("https://github.com/HamidrezaTg/budget-planner/releases/download/v3.18.6/budget-planner-client_3.18.6_amd64.deb")
+install=gulden-client.install
+source=("https://github.com/HamidrezaTg/gulden/releases/download/v3.22.0/gulden-client_3.22.0_amd64.deb")
 # Update the sha256 below with `makepkg -g >> PKGBUILD && updpkgsums`.
 sha256sums=('352da062a9146ddbeb92f96d55946cbdfd9f33650a1471f256bc8e2a377a9735')
 

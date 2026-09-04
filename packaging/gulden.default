@@ -1,0 +1,4 @@
+# Gulden service overrides
+# PORT=2026
+# DATA_DIR=/var/lib/gulden
+# BIND_IP=127.0.0.1

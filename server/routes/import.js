@@ -20,6 +20,7 @@ import { onlineOcr } from '../services/online-ocr.js';
 import { annotateWithTransferPairs } from '../services/transfer-detect.js';
 
 const router = Router();
+const PENDING_TRANSFER_PREFIX = 'pending-transfer|';
 
 // Multer's async streaming resumes outside the AsyncLocalStorage scope on
 // current Node: capture the user's concrete database handle BEFORE multer
@@ -368,6 +369,41 @@ function resolveAccountId(conn, account_id) {
   const acc = conn.prepare('SELECT id FROM accounts WHERE id = ?').get(Number(account_id));
   if (!acc) return null;
   return Number(account_id);
+}
+
+function findPendingTransfer(conn, tx) {
+  if (tx.account_id == null || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) === 0)
+    return null;
+  const candidates = conn
+    .prepare(
+      `SELECT id, date, amount, currency, account_id
+       FROM transactions
+       WHERE transfer_group LIKE ?
+         AND account_id IS NOT NULL AND account_id != ?
+         AND amount * ? < 0
+         AND ABS(ABS(amount) - ABS(?)) <= 0.005
+         AND currency = ?
+         AND date BETWEEN date(?, '-3 days') AND date(?, '+3 days')
+       ORDER BY ABS(julianday(date) - julianday(?)), id`,
+    )
+    .all(
+      `${PENDING_TRANSFER_PREFIX}%`,
+      tx.account_id,
+      Number(tx.amount),
+      Number(tx.amount),
+      tx.currency,
+      tx.date,
+      tx.date,
+      tx.date,
+    );
+  if (!candidates.length) return null;
+  // Do not guess when two parked rows are equally plausible.
+  const days = (date) =>
+    Math.abs((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${tx.date}T00:00:00Z`)) / 86400000);
+  const closest = candidates.filter(
+    (candidate) => days(candidate.date) === Math.min(...candidates.map((item) => days(item.date))),
+  );
+  return closest.length === 1 ? closest[0] : null;
 }
 
 router.post(
@@ -744,7 +780,12 @@ function auditImport(conn, detail) {
 router.post(
   '/confirm',
   withCtx((req, res) => {
-    const { token, account_id = null, transfer_pairs = [] } = req.body ?? {};
+    const {
+      token,
+      account_id = null,
+      transfer_pairs = [],
+      pending_transfers = [],
+    } = req.body ?? {};
     const stagedEntry = getOwnedStage(req, token);
     if (!stagedEntry) return res.status(400).json({ error: 'Unknown or expired import token' });
     if (stagedEntry.requires_ai)
@@ -807,6 +848,9 @@ router.post(
       // recurrence, OR a `xfer|<pair_id>` token if the user confirmed this
       // transfer. The ON CONFLICT below then folds everything together.
       const confirmedPairs = new Set(Array.isArray(transfer_pairs) ? transfer_pairs : []);
+      const pendingTransfers = new Set(
+        Array.isArray(pending_transfers) ? pending_transfers.map((key) => String(key)) : [],
+      );
       const finalDedupKeys = withCats.map((tx, i) => {
         const rec = findRecurrenceMatch(tx);
         matchedRecurrenceByIndex[i] = rec;
@@ -825,12 +869,14 @@ router.post(
       // file if the request dies halfway.
       req.impDb.exec('BEGIN');
       let inserted = 0;
+      let autoPaired = 0;
+      let parked = 0;
       try {
         for (let i = 0; i < withCats.length; i++) {
           const tx = withCats[i];
           const dedupKey = finalDedupKeys[i];
           const isTransfer = tx.transfer_pair_id && confirmedPairs.has(tx.transfer_pair_id);
-          const transferGroup = isTransfer ? tx.transfer_pair_id : null;
+          const isPending = !isTransfer && pendingTransfers.has(tx.dedup_key);
           const r = ins.run(
             tx.date,
             tx.description,
@@ -839,13 +885,40 @@ router.post(
             tx.currency,
             accId,
             isTransfer ? null : tx.suggested_category_id,
-            isTransfer ? 0 : tx.needs_review,
-            isTransfer ? null : (tx.review_reason ?? null),
+            isTransfer || isPending ? 0 : tx.needs_review,
+            isTransfer || isPending
+              ? isPending
+                ? 'awaiting_transfer'
+                : null
+              : (tx.review_reason ?? null),
             path.basename(filePath),
             dedupKey,
-            transferGroup,
+            isTransfer ? tx.transfer_pair_id : null,
           );
-          inserted += r.changes;
+          if (!r.changes) continue;
+          inserted++;
+          const insertedId = Number(r.lastInsertRowid);
+          if (isPending) {
+            req.impDb
+              .prepare('UPDATE transactions SET transfer_group = ? WHERE id = ?')
+              .run(`${PENDING_TRANSFER_PREFIX}${insertedId}`, insertedId);
+            parked++;
+            continue;
+          }
+          if (isTransfer) continue;
+
+          const counterpart = findPendingTransfer(req.impDb, tx);
+          if (!counterpart) continue;
+          const transferGroup = `transfer-${crypto.randomUUID()}`;
+          req.impDb
+            .prepare(
+              `UPDATE transactions
+               SET transfer_group = ?, category_id = NULL, fund_id = NULL, commitment_id = NULL,
+                   needs_review = 0, review_reason = NULL
+               WHERE id IN (?, ?)`,
+            )
+            .run(transferGroup, insertedId, counterpart.id);
+          autoPaired++;
         }
         // Advance last_posted_month on every matched recurrence to the latest
         // month in this file, so the dashboard "Coming up" panel doesn't show
@@ -877,6 +950,8 @@ router.post(
         remainingReview,
         transferPairs: withCats.filter((tx) => tx.transfer_pair_id).length / 2,
         recurrenceMatches: matchedRecurrenceByIndex.filter(Boolean).length,
+        autoPairedTransfers: autoPaired,
+        parkedTransfers: parked,
         errors: parsed.errors ?? [],
       });
     } catch (e) {

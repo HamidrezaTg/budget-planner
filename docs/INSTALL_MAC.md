@@ -1,15 +1,15 @@
-# Install Budget Planner on macOS
+# Install Gulden on macOS
 
 The macOS client is a native Tauri shell. It contains no server or budget
-database; it connects to a Budget Planner server on your LAN, Tailscale, or
+database; it connects to a Gulden server on your LAN, Tailscale, or
 another reachable HTTPS network.
 
 ## Install
 
-1. Download the matching `budget-planner-client_<version>_<arch>.dmg` from the
-   [GitHub release](https://github.com/HamidrezaTg/budget-planner/releases).
-2. Open the DMG and drag **Budget Planner** to **Applications**.
-3. Open **Applications**, right-click **Budget Planner**, choose **Open**, and
+1. Download the matching `gulden-client_<version>_<arch>.dmg` from the
+   [GitHub release](https://github.com/HamidrezaTg/gulden/releases).
+2. Open the DMG and drag **Gulden** to **Applications**.
+3. Open **Applications**, right-click **Gulden**, choose **Open**, and
    confirm **Open** on the first launch.
 
 The release is intentionally unsigned until a Developer ID certificate is

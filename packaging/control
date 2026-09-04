@@ -1,13 +1,15 @@
-Package: budget-planner
-Version: 3.20.2
+Package: gulden-server
+Version: 3.23.0
 Section: web
 Priority: optional
 Architecture: all
 Depends: nodejs (>= 22)
+Replaces: budget-planner
+Breaks: budget-planner
 Suggests: poppler-utils, tesseract-ocr
 Recommends: systemd
 Maintainer: HamidrezaTg <hamidreza@users.noreply.github.com>
-Description: Self-hosted multi-user budget planner
+Description: Self-hosted multi-user Gulden budget manager
  Private, local-first household budgeting: statement import with duplicate
  protection, learning categorization, budgets with rollover, sinking funds,
  96-month projection, multi-currency reporting, month-end report snapshots,

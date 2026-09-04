@@ -57,7 +57,7 @@ export async function sendDailySummary() {
     .join('\n');
   await publishNtfy({
     ...config,
-    title: `Budget Planner warnings for ${month}`,
+    title: `Gulden warnings for ${month}`,
     message,
   });
   db.prepare('INSERT INTO notification_deliveries (event_key, kind) VALUES (?, ?)').run(

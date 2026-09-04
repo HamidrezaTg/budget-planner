@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-capability",
-  "description": "Capabilities the Budget Planner desktop client needs to talk to a self-hosted server and store the address.",
+  "description": "Capabilities the Gulden desktop client needs to talk to a self-hosted server and store the address.",
   "windows": ["main"],
   "permissions": [
     "core:default",

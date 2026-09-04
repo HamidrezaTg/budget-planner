@@ -19,6 +19,8 @@ const FILTER_KEYS = [
   'transfer',
 ];
 const pickFilters = (p) => Object.fromEntries(FILTER_KEYS.map((k) => [k, p.get(k) ?? '']));
+const isAwaitingTransfer = (tx) =>
+  typeof tx.transfer_group === 'string' && tx.transfer_group.startsWith('pending-transfer|');
 
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
@@ -276,7 +278,7 @@ export default function Transactions() {
   };
 
   const deleteTransaction = async (tx) => {
-    const paired = !!tx.transfer_group;
+    const paired = !!tx.transfer_group && !isAwaitingTransfer(tx);
     const ok = await confirm({
       title: paired ? 'Delete both transfer entries?' : 'Delete transaction?',
       message: paired
@@ -331,6 +333,16 @@ export default function Transactions() {
   const unpairTransfer = async (tx) => {
     try {
       await api.post(`/transactions/${tx.id}/unpair`);
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const setAwaitingTransfer = async (tx, awaiting) => {
+    try {
+      await api.patch(`/transactions/${tx.id}`, { awaiting_pair: awaiting });
+      setError('');
       load();
     } catch (e) {
       setError(e.message);
@@ -851,9 +863,13 @@ export default function Transactions() {
                   {tx.transfer_group ? (
                     <span
                       className="pill-badge accent-badge"
-                      title={`Bank↔card transfer (group: ${tx.transfer_group}) — not counted as spend or income`}
+                      title={
+                        isAwaitingTransfer(tx)
+                          ? 'Waiting for the matching transaction from another account — excluded from calculations'
+                          : `Bank↔card transfer (group: ${tx.transfer_group}) — not counted as spend or income`
+                      }
                     >
-                      transfer
+                      {isAwaitingTransfer(tx) ? 'awaiting transfer' : 'transfer'}
                     </span>
                   ) : (
                     ''
@@ -1017,6 +1033,24 @@ export default function Transactions() {
                       >
                         Edit
                       </button>
+                      <button
+                        className="btn ghost small"
+                        title="Exclude this transaction until the matching transfer entry is imported"
+                        onClick={() => setAwaitingTransfer(tx, true)}
+                      >
+                        Awaiting transfer
+                      </button>
+                    </div>
+                  ) : tx.transfer_group && isAwaitingTransfer(tx) ? (
+                    <div className="assign">
+                      <span className="pill-badge accent-badge">awaiting transfer</span>
+                      <button
+                        className="btn ghost small"
+                        title="Return this transaction to the needs-review queue"
+                        onClick={() => setAwaitingTransfer(tx, false)}
+                      >
+                        Stop waiting
+                      </button>
                     </div>
                   ) : tx.transfer_group ? (
                     <div className="assign">
@@ -1067,6 +1101,15 @@ export default function Transactions() {
                       >
                         Edit
                       </button>
+                      {tx.needs_review && (
+                        <button
+                          className="btn ghost small"
+                          title="Exclude this transaction until the matching transfer entry is imported"
+                          onClick={() => setAwaitingTransfer(tx, true)}
+                        >
+                          Awaiting transfer
+                        </button>
+                      )}
                     </div>
                   )}
                 </td>

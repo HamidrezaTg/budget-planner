@@ -1,8 +1,8 @@
 # Mobile Clients
 
-Budget Planner's Capacitor apps are clients only. They contain no server, account
+Gulden's Capacitor apps are clients only. They contain no server, account
 service, analytics, advertising, or third-party data collection. Financial data stays
-on the self-hosted Budget Planner server; the native shell stores only the selected
+on the self-hosted Gulden server; the native shell stores only the selected
 server address in WebView local storage.
 
 ## Network policy
@@ -15,7 +15,7 @@ remembering an HTTP address.
 HTTP is not safe on public Wi-Fi or any untrusted network: passwords, cookies, and
 application traffic can be observed or modified. Use HTTPS for those networks. A
 Tailscale HTTPS DNS hostname (for example `https://server.example.ts.net:2026`) or a
-certificate-backed reverse proxy provides HTTPS while keeping Budget Planner on port
+certificate-backed reverse proxy provides HTTPS while keeping Gulden on port
 2026. A raw Tailscale IP cannot have a normal DNS certificate.
 
 The iOS shell also permits HTTP only for local/VPN networking and uses the same explicit

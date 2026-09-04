@@ -1,9 +1,9 @@
 # Documentation
 
-Budget Planner is a self-hosted application. The server owns the data; browsers,
+Gulden is a self-hosted application. The server owns the data; browsers,
 phones, and desktop applications connect to it as clients.
 
-## Start Using Budget Planner
+## Start Using Gulden
 
 - [User Guide](USER_GUIDE.md) - complete end-user reference for setup, budgeting,
   imports, transactions, forecasting, reports, backups, sharing, and administration.

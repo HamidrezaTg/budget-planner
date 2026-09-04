@@ -161,18 +161,18 @@ jobs:
       - name: Verify Linux desktop bundles
         if: runner.os == 'Linux'
         run: |
-          test -s dist/budget-planner-client_*_amd64.deb
-          test -s dist/budget-planner-client_*_amd64.AppImage
+          test -s dist/gulden-client_*_amd64.deb
+          test -s dist/gulden-client_*_amd64.AppImage
 
       - name: Upload Linux desktop bundles
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: budget-planner-linux-bundles
+          name: gulden-linux-bundles
           if-no-files-found: error
           path: |
-            dist/budget-planner-client_*_amd64.deb
-            dist/budget-planner-client_*_amd64.AppImage
+            dist/gulden-client_*_amd64.deb
+            dist/gulden-client_*_amd64.AppImage
 
       - name: Build the Tauri desktop client (DMG/MSI)
         if: runner.os != 'Linux'

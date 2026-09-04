@@ -1,7 +1,7 @@
 #!/bin/bash
-# 'remove' keeps /var/lib/budget-planner (your data!). Only 'purge' deletes it.
+# 'remove' keeps /var/lib/gulden (your data!). Only 'purge' deletes it.
 if [ "$1" = "purge" ]; then
-  rm -rf /var/lib/budget-planner
-  deb-systemd-helper purge budget-planner.service || true
-  deb-systemd-helper unmask budget-planner.service || true
+  rm -rf /var/lib/gulden
+  deb-systemd-helper purge gulden.service || true
+  deb-systemd-helper unmask gulden.service || true
 fi

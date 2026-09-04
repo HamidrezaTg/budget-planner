@@ -5,11 +5,11 @@ the server or local budget data.
 
 ## Install Paths
 
-- Debian/Ubuntu: install `budget-planner-client_<version>_amd64.deb` with
-  `sudo apt install ./budget-planner-client_<version>_amd64.deb`.
-- Arch Linux: install the AUR package `budget-planner-client`, or use the
+- Debian/Ubuntu: install `gulden-client_<version>_amd64.deb` with
+  `sudo apt install ./gulden-client_<version>_amd64.deb`.
+- Arch Linux: install the AUR package `gulden-client`, or use the
   matching AppImage from GitHub Releases.
-- macOS: open the unsigned DMG and drag **Budget Planner** to Applications.
+- macOS: open the unsigned DMG and drag **Gulden** to Applications.
 - Windows: install the generated NSIS or MSI bundle and launch the client.
 
 On first launch, enter the server URL. The client checks
@@ -34,6 +34,6 @@ secrets/configuration. Never commit the private signing key.
 
 `scripts/build-aur.sh` generates and validates `PKGBUILD` and `.SRCINFO` in a
 clean Arch container. A maintainer with an AUR account must then clone the
-`budget-planner-client` AUR repository, copy the generated files, review the
+`gulden-client` AUR repository, copy the generated files, review the
 source checksum and version, commit, and push them. The repository's CI only
 validates the package; it does not publish to AUR automatically.

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Budget Planner</string>
-    <string name="title_activity_main">Budget Planner</string>
+    <string name="app_name">Gulden</string>
+    <string name="title_activity_main">Gulden</string>
     <string name="package_name">com.hamidreza.budgetplanner</string>
     <string name="custom_url_scheme">com.hamidreza.budgetplanner</string>
 </resources>

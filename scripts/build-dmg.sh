@@ -9,7 +9,7 @@ if ! command -v cargo >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> building unsigned Budget Planner macOS client $VERSION"
+echo "==> building unsigned Gulden macOS client $VERSION"
 npm --prefix desktop-client-tauri ci --no-audit --no-fund
 ( cd desktop-client-tauri && npx tauri build --bundles dmg )
 
@@ -22,6 +22,6 @@ fi
 
 mkdir -p dist
 ARCH=$(uname -m)
-cp "${dmg_files[0]}" "dist/budget-planner-client_${VERSION}_${ARCH}.dmg"
-ls -lh "dist/budget-planner-client_${VERSION}_${ARCH}.dmg"
+cp "${dmg_files[0]}" "dist/gulden-client_${VERSION}_${ARCH}.dmg"
+ls -lh "dist/gulden-client_${VERSION}_${ARCH}.dmg"
 echo "==> unsigned DMG ready for manual install; see docs/INSTALL_MAC.md"

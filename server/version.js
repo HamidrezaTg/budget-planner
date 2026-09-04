@@ -6,7 +6,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const packageInfo = JSON.parse(fs.readFileSync(path.join(here, '..', 'package.json'), 'utf8'));
 
 export const SERVER_VERSION = packageInfo.version;
-export const RELEASES_URL = 'https://github.com/HamidrezaTg/budget-planner/releases/latest';
+export const RELEASES_URL = 'https://github.com/HamidrezaTg/gulden/releases/latest';
 
 let cached = null;
 const CACHE_MS = 10 * 60 * 1000;
@@ -34,9 +34,9 @@ export async function getVersionStatus({ refresh = false } = {}) {
   const checkedAt = new Date().toISOString();
   try {
     const response = await fetch(
-      'https://api.github.com/repos/HamidrezaTg/budget-planner/releases/latest',
+      'https://api.github.com/repos/HamidrezaTg/gulden/releases/latest',
       {
-        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'budget-planner-server' },
+        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'gulden-server' },
         signal: AbortSignal.timeout(5000),
       },
     );

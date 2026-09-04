@@ -20,7 +20,7 @@ test('login, import, review, and dashboard flow', async ({ page }) => {
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Budget Planner' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Gulden' })).toBeVisible();
   await page.getByPlaceholder('Username').fill('e2e_user');
   await page.getByPlaceholder('Password').fill('correct-horse-battery');
   await page.getByRole('button', { name: 'Create account & start' }).click();

@@ -32,6 +32,7 @@ export default function ImportPage() {
   );
   const [accounts, setAccounts] = useState([]);
   const [selectedTransfers, setSelectedTransfers] = useState([]);
+  const [selectedPendingTransfers, setSelectedPendingTransfers] = useState([]);
   const [ocrMode, setOcrMode] = useState('local');
   const [aiSettings, setAiSettings] = useState(null);
   const [templates, setTemplates] = useState([]);
@@ -60,6 +61,7 @@ export default function ImportPage() {
     setDone(null);
     setResult(null);
     setSelectedTransfers([]);
+    setSelectedPendingTransfers([]);
     setBusy(true);
     try {
       const online = ocrMode === 'online' && /\.(pdf|jpe?g|png)$/i.test(file.name || '');
@@ -154,6 +156,7 @@ export default function ImportPage() {
         token: result.token,
         account_id: accountId || null,
         transfer_pairs: selectedTransfers,
+        pending_transfers: selectedPendingTransfers,
       });
       setDone(r);
       setResult(null);
@@ -411,6 +414,9 @@ export default function ImportPage() {
         <div className="card success-box">
           Imported {done.inserted} transaction(s)
           {done.skippedDuplicates > 0 && ` · skipped ${done.skippedDuplicates} duplicate(s)`}
+          {done.autoPairedTransfers > 0 &&
+            ` · paired ${done.autoPairedTransfers} waiting transfer(s)`}
+          {done.parkedTransfers > 0 && ` · parked ${done.parkedTransfers} transfer(s)`}
           {done.remainingReview > 0 && (
             <>
               {' '}
@@ -559,13 +565,36 @@ export default function ImportPage() {
                     </td>
                     <td>{tx.suggested_category_id ? '✓' : '—'}</td>
                     <td>
-                      {tx.duplicate
-                        ? 'duplicate'
-                        : tx.review_reason === 'choice_rule'
-                          ? 'choice rule'
-                          : tx.needs_review
-                            ? 'needs review'
-                            : 'ok'}
+                      {tx.duplicate ? (
+                        'duplicate'
+                      ) : (
+                        <>
+                          <span className="muted tiny">
+                            {tx.review_reason === 'choice_rule'
+                              ? 'choice rule'
+                              : tx.needs_review
+                                ? 'needs category'
+                                : 'ok'}
+                          </span>{' '}
+                          <label
+                            className="muted tiny"
+                            title="Hide this row from calculations until its other account is imported"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedPendingTransfers.includes(tx.dedup_key)}
+                              onChange={(e) =>
+                                setSelectedPendingTransfers((previous) =>
+                                  e.target.checked
+                                    ? [...previous, tx.dedup_key]
+                                    : previous.filter((key) => key !== tx.dedup_key),
+                                )
+                              }
+                            />{' '}
+                            awaiting transfer
+                          </label>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}

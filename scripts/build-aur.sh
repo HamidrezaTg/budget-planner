@@ -7,12 +7,12 @@ cd "$(dirname "$0")/.."
 
 VERSION=$(node -p "require('./desktop-client-tauri/package.json').version")
 echo "==> regenerating AUR package for v$VERSION"
-ASSET_URL="https://github.com/HamidrezaTg/budget-planner/releases/download/v${VERSION}/budget-planner-client_${VERSION}_amd64.deb"
+ASSET_URL="https://github.com/HamidrezaTg/gulden/releases/download/v${VERSION}/gulden-client_${VERSION}_amd64.deb"
 ASSET=$(mktemp)
 trap 'rm -f "$ASSET"' EXIT
 curl --fail --location --retry 2 --silent --show-error "$ASSET_URL" -o "$ASSET"
 CHECKSUM=$(sha256sum "$ASSET" | cut -d' ' -f1)
-PKG_DIR="$(pwd)/packaging/aur/budget-planner-client"
+PKG_DIR="$(pwd)/packaging/aur/gulden-client"
 sed -i "s/^pkgver=.*/pkgver=${VERSION}/" "$PKG_DIR/PKGBUILD"
 sed -i "s|^source=.*|source=(\"${ASSET_URL}\")|" "$PKG_DIR/PKGBUILD"
 sed -i "s/^sha256sums=.*/sha256sums=('${CHECKSUM}')/" "$PKG_DIR/PKGBUILD"
@@ -65,4 +65,4 @@ else
   exit 1
 fi
 
-echo "==> AUR package regenerated and built successfully. Submit with: cd packaging/aur/budget-planner-client && git push aur master"
+echo "==> AUR package regenerated and built successfully. Submit with: cd packaging/aur/gulden-client && git push aur master"

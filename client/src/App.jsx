@@ -18,6 +18,7 @@ const Balances = lazy(() => import('./pages/Balances.jsx'));
 const Projection = lazy(() => import('./pages/Projection.jsx'));
 const Reports = lazy(() => import('./pages/Reports.jsx'));
 const Categories = lazy(() => import('./pages/Categories.jsx'));
+const Rules = lazy(() => import('./pages/Rules.jsx'));
 const Chat = lazy(() => import('./pages/Chat.jsx'));
 const Settings = lazy(() => import('./pages/Settings.jsx'));
 const Users = lazy(() => import('./pages/Users.jsx'));
@@ -67,7 +68,7 @@ export default function App() {
     return (
       <div className="login-wrap">
         <div className="card login-card">
-          <h1>Budget Planner</h1>
+          <h1>Gulden</h1>
           <p className="muted">
             The planner server is not reachable. The page you see was served from the offline cache
             — your data is untouched.
@@ -106,6 +107,7 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/budgets" element={<Budgets />} />
               <Route path="/categories" element={<Categories />} />
+              <Route path="/rules" element={<Rules />} />
               <Route path="/import" element={<ImportPage />} />
               <Route path="/transactions" element={<Transactions />} />
               <Route path="/recurring" element={<Recurring />} />

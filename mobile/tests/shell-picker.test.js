@@ -20,7 +20,7 @@ function storage(values = {}) {
 
 function load(
   values,
-  fetch = async () => ({ ok: true, json: async () => ({ name: 'Budget Planner', api: '/api' }) }),
+  fetch = async () => ({ ok: true, json: async () => ({ name: 'Gulden', api: '/api' }) }),
 ) {
   const localStorage = storage(values);
   const window = { localStorage };
@@ -58,7 +58,7 @@ test('probe validates the server discovery endpoint for HTTP and HTTPS', async (
   let requested;
   const shell = load({}, async (url) => {
     requested = url;
-    return { ok: true, json: async () => ({ name: 'Budget Planner', api: '/api' }) };
+    return { ok: true, json: async () => ({ name: 'Gulden', api: '/api' }) };
   });
   await shell.probe('http://192.168.1.20:2026/');
   assert.equal(requested, 'http://192.168.1.20:2026/.well-known/budget-planner');

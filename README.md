@@ -1,6 +1,6 @@
-# Budget Planner
+# Gulden
 
-Budget Planner is a self-hosted, local-first budget planner for people who want
+Gulden is a self-hosted, local-first budget manager for people who want
 their financial data on their own server. It stores each user's budget in a
 private SQLite database and has no required cloud account, advertising, or
 telemetry service.
@@ -37,10 +37,10 @@ desktop clients are user interfaces that connect to the server.
 
 Requires Node.js 22 or newer. The installer downloads the latest GitHub release,
 verifies the release checksum, installs the server and systemd service, and stores
-data in `/var/lib/budget-planner`.
+data in `/var/lib/gulden`.
 
 ```bash
-bash <(curl -fsSL https://github.com/HamidrezaTg/budget-planner/releases/latest/download/budget-planner-install.sh)
+bash <(curl -fsSL https://github.com/HamidrezaTg/gulden/releases/latest/download/gulden-install.sh)
 ```
 
 The interactive installer asks whether to install local OCR tools. Use
@@ -62,25 +62,25 @@ The default port is `2026`. Open `http://<server-ip>:2026` in a browser, create 
 first account, and follow the setup path in the [User Guide](docs/USER_GUIDE.md).
 The first account becomes the administrator.
 
-The Debian package also installs the `budget-planner` administration CLI:
+The Debian package also installs the `gulden` administration CLI:
 
 ```bash
-sudo budget-planner status
-sudo budget-planner doctor
-sudo budget-planner backup create
+sudo gulden status
+sudo gulden doctor
+sudo gulden backup create
 ```
 
-Run `budget-planner --help` for user management, configuration, logs, backup listing,
+Run `gulden --help` for user management, configuration, logs, backup listing,
 and validated restore commands. Restores require an explicit confirmation and retain
 the previous data directory.
 
 ### Install a release package manually
 
-Download `budget-planner-server_<version>_all.deb` from
-[GitHub Releases](https://github.com/HamidrezaTg/budget-planner/releases), then run:
+Download `gulden-server_<version>_all.deb` from
+[GitHub Releases](https://github.com/HamidrezaTg/gulden/releases), then run:
 
 ```bash
-sudo apt install ./budget-planner-server_<version>_all.deb
+sudo apt install ./gulden-server_<version>_all.deb
 ```
 
 The package keeps OCR tools optional. Install `poppler-utils` for PDF extraction and
@@ -117,8 +117,8 @@ server address entered on first launch.
 
 - **Browser/PWA:** use the server URL in a trusted LAN, localhost, VPN, or HTTPS
   reverse proxy. A PWA caches the application shell, not financial API data.
-- **Android:** download `budget-planner-android.apk` from
-  [Releases](https://github.com/HamidrezaTg/budget-planner/releases) and sideload it.
+- **Android:** download `gulden-android.apk` from
+  [Releases](https://github.com/HamidrezaTg/gulden/releases) and sideload it.
   Enter `http://192.168.x.x:2026` for a trusted LAN, `http://100.x.y.z:2026` for a
   trusted Tailscale network, or an `https://` endpoint. The app warns before saving
   HTTP because it is unsafe on untrusted networks. It remembers up to ten server
@@ -155,7 +155,7 @@ login, and in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md).
 ## Data, Privacy, and Backups
 
 The default source-install data directory is `data/`; the packaged service uses
-`/var/lib/budget-planner`:
+`/var/lib/gulden`:
 
 - `master.db` stores server-level users and sessions.
 - `users/<username>.db` stores that user's budget, settings, and planning data.
@@ -166,14 +166,14 @@ user database only. For a complete migration, copy the matching uploads director
 too. Restore validates the SQLite file, creates a pre-restore copy, and rolls back a
 failed restore.
 
-Budget Planner does not require outbound services. Optional outbound requests are
+Gulden does not require outbound services. Optional outbound requests are
 limited to AI providers you configure, ECB/Frankfurter exchange-rate data, ntfy if
 you configure it, and the GitHub release check shown in Settings. Statement files
 are processed and removed after import.
 
 ## Configuration
 
-Packaged installs read `/etc/default/budget-planner`. Source installs can use shell
+Packaged installs read `/etc/default/gulden`. Source installs can use shell
 environment variables.
 
 | Variable          | Default       | Purpose                                                                                 |
@@ -237,4 +237,4 @@ outbound requests (AI and ntfy endpoints) to an allowlist in Settings.
 
 ## Contributing and License
 
-Issues and pull requests are welcome. Budget Planner is licensed under [MIT](LICENSE).
+Issues and pull requests are welcome. Gulden is licensed under [MIT](LICENSE).

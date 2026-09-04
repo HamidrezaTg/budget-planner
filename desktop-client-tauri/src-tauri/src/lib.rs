@@ -47,7 +47,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu
     let help = SubmenuBuilder::new(app, "Help")
         .item(&PredefinedMenuItem::about(
             app,
-            Some("About Budget Planner"),
+            Some("About Gulden"),
             None,
         )?)
         .build()?;

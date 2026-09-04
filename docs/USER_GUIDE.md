@@ -1,13 +1,13 @@
 # User Guide
 
-This is the complete end-user manual for Budget Planner. The same topics are
+This is the complete end-user manual for Gulden. The same topics are
 available as a searchable, public webpage at `/help`, so Help can be opened before
 login and while the server is unavailable. Links below point to application pages
 and are useful after signing in.
 
-## How Budget Planner Works
+## How Gulden Works
 
-Budget Planner has one server and many optional clients. The server stores the
+Gulden has one server and many optional clients. The server stores the
 databases and attachments. A browser, Android app, iOS shell, or desktop app only
 connects to that server; it does not contain a second budget.
 
@@ -50,7 +50,7 @@ is remembered in the browser.
 - **Projection**: long-range forecast and temporary scenarios.
 - **Reports**: history, charts, exports, and frozen month-end snapshots.
 - **Import**: preview and confirm bank statements.
-- **Transactions**: actual rows, review, rules, transfers, splits, and attachments.
+- **Transactions**: actual rows, review, transfers, splits, and attachments.
 - **Scheduled**: expected monthly transactions.
 - **Budgets**: monthly category plans.
 - **Income**: income sources and monthly actuals.
@@ -58,7 +58,8 @@ is remembered in the browser.
 - **Funds**: sinking funds and goals.
 - **Commitments**: dated obligations.
 - **Balances**: observed account balances and reconciliation.
-- **Categories**: groups, categories, and categorization rules.
+- **Categories**: groups and categories.
+- **Rules**: keyword, advanced, and category-choice categorization rules.
 - **AI Chat**: optional read-only questions and confirmed proposals.
 - **Settings**: identity, display, currency, backups, sharing, notifications, and AI.
 - **Help**: this guide.
@@ -144,15 +145,15 @@ them. This prevents history from becoming detached silently.
 People are names connected to income sources. Deleting a person preserves the income
 source and clears only that connection.
 
-## Categories and Rules
+## Categories
 
 Categories are organized into groups and can have a paying account and standing
-plan. Categorization rules determine how imported transactions are assigned.
+plan. Open **Rules** to determine how imported transactions are assigned.
 
 - Assigning a category to a review row can learn a keyword rule.
 - Learned rules can repair older matching rows retroactively.
 - Unchecking "Remember" while editing a transaction removes the keyword rule that
-  transaction taught — but never a rule you created manually in Categories or one
+  transaction taught — but never a rule you created manually in Rules or one
   still used by other transactions.
 - Category choice rules cover keywords that may belong to several categories
   (for example "Amazon" → Household or Electronics). They never auto-assign:
@@ -270,6 +271,9 @@ or spending.
 - Create a paired transfer manually.
 - Choose candidate pairs during import.
 - Pair equal-and-opposite existing transactions from different accounts.
+- Mark a one-sided transfer as **Awaiting transfer** when its counterpart will be
+  imported later. It is excluded from calculations and the review count until the
+  other account is imported.
 - Unpair a wrong match.
 - Delete both sides together only when the movement should be removed entirely.
 
@@ -329,7 +333,8 @@ from a finished obligation visible.
 ## Balances and Reconciliation
 
 Open **Balances** and record the real observed balance for an account and month.
-The app compares the observation with its model and shows a variance.
+The month-by-month table shows the observed input, calculated balance, and variance
+for every account, alongside the total variance.
 
 Use the variance to investigate missing imports, incorrect opening balances,
 uncategorized rows, unpaired transfers, or currency rates. A correct observation
@@ -462,10 +467,10 @@ Administrators use **Admin → Users** to create users, reset passwords, rename 
 and delete another user with that user's private database. Regular users do not see
 the Admin route.
 
-Debian packages also provide `sudo budget-planner`. Use `budget-planner status` and
-`budget-planner doctor` for service checks, `budget-planner users list` for account
-status, and `budget-planner users disable USERNAME` or `enable USERNAME` to control
-login without deleting data. `budget-planner backup create` snapshots the complete
+Debian packages also provide `sudo gulden`. Use `gulden status` and
+`gulden doctor` for service checks, `gulden users list` for account
+status, and `gulden users disable USERNAME` or `enable USERNAME` to control
+login without deleting data. `gulden backup create` snapshots the complete
 server data; `backup restore` validates the source and requires explicit confirmation.
 
 Filesystem access to the server data directory is equivalent to access to the

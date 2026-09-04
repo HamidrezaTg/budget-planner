@@ -106,11 +106,11 @@ const openapiMatch = openapiText.match(/"version"\s*:\s*"(\d+\.\d+\.\d+(?:-[^"]+
 expectMatch('openapi', 'docs/openapi.json', openapiMatch?.[1]);
 
 const pkgbuildText = fs.readFileSync(
-  path.join(baseRoot, 'packaging', 'aur', 'budget-planner-client', 'PKGBUILD'),
+  path.join(baseRoot, 'packaging', 'aur', 'gulden-client', 'PKGBUILD'),
   'utf8',
 );
 const pkgverMatch = pkgbuildText.match(/^pkgver=(\d+\.\d+\.\d+(?:-[^]+)?)/m);
-expectMatch('pkgbuild', 'packaging/aur/budget-planner-client/PKGBUILD', pkgverMatch?.[1]);
+expectMatch('pkgbuild', 'packaging/aur/gulden-client/PKGBUILD', pkgverMatch?.[1]);
 
 const changelogText = fs.readFileSync(path.join(baseRoot, 'CHANGELOG.md'), 'utf8');
 const changelogMatch = changelogText.match(/^##\s*\[(\d+\.\d+\.\d+(?:-[^]]+)?)\][^\n]*$/m);

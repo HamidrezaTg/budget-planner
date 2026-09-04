@@ -1,5 +1,5 @@
 #!/bin/bash
 set -e
 if [ -d /run/systemd/system ] && [ "$1" = "remove" ]; then
-  deb-systemd-invoke stop budget-planner.service || true
+  deb-systemd-invoke stop gulden.service || true
 fi

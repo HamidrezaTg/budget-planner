@@ -6,5 +6,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    budget_planner_client_lib::run();
+    gulden_client_lib::run();
 }

@@ -107,7 +107,7 @@ app.use((req, res, next) => {
 app.get('/metrics', (_req, res) => {
   if (process.env.METRICS_ENABLED !== '1') return res.status(404).end();
   const lines = [
-    '# HELP budget_planner_requests_total Total HTTP requests handled by Budget Planner.',
+    '# HELP budget_planner_requests_total Total HTTP requests handled by Gulden.',
     '# TYPE budget_planner_requests_total counter',
     `budget_planner_requests_total ${requestCount}`,
   ];
@@ -137,7 +137,7 @@ app.get('/.well-known/budget-planner', (_req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.json({
     api: '/api',
-    name: 'Budget Planner',
+    name: 'Gulden',
     version: PKG_VERSION,
     features: ['accounts', 'transfers', 'funds', 'recurrences', 'multi-currency', 'import', 'ai'],
   });
@@ -221,7 +221,7 @@ setInterval(runNotificationSweep, 24 * 3600 * 1000).unref();
 app.listen(PORT, BIND_IP, () => {
   const shown = BIND_IP === '0.0.0.0' ? '<this-machine>' : BIND_IP;
   console.log(
-    `Budget planner running at http://${shown}:${PORT}` +
+    `Gulden running at http://${shown}:${PORT}` +
       (BIND_IP === '127.0.0.1' ? ' (loopback only — set BIND_IP to expose it, see README)' : ''),
   );
 });

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ============================================================
-# Budget Planner — interactive installer (server .deb)
+# Gulden — interactive installer (server .deb)
 #
 # Public repository: no authentication needed.
-#   bash <(curl -fsSL https://github.com/HamidrezaTg/budget-planner/releases/latest/download/budget-planner-install.sh)
+#   bash <(curl -fsSL https://github.com/HamidrezaTg/gulden/releases/latest/download/gulden-install.sh)
 #
 # Flags: --client (desktop client), --version X, --quiet (skip menu, defaults),
 #        --ocr none|pdf|full, --data-dir /absolute/path,
@@ -11,12 +11,12 @@
 # ============================================================
 set -euo pipefail
 
-REPO="HamidrezaTg/budget-planner"
+REPO="HamidrezaTg/gulden"
 WANT_CLIENT=0
 WANT_VERSION=""
 QUIET=0
 OCR_MODE=""
-DATA_DIR="/var/lib/budget-planner"
+DATA_DIR="/var/lib/gulden"
 DATA_DIR_SET=0
 RESTORE_DIR=""
 
@@ -87,14 +87,14 @@ if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
   esac
   if [ "$SELF_IS_STREAM" = "1" ] || [ ! -f "$SELF" ]; then
     SAFE_TAG=${TAG//[^A-Za-z0-9._-]/_}
-    SELF="/tmp/budget-planner-install-${SAFE_TAG}.sh"
+    SELF="/tmp/gulden-install-${SAFE_TAG}.sh"
     echo "==> caching the exact ${TAG} installer for sudo"
     if [ -n "${GH_TOKEN:-}" ]; then
       curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
-        -o "$SELF" "https://github.com/$REPO/releases/download/$TAG/budget-planner-install.sh"
+        -o "$SELF" "https://github.com/$REPO/releases/download/$TAG/gulden-install.sh"
     else
       curl -fsSL -o "$SELF" \
-        "https://github.com/$REPO/releases/download/$TAG/budget-planner-install.sh"
+        "https://github.com/$REPO/releases/download/$TAG/gulden-install.sh"
     fi
     chmod 700 "$SELF"
   fi
@@ -105,7 +105,7 @@ if [ "$(id -u)" -ne 0 ] && [ "${INSTALLER_NO_SUDO:-}" != "1" ]; then
   [ "$QUIET" = "1" ] && REEXEC_ARGS+=(--quiet)
   [ -n "$WANT_VERSION" ] && REEXEC_ARGS+=(--version "$WANT_VERSION")
   [ -n "$OCR_MODE" ] && REEXEC_ARGS+=(--ocr "$OCR_MODE")
-  [ "$DATA_DIR" != "/var/lib/budget-planner" ] && REEXEC_ARGS+=(--data-dir "$DATA_DIR")
+  [ "$DATA_DIR" != "/var/lib/gulden" ] && REEXEC_ARGS+=(--data-dir "$DATA_DIR")
   [ -n "$RESTORE_DIR" ] && REEXEC_ARGS+=(--restore-server-data "$RESTORE_DIR")
   exec sudo -E GH_TOKEN="${GH_TOKEN:-}" bash "$SELF" "${REEXEC_ARGS[@]}"
 fi
@@ -114,9 +114,9 @@ echo "==> release: $TAG"
 
 if [ "$WANT_CLIENT" = "1" ]; then
   [ "$(dpkg --print-architecture)" = "amd64" ] || { echo "ERROR: the desktop client is amd64-only." >&2; exit 1; }
-  PATTERN="budget-planner-client_.*_amd64\.deb"
+  PATTERN="gulden-client_.*_amd64\.deb"
 else
-  PATTERN="budget-planner-server_[0-9.]*_all\.deb"
+  PATTERN="gulden-server_[0-9.]*_all\.deb"
 fi
 
 ASSET_NAME=$(printf '%s' "$RELEASE_JSON" | grep -oE '"name"[[:space:]]*:[[:space:]]*"'"$PATTERN"'"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
@@ -164,7 +164,8 @@ if [ "$WANT_CLIENT" != "1" ]; then
 fi
 
 # ---- interactive configuration (skipped with --quiet or when piped) -----
-DEFAULTS_FILE="${BP_DEFAULTS_FILE:-/etc/default/budget-planner}"
+DEFAULTS_FILE="${BP_DEFAULTS_FILE:-/etc/default/gulden}"
+OLD_DEFAULTS_FILE="/etc/default/budget-planner"
 PORT=2026
 BIND_IP=""
 ADMIN_NAME=""
@@ -172,6 +173,9 @@ ADMIN_PW=""
 NETWORK_ONLY=0
 [ -n "$OCR_MODE" ] || OCR_MODE="full"
 
+if [ "$DEFAULTS_FILE" = "/etc/default/gulden" ] && [ ! -f "$DEFAULTS_FILE" ] && [ -f "$OLD_DEFAULTS_FILE" ]; then
+  cp -p "$OLD_DEFAULTS_FILE" "$DEFAULTS_FILE"
+fi
 if [ -f "$DEFAULTS_FILE" ]; then
   configured_port=$(grep -E '^PORT=' "$DEFAULTS_FILE" | tail -1 | cut -d= -f2- || true)
   case "${configured_port:-}" in ''|*[!0-9]*) ;; *) PORT="$configured_port" ;; esac
@@ -205,7 +209,7 @@ if [ "$WANT_CLIENT" != "1" ] && [ "$QUIET" != "1" ] && { [ -t 0 ] || [ "${BP_WAN
     command -v tailscale >/dev/null 2>&1 && EXISTING_TS=$(tailscale ip -4 -1 2>/dev/null || true)
 
     echo
-    echo "  Where will you use Budget Planner from?"
+  echo "  Where will you use Gulden from?"
     echo "   1) Everywhere — LAN and Tailscale (recommended)"
     echo "   2) This machine only (localhost)"
     [ -n "$EXISTING_TS" ] && echo "   3) Tailscale devices only"
@@ -227,7 +231,7 @@ if [ "$WANT_CLIENT" != "1" ] && [ "$QUIET" != "1" ] && { [ -t 0 ] || [ "${BP_WAN
       DATA_DIR="${data_dir_in:-$DATA_DIR}"
       case "$DATA_DIR" in
         /*) ;;
-        *) echo "  Data directory must be absolute; keeping $DATA_DIR"; DATA_DIR="/var/lib/budget-planner" ;;
+        *) echo "  Data directory must be absolute; keeping $DATA_DIR"; DATA_DIR="/var/lib/gulden" ;;
       esac
 
       if [ -z "$RESTORE_DIR" ]; then
@@ -328,7 +332,7 @@ rm -f "$OUT"
 if [ "$WANT_CLIENT" = "1" ]; then
   echo
   echo "============================================================="
-  echo " Desktop client installed — find 'Budget Planner' in your"
+  echo " Desktop client installed — find 'Gulden' in your"
   echo " application menu and enter your server address on first launch."
   echo "============================================================="
   exit 0
@@ -351,13 +355,13 @@ set_default DATA_DIR "$DATA_DIR"
 
 # The packaged service is sandboxed to its default directory. A drop-in keeps
 # that protection while allowing an explicitly selected custom path.
-if [ "$DATA_DIR" != "/var/lib/budget-planner" ]; then
+if [ "$DATA_DIR" != "/var/lib/gulden" ]; then
   install -d -m 700 -o budget -g budget "$DATA_DIR"
-  install -d -m 755 /etc/systemd/system/budget-planner.service.d
-  cat > /etc/systemd/system/budget-planner.service.d/data-dir.conf <<EOF
+  install -d -m 755 /etc/systemd/system/gulden.service.d
+  cat > /etc/systemd/system/gulden.service.d/data-dir.conf <<EOF
 [Service]
 ReadWritePaths=
-ReadWritePaths=/var/lib/budget-planner
+ReadWritePaths=/var/lib/gulden
 ReadWritePaths=$DATA_DIR
 EOF
 fi
@@ -419,18 +423,18 @@ if [ -n "$RESTORE_DIR" ]; then
     [ "$restore_confirm" = "RESTORE" ] || { echo "Restore cancelled."; exit 1; }
   fi
   echo "==> stopping service for complete server-data restore"
-  systemctl stop budget-planner || true
+  systemctl stop gulden || true
   restore_server_data "$RESTORE_DIR" "$DATA_DIR"
 fi
 
-systemctl restart budget-planner
+systemctl restart gulden
 
 # ---- optional admin creation -------------------------------------------
 if [ -n "$ADMIN_NAME" ] && [ -n "$ADMIN_PW" ]; then
   echo "==> creating admin account"
   if sudo -u budget env DATA_DIR="$DATA_DIR" \
       BP_USER="$ADMIN_NAME" BP_PW="$ADMIN_PW" \
-      node /opt/budget-planner/server/cli-add-user.mjs; then
+      node /opt/gulden/server/cli-add-user.mjs; then
     ADMIN_DONE=yes
   else
     echo "  (Could not create the account here — create it in the browser instead.)"
@@ -439,10 +443,10 @@ fi
 
 # ---- verify + summary ---------------------------------------------------
 sleep 1
-if systemctl is-active --quiet budget-planner; then
+if systemctl is-active --quiet gulden; then
   STATE="running"
 else
-  STATE="NOT RUNNING — check: journalctl -u budget-planner -n 30"
+  STATE="NOT RUNNING — check: journalctl -u gulden -n 30"
 fi
 
 LAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')
@@ -451,7 +455,7 @@ command -v tailscale >/dev/null 2>&1 && TS_IP=$(tailscale ip -4 -1 2>/dev/null |
 
 echo
 echo "============================================================="
-echo " Budget Planner server: $STATE"
+echo " Gulden server: $STATE"
 echo "   Data dir: $DATA_DIR   (SQLite — back it up!)"
 [ "$STATE" = "running" ] || { echo "============================================================="; exit 0; }
 echo

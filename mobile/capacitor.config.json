@@ -1,6 +1,6 @@
 {
   "appId": "com.hamidreza.budgetplanner",
-  "appName": "Budget Planner",
+  "appName": "Gulden",
   "webDir": "www",
   "server": {
     "allowNavigation": ["*"]

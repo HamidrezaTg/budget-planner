@@ -1,7 +1,7 @@
 {
-  "name": "Budget Planner",
-  "short_name": "Budget Planner",
-  "description": "A private, local-first budget planner.",
+  "name": "Gulden",
+  "short_name": "Gulden",
+  "description": "A private, local-first budget manager.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f3ec",

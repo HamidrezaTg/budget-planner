@@ -1,6 +1,6 @@
-# Budget Planner Roadmap
+# Gulden Roadmap
 
-This is the working roadmap for the Budget Planner project. It is meant to be
+This is the working roadmap for the Gulden project. It is meant to be
 read by you and by future AI assistants, so each step is concrete and self
 contained. The project lives at `/home/hamid/projects/mimo_test/budget-planner`
 and uses Node.js ≥ 22 on the server, React + Vite on the web client, and
@@ -164,9 +164,9 @@ This is separate from the CI package validation, which already passes:
 
 - [ ] Create or use an AUR maintainer account with SSH access.
 - [ ] From the project root, run `./scripts/build-aur.sh` to regenerate and
-      validate `packaging/aur/budget-planner-client/PKGBUILD` and `.SRCINFO`.
+      validate `packaging/aur/gulden-client/PKGBUILD` and `.SRCINFO`.
 - [ ] Clone the AUR repository with
-      `git clone ssh://aur@aur.archlinux.org/budget-planner-client.git`.
+      `git clone ssh://aur@aur.archlinux.org/gulden-client.git`.
 - [ ] Copy the generated `PKGBUILD` and `.SRCINFO` into that checkout, review
       the version, source URL, and checksum, then commit and push to AUR.
 - [ ] Verify the package can be installed from AUR, record the package URL and
@@ -204,7 +204,7 @@ updates. Complete the implementation and key setup together:
 These are the projects I checked while drafting this roadmap. They informed
 the desktop-client and packaging choices.
 
-- https://github.com/HamidrezaTg/budget-planner — your own project.
+- https://github.com/HamidrezaTg/gulden — your own project.
 - https://github.com/solid-logic-studios/bucketwise-planner — Barefoot-Investor
   methodology, multi-user, DDD-style architecture.
 - https://github.com/honeybearfolio/HoneyBear-Folio — Tauri + React, SQLite,

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Build the Android APK — a pure CLIENT for your self-hosted Budget Planner.
+# Build the Android APK — a pure CLIENT for your self-hosted Gulden server.
 # The app contains no backend: on first launch it asks for the server address
 # (e.g. http://192.168.1.20:2026 or https://budget.example.ts.net), remembers it, and
 # loads the planner from there.
 #
-# Output: dist/budget-planner-android.apk
+# Output: dist/gulden-android.apk
 #
 # Release signing: export BP_ANDROID_KEYSTORE, BP_ANDROID_KEYSTORE_PASSWORD and
 # BP_ANDROID_KEY_ALIAS (plus optional BP_ANDROID_KEY_PASSWORD) before running.
@@ -81,26 +81,26 @@ fi
 if [ "$SIGNED_RELEASE" = true ]; then
   echo "==> gradle assembleRelease (release signing configured)"
   ( cd android && ./gradlew assembleRelease --no-daemon -q )
-  cp android/app/build/outputs/apk/release/app-release.apk ../dist/budget-planner-android.apk
-  test -s ../dist/budget-planner-android.apk
+   cp android/app/build/outputs/apk/release/app-release.apk ../dist/gulden-android.apk
+   test -s ../dist/gulden-android.apk
 else
   # A debug-key build must NEVER land under the release filename: users
   # sideload updates by filename, and the public debug key would let anyone
   # craft a signed "update" for them. Only an explicit opt-in overrides this.
   if [ "${BP_ALLOW_DEBUG_APK:-0}" != "1" ]; then
     echo "ERROR: no signing environment (BP_ANDROID_KEYSTORE...) and BP_ALLOW_DEBUG_APK!=1." >&2
-    echo "       Refusing to produce a debug-key APK as dist/budget-planner-android.apk." >&2
+    echo "       Refusing to produce a debug-key APK as dist/gulden-android.apk." >&2
     exit 1
   fi
   echo "==> gradle assembleDebug (BP_ALLOW_DEBUG_APK=1 — local test build only)"
   ( cd android && ./gradlew assembleDebug --no-daemon -q )
-  cp android/app/build/outputs/apk/debug/app-debug.apk ../dist/budget-planner-android-debug.apk
+   cp android/app/build/outputs/apk/debug/app-debug.apk ../dist/gulden-android-debug.apk
 fi
 
 if [ "$SIGNED_RELEASE" = true ]; then
-  echo "==> done: dist/budget-planner-android.apk (signed release)"
+  echo "==> done: dist/gulden-android.apk (signed release)"
 else
-  echo "==> done: dist/budget-planner-android-debug.apk (debug key — do not distribute)"
+  echo "==> done: dist/gulden-android-debug.apk (debug key — do not distribute)"
 fi
 echo "    install:  adb install dist/<apk>"
 echo "    (or copy to the phone and open it — allow 'unknown sources')"

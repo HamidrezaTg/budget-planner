@@ -1,14 +1,14 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Budget Planner API",
-    "version": "3.22.0",
-    "description": "Static contract for the Budget Planner HTTP API. JSON amounts are numbers and transaction expenses are negative. Unless an operation is marked public, send the bp_session cookie returned by login or setup."
+    "title": "Gulden API",
+    "version": "3.23.0",
+    "description": "Static contract for the Gulden HTTP API. JSON amounts are numbers and transaction expenses are negative. Unless an operation is marked public, send the bp_session cookie returned by login or setup."
   },
   "servers": [
     {
       "url": "/api",
-      "description": "Budget Planner API base path"
+      "description": "Gulden API base path"
     }
   ],
   "tags": [
@@ -47,7 +47,7 @@
     "/.well-known/budget-planner": {
       "get": {
         "tags": ["Public"],
-        "summary": "Discover a Budget Planner server",
+        "summary": "Discover a Gulden server",
         "operationId": "getDiscovery",
         "servers": [{ "url": "/", "description": "Server root (outside /api)" }],
         "security": [],
@@ -2401,7 +2401,11 @@
           "description": { "type": "string" },
           "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
           "remember": { "type": "boolean" },
-          "keyword": { "type": "string" }
+          "keyword": { "type": "string" },
+          "awaiting_pair": {
+            "type": "boolean",
+            "description": "Park or unpark an unmatched transfer while waiting for the counterpart account import. Parked rows are excluded from calculations and needs-review counts."
+          }
         }
       },
       "TransactionSplit": {

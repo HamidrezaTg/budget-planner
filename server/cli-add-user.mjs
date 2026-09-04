@@ -16,7 +16,7 @@ if (!name || !pw) {
 // the working directory, and a typo'd cwd would silently create the admin in
 // an empty database the running service never sees (it prints "success"!).
 if (!process.env.DATA_DIR) {
-  console.error('DATA_DIR must be set explicitly (e.g. DATA_DIR=/var/lib/budget-planner)');
+  console.error('DATA_DIR must be set explicitly (e.g. DATA_DIR=/var/lib/gulden)');
   process.exit(1);
 }
 if (hasAnyUser()) {

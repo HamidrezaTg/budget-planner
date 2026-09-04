@@ -59,7 +59,7 @@ test('daily ntfy summaries publish once and retry after failure', async () => {
   assert.equal(second, false);
   assert.equal(received.length, 1);
   assert.match(received[0].body, /Tight budget is over budget/);
-  assert.equal(received[0].headers.title, `Budget Planner warnings for ${currentMonth()}`);
+  assert.equal(received[0].headers.title, `Gulden warnings for ${currentMonth()}`);
   server.close();
   dbm.closeUserDb('notify-user');
 });

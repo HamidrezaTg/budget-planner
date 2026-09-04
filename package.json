@@ -1,6 +1,6 @@
 {
-  "name": "budget-planner",
-  "version": "3.22.0",
+  "name": "gulden",
+  "version": "3.23.0",
   "private": true,
   "type": "module",
   "scripts": {

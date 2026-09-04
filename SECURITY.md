@@ -1,6 +1,6 @@
 # Security
 
-Budget Planner is a self-hosted, single-machine-first budget app. This document
+Gulden is a self-hosted, single-machine-first budget app. This document
 summarizes the security model and how to report issues.
 
 ## Reporting a vulnerability

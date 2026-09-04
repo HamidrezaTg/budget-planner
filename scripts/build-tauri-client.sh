@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the Tauri v2 desktop client on the current host. On Linux this produces:
-#   - dist/budget-planner-client_<version>_amd64.deb
-#   - dist/budget-planner-client_<version>_amd64.AppImage
+#   - dist/gulden-client_<version>_amd64.deb
+#   - dist/gulden-client_<version>_amd64.AppImage
 # The same command can produce the native bundle for macOS or Windows when
 # invoked on those hosts; this script collects Linux artifacts only.
 set -euo pipefail
@@ -20,7 +20,7 @@ if ! command -v node >/dev/null 2>&1; then
   echo "ERROR: node not found. Install Node.js >= 22." >&2; exit 1;
 fi
 
-echo "==> building budget-planner-client $VERSION (Tauri v2)"
+echo "==> building gulden-client $VERSION (Tauri v2)"
 pushd desktop-client-tauri >/dev/null
 npm ci --no-audit --no-fund
 npx tauri build --bundles "$BUNDLES"
@@ -42,12 +42,12 @@ if [[ ",$BUNDLES," == *,appimage,* ]] && ((${#appimage_files[@]} == 0)); then
   exit 1
 fi
 if [[ ",$BUNDLES," == *,deb,* ]]; then
-  cp "${deb_files[0]}" "dist/budget-planner-client_${VERSION}_amd64.deb"
+  cp "${deb_files[0]}" "dist/gulden-client_${VERSION}_amd64.deb"
 fi
 if [[ ",$BUNDLES," == *,appimage,* ]]; then
-  cp "${appimage_files[0]}" "dist/budget-planner-client_${VERSION}_amd64.AppImage"
+  cp "${appimage_files[0]}" "dist/gulden-client_${VERSION}_amd64.AppImage"
 fi
 
 ls -lh dist/ 2>/dev/null || true
-echo "==> install on Debian/Ubuntu:  sudo apt install ./dist/budget-planner-client_${VERSION}_amd64.deb"
-echo "==> install AppImage:            chmod +x dist/budget-planner-client_${VERSION}_amd64.AppImage && ./dist/budget-planner-client_${VERSION}_amd64.AppImage"
+echo "==> install on Debian/Ubuntu:  sudo apt install ./dist/gulden-client_${VERSION}_amd64.deb"
+echo "==> install AppImage:            chmod +x dist/gulden-client_${VERSION}_amd64.AppImage && ./dist/gulden-client_${VERSION}_amd64.AppImage"

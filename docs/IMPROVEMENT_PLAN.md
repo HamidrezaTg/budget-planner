@@ -1,11 +1,11 @@
-# Improvement Plan — Budget Planner
+# Improvement Plan — Gulden
 
 > Status: active implementation plan, validated against the current codebase
 > (v3.9.2). Updated 2026-08-28.
 
 ## Current Progress
 
-**v3.9.2 is published** (https://github.com/HamidrezaTg/budget-planner/releases/tag/v3.9.2)
+**v3.9.2 is published** (https://github.com/HamidrezaTg/gulden/releases/tag/v3.9.2)
 with server `.deb`, client `.deb`, signed APK and CI-generated `SHA256SUMS.txt`,
 all publicly downloadable. The release was cut by the new tag-triggered release
 workflow (its first run, after two pipeline bugs were fixed by dogfooding it).

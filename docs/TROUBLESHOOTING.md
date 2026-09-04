@@ -11,21 +11,21 @@ which older distro packages (Ubuntu 24.04 ships Node 18) don't have. Check:
 
 ```bash
 node -v
-journalctl -u budget-planner -n 30 --no-pager
+journalctl -u gulden -n 30 --no-pager
 ```
 
 Fix: installer v3.8.1+ enforces Node 22 and can install it via NodeSource.
 Manual fix: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash - && sudo apt install nodejs`,
-then `sudo systemctl restart budget-planner`.
+then `sudo systemctl restart gulden`.
 
 Another classic: the service was installed before v3.8.2 — those units didn't set
-`DATA_DIR` and died with `ENOENT … /opt/budget-planner/data`. Upgrade to ≥ 3.8.2.
+`DATA_DIR` and died with `ENOENT … /opt/gulden/data`. Upgrade to ≥ 3.8.2.
 
 ### Port already in use
 
 `EADDRINUSE` in the journal → something else owns the port. Change it:
-`sudo nano /etc/default/budget-planner` → add `PORT=3000`, then
-`sudo systemctl restart budget-planner`.
+`sudo nano /etc/default/gulden` → add `PORT=3000`, then
+`sudo systemctl restart gulden`.
 
 ## Connecting from other devices
 
@@ -65,7 +65,7 @@ Checklist, in order:
 ### Linux desktop client shows the wrong welcome page
 
 Upgrade to the current Tauri desktop client from GitHub Releases. The server address lives in
-`~/.config/budget-planner-client/config.json`; delete that file to get the
+`~/.config/com.hamidreza.budgetplanner.client/config.json`; delete that file to get the
 first-launch setup screen back.
 
 ## Import & transactions
@@ -103,7 +103,7 @@ Every response carries an `X-Request-Id` header. If a server error mentions one
 (or your browser devtools Network tab shows it), find the matching server line with:
 
 ```bash
-journalctl -u budget-planner | grep <request-id>
+journalctl -u gulden | grep <request-id>
 ```
 
 That line contains the full error detail without exposing stack traces to clients.
@@ -120,7 +120,7 @@ ECB"). Changing the display currency clears all stored rates — refetch afterwa
 
 ### Migrating to a new server
 
-Stop the service, copy the whole data directory (default `/var/lib/budget-planner`,
+Stop the service, copy the whole data directory (default `/var/lib/gulden`,
 or `data/` for source installs) to the same path on the new machine, fix ownership
 (`chown -R budget:budget`), start. Alternatively: Settings → **Download full backup**
 on the old machine → create an account on the new one → **Restore backup**.

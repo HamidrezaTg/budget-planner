@@ -122,3 +122,102 @@ test('confirming the candidate marks both rows as a transfer_group', async () =>
   // confirm succeeded without error and inserted both rows.
   assert.equal(confirm.data.skippedDuplicates, 0);
 });
+
+test('parks an unmatched transfer and auto-pairs it when the other account is imported', async () => {
+  const accounts = (await call('GET', '/api/accounts')).data;
+  const bank = accounts.find((a) => a.name === 'XBank');
+  const card = accounts.find((a) => a.name === 'XCard');
+  const created = await call('POST', '/api/transactions', {
+    date: '2026-08-20',
+    description: 'Waiting top up',
+    amount: -321.45,
+    currency: 'EUR',
+    account_id: bank.id,
+  });
+  assert.equal(created.status, 200, JSON.stringify(created.data));
+  const pendingId = created.data.ids[0];
+  const parked = await call('PATCH', `/api/transactions/${pendingId}`, { awaiting_pair: true });
+  assert.equal(parked.status, 200, JSON.stringify(parked.data));
+  assert.equal(parked.data.transfer_group, `pending-transfer|${pendingId}`);
+  assert.equal(parked.data.needs_review, 0);
+  assert.equal(parked.data.review_reason, 'awaiting_transfer');
+
+  const csv = [
+    'Started Date,Description,Amount,Currency,State',
+    '2026-08-21,Top up received,321.45,EUR,COMPLETED',
+  ].join('\n');
+  const form = new FormData();
+  form.append('file', new Blob([csv], { type: 'text/csv' }), 'waiting-counterpart.csv');
+  const uploadResponse = await fetch(`${srv.url}/api/import/upload`, {
+    method: 'POST',
+    body: form,
+    headers: { cookie },
+  });
+  const upload = await uploadResponse.json();
+  assert.equal(uploadResponse.status, 200, JSON.stringify(upload));
+  const confirmed = await call('POST', '/api/import/confirm', {
+    token: upload.token,
+    account_id: card.id,
+  });
+  assert.equal(confirmed.status, 200, JSON.stringify(confirmed.data));
+  assert.equal(confirmed.data.autoPairedTransfers, 1);
+
+  const rows = (await call('GET', '/api/transactions?limit=all&transfer=1')).data.rows;
+  const imported = rows.find((row) => row.description === 'Top up received');
+  const original = rows.find((row) => row.id === pendingId);
+  assert.ok(imported);
+  assert.equal(original.transfer_group, imported.transfer_group);
+  assert.equal(original.review_reason, null);
+  assert.equal(imported.needs_review, 0);
+  assert.ok(rows.some((row) => row.id === pendingId));
+});
+
+test('ambiguous pending transfers stay parked', async () => {
+  const accounts = (await call('GET', '/api/accounts')).data;
+  const bank = accounts.find((a) => a.name === 'XBank');
+  const card = accounts.find((a) => a.name === 'XCard');
+  const created = await call('POST', '/api/transactions', [
+    {
+      date: '2026-08-25',
+      description: 'Waiting A',
+      amount: -77,
+      currency: 'EUR',
+      account_id: bank.id,
+    },
+    {
+      date: '2026-08-25',
+      description: 'Waiting B',
+      amount: -77,
+      currency: 'EUR',
+      account_id: bank.id,
+    },
+  ]);
+  assert.equal(created.status, 200, JSON.stringify(created.data));
+  for (const id of created.data.ids) {
+    const parked = await call('PATCH', `/api/transactions/${id}`, { awaiting_pair: true });
+    assert.equal(parked.status, 200);
+  }
+  const csv = [
+    'Started Date,Description,Amount,Currency,State',
+    '2026-08-26,One received,77,EUR,COMPLETED',
+  ].join('\n');
+  const form = new FormData();
+  form.append('file', new Blob([csv], { type: 'text/csv' }), 'ambiguous-counterpart.csv');
+  const uploadResponse = await fetch(`${srv.url}/api/import/upload`, {
+    method: 'POST',
+    body: form,
+    headers: { cookie },
+  });
+  const upload = await uploadResponse.json();
+  const confirmed = await call('POST', '/api/import/confirm', {
+    token: upload.token,
+    account_id: card.id,
+  });
+  assert.equal(confirmed.status, 200, JSON.stringify(confirmed.data));
+  assert.equal(confirmed.data.autoPairedTransfers, 0);
+  const rows = (await call('GET', '/api/transactions?limit=all')).data.rows;
+  const received = rows.find((row) => row.description === 'One received');
+  assert.ok(received);
+  assert.equal(received.transfer_group, null);
+  assert.equal(received.needs_review, 1);
+});

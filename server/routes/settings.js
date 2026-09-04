@@ -274,7 +274,7 @@ router.post('/ntfy/test', async (_req, res) => {
   try {
     await publishNtfy({
       ...config,
-      title: 'Budget Planner test notification',
+      title: 'Gulden test notification',
       message: 'ntfy notifications are configured correctly.',
     });
     res.json({ ok: true });

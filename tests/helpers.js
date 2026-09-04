@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 
 export function freshDataDir() {
   return mkdtempSync(path.join(tmpdir(), 'bp-test-'));
@@ -14,6 +15,19 @@ export function cleanup(dir) {
   try {
     rmSync(dir, { recursive: true, force: true });
   } catch {}
+}
+
+async function freePort() {
+  const probe = net.createServer();
+  await new Promise((resolve, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', resolve);
+  });
+  const port = probe.address().port;
+  await new Promise((resolve, reject) =>
+    probe.close((error) => (error ? reject(error) : resolve())),
+  );
+  return port;
 }
 
 // Load the server's db module against an isolated temp data directory.
@@ -31,7 +45,7 @@ export async function loadAuth(dataDir) {
 // Start a real server on an ephemeral-ish port with an isolated data dir.
 // Returns { url, stop }.
 export async function startServer(dataDir, port = 0, extraEnv = {}) {
-  const usedPort = port || 21300 + Math.floor(Math.random() * 300);
+  const usedPort = port || (await freePort());
   const child = spawn(process.execPath, ['server/index.js'], {
     cwd: path.join(import.meta.dirname, '..'),
     env: {

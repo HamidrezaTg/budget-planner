@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-const GITHUB = 'https://github.com/HamidrezaTg/budget-planner';
+const GITHUB = 'https://github.com/HamidrezaTg/gulden';
 
 const SECTIONS = [
   {
@@ -32,7 +32,7 @@ const SECTIONS = [
     summary: 'The selected working month controls the period shown by most pages.',
     steps: [
       'Use the Working month selector in the sidebar to move through months. Dashboard, budgets, transactions, income, balances, and reports follow that selection.',
-      'On mobile, open the menu from the top bar. On desktop, collapse the sidebar from the Budget Planner mark.',
+      'On mobile, open the menu from the top bar. On desktop, collapse the sidebar from the Gulden mark.',
       'Use the eye control to blur financial values in the current browser. Use the theme control to switch appearance; your selected theme is saved to your user account and follows you to other devices.',
       'Press ? for Help, or press g then d, t, or r for Dashboard, Transactions, or Reports. Shortcuts are disabled while typing.',
       'In a native client, use Switch server to change between saved server endpoints. HTTP is intended only for trusted LAN/VPN connections.',
@@ -52,7 +52,7 @@ const SECTIONS = [
       'In Accounts, create bank, card, cash, or other accounts. Mark a spending pot when the account is used for day-to-day spending.',
       'Set the opening balance and account currency at the point tracking begins. Change it only when correcting the starting point, not to hide a later discrepancy.',
       'In Categories, organize categories into groups, choose a paying account, and add a standing plan. Categories may be left ungrouped or without an account, but the Dashboard will warn about missing account assignments.',
-      'Retire a category when it should stop receiving new plans or rules. Its transaction history remains; its plan and categorization rules are cleared. Reactivate it when needed.',
+      'Retire a category when it should stop receiving new plans or rules. Its transaction history remains; its plan and categorization rules are cleared. Manage categorization rules separately on the Rules page. Reactivate a retired category when needed.',
       'Use People to connect an income source to a household member or other payer. Removing a person clears only that link.',
     ],
     notes: [
@@ -75,6 +75,23 @@ const SECTIONS = [
     ],
     notes: [
       'Budget, fund, commitment, and income planning figures use the global display currency.',
+    ],
+  },
+  {
+    id: 'rules',
+    title: 'Categorization rules',
+    eyebrow: 'Automate safely',
+    route: '/rules',
+    summary:
+      'Use explicit rules for repeatable merchants while keeping ambiguous choices in review.',
+    steps: [
+      'Open Rules from the sidebar to create keyword, advanced, and category-choice rules.',
+      'Use the search and filters to find rules by type, category, or enabled state.',
+      'Disable an advanced or choice rule when it should stop matching without deleting its history.',
+      'Use Rule tester to preview a match. Testing never changes transactions.',
+    ],
+    notes: [
+      'Keyword rules are always enabled; learned rules can be removed from the transaction editor by unchecking Remember.',
     ],
   },
   {
@@ -106,7 +123,7 @@ const SECTIONS = [
       'Transactions are the actual record. Review unknown rows promptly so learned rules improve future imports.',
     steps: [
       'Filter by month or show only Needs review. Assigning a category can learn a keyword rule and retroactively fix matching unknown rows.',
-      'Use advanced categorization rules for description, absolute amount range, account, transaction type, and priority. The rule tester never changes data.',
+      'Use the Rules page for description, absolute amount range, account, transaction type, and priority rules. The rule tester never changes data.',
       'Add a transaction manually when a statement is unavailable. Negative amounts normally represent spending; positive amounts represent income or refunds.',
       'Edit account, category, fund, commitment, description, or amount when a transaction needs correction. Delete only when the row is genuinely unwanted.',
       'Split a purchase across categories. Split amounts must equal the original signed amount; Unsplit restores the original transaction.',
@@ -126,7 +143,7 @@ const SECTIONS = [
       'A paired transfer moves money between accounts and is excluded from income and spending totals.',
     steps: [
       'Create a paired transfer manually when both sides of the movement are known.',
-      'During import, inspect candidate pairs and choose the matches that represent the same movement between accounts.',
+      'During import, inspect candidate pairs and choose the matches that represent the same movement between accounts. If only one side is present, mark it as awaiting transfer; it is excluded until the counterpart is imported.',
       'From Transactions, pair existing equal-and-opposite rows when the bank statements were imported separately.',
       'Unpair when a match was wrong. Delete a paired transfer together only when both rows should truly be removed.',
       'Check the Dashboard transfer guidance after categorizing spending-pot budget lines. It indicates the planned amount to move, not an additional expense.',
@@ -277,7 +294,7 @@ const SECTIONS = [
       'Optional outbound connections are limited to providers you configure, ECB/Frankfurter exchange-rate data, ntfy if configured, and the GitHub release check shown in Settings.',
     ],
     notes: [
-      'Budget Planner has no third-party account, advertising, or telemetry service. It is self-hosted, but server and backup security remain your responsibility.',
+      'Gulden has no third-party account, advertising, or telemetry service. It is self-hosted, but server and backup security remain your responsibility.',
     ],
   },
   {
@@ -327,13 +344,13 @@ export default function Help() {
   return (
     <div className="public-help">
       <header className="help-header">
-        <Link className="help-brand" to="/" aria-label="Budget Planner home">
+        <Link className="help-brand" to="/" aria-label="Gulden home">
           <span className="brand-mark">
             <i></i>
             <i></i>
             <i></i>
           </span>
-          <span>Budget Planner</span>
+          <span>Gulden</span>
         </Link>
         <nav className="help-header-nav" aria-label="Help navigation">
           <a href={`${GITHUB}/releases`} target="_blank" rel="noreferrer">
@@ -353,9 +370,9 @@ export default function Help() {
           <p className="eyebrow">Complete user guide</p>
           <h1>Make every number explainable.</h1>
           <p className="help-lede">
-            Budget Planner is a self-hosted planner: your server stores the data, clients connect to
-            it, and every import, forecast, and automation can be reviewed. Use this guide to set up
-            the model, maintain actuals, and understand what the app is telling you.
+            Gulden is a self-hosted planner: your server stores the data, clients connect to it, and
+            every import, forecast, and automation can be reviewed. Use this guide to set up the
+            model, maintain actuals, and understand what the app is telling you.
           </p>
           <div className="help-intro-actions">
             <PageLink to="/accounts">Set up accounts</PageLink>
@@ -462,7 +479,7 @@ export default function Help() {
       </main>
 
       <footer className="help-footer">
-        <span>Budget Planner · Self-hosted help</span>
+        <span>Gulden · Self-hosted help</span>
         <a href={`${GITHUB}/blob/main/SECURITY.md`} target="_blank" rel="noreferrer">
           Security
         </a>

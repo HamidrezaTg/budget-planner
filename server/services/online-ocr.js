@@ -26,7 +26,7 @@ function formatFor(filePath) {
 }
 
 function renderPdf(filePath) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'budget-planner-online-ocr-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gulden-online-ocr-'));
   try {
     let info;
     try {

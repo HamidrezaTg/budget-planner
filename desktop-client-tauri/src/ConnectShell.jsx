@@ -86,7 +86,7 @@ async function probe(url) {
   });
   if (!response.ok) throw new Error('Not a planner server');
   const info = await response.json();
-  if (info.name !== 'Budget Planner' || info.api !== '/api') {
+  if (info.name !== 'Gulden' || info.api !== '/api') {
     throw new Error('Not a planner server');
   }
 }
@@ -205,7 +205,7 @@ export default function ConnectShell() {
           <i></i>
           <i></i>
         </span>
-        <h1>Budget Planner</h1>
+        <h1>Gulden</h1>
         <p>
           This app is a client for your self-hosted planner. Enter the address of the machine
           running the server — for example <b>http://192.168.1.10:2026</b> (home network) or your

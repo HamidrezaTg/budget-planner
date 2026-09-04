@@ -300,17 +300,32 @@ export default function Balances() {
         />{' '}
         show months without observations
       </label>
-      <div className="card table-card tight">
+      <div className="card table-card tight" style={{ overflowX: 'auto' }}>
         <table>
           <thead>
             <tr>
               <th>Month</th>
               {data.accounts.map((a) => (
-                <th key={a.id} className="num">
+                <th key={a.id} colSpan="3" className="num">
                   {a.name} <span className="muted tiny">({a.display_currency})</span>
                 </th>
               ))}
               <th className="num">Total variance</th>
+            </tr>
+            <tr>
+              <th></th>
+              {data.accounts.flatMap((a) => [
+                <th key={`${a.id}-observed`} className="num muted tiny">
+                  Observed
+                </th>,
+                <th key={`${a.id}-calculated`} className="num muted tiny">
+                  Calculated
+                </th>,
+                <th key={`${a.id}-variance`} className="num muted tiny">
+                  Variance
+                </th>,
+              ])}
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -332,68 +347,76 @@ export default function Balances() {
                       (o) => o.account_id === r.account_id && o.month === m.month,
                     );
                     return (
-                      <td key={r.account_id} className="num">
-                        {r.calculated === null ? (
-                          <span className="muted tiny" title="Before the opening-balance month">
-                            n/a
-                          </span>
-                        ) : (
-                          <>
-                            <input
-                              type="number"
-                              step="0.01"
-                              style={{ width: 100 }}
-                              aria-label={`Observed balance for ${m.month}`}
-                              placeholder={r.observed == null ? 'actual…' : undefined}
-                              value={draft ?? (r.observed == null ? '' : r.observed)}
-                              onChange={(e) =>
-                                setObservedDrafts((p) => ({ ...p, [key]: e.target.value }))
-                              }
-                              onBlur={() => saveObserved(r.account_id, m.month)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  e.currentTarget.blur();
+                      <>
+                        <td key={`${r.account_id}-observed`} className="num">
+                          {r.calculated === null ? (
+                            <span className="muted tiny" title="Before the opening-balance month">
+                              n/a
+                            </span>
+                          ) : (
+                            <>
+                              <input
+                                type="number"
+                                step="0.01"
+                                style={{ width: 100 }}
+                                aria-label={`Observed balance for ${m.month}`}
+                                placeholder={r.observed == null ? 'actual…' : undefined}
+                                value={draft ?? (r.observed == null ? '' : r.observed)}
+                                onChange={(e) =>
+                                  setObservedDrafts((p) => ({ ...p, [key]: e.target.value }))
                                 }
-                              }}
-                            />
-                            {observation && (
-                              <button
-                                className="btn danger tiny-btn"
-                                title={`Delete the ${m.month} observation`}
-                                onClick={async () => {
-                                  const ok = await confirm({
-                                    title: `Delete the ${m.month} observation for this account?`,
-                                    message:
-                                      'The projection will re-anchor to the next remaining observation.',
-                                    danger: true,
-                                    confirmLabel: 'Delete',
-                                  });
-                                  if (!ok) return;
-                                  try {
-                                    await api.del(`/balances/${observation.id}`);
-                                    setMsg('');
-                                    load();
-                                  } catch (err) {
-                                    setMsg(err.message);
+                                onBlur={() => saveObserved(r.account_id, m.month)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    e.currentTarget.blur();
                                   }
                                 }}
-                              >
-                                ✕
-                              </button>
-                            )}
-                            <div className="muted tiny">
-                              calc {formatMoney(r.calculated, r.display_currency)}
-                              {r.variance != null && (
-                                <span className={varianceClass(r.variance)}>
-                                  {' '}
-                                  · {fmtVariance(r.variance, r.display_currency)}
-                                </span>
+                              />
+                              {observation && (
+                                <button
+                                  className="btn danger tiny-btn"
+                                  title={`Delete the ${m.month} observation`}
+                                  onClick={async () => {
+                                    const ok = await confirm({
+                                      title: `Delete the ${m.month} observation for this account?`,
+                                      message:
+                                        'The projection will re-anchor to the next remaining observation.',
+                                      danger: true,
+                                      confirmLabel: 'Delete',
+                                    });
+                                    if (!ok) return;
+                                    try {
+                                      await api.del(`/balances/${observation.id}`);
+                                      setMsg('');
+                                      load();
+                                    } catch (err) {
+                                      setMsg(err.message);
+                                    }
+                                  }}
+                                >
+                                  ✕
+                                </button>
                               )}
-                            </div>
-                          </>
-                        )}
-                      </td>
+                            </>
+                          )}
+                        </td>
+                        <td key={`${r.account_id}-calculated`} className="num">
+                          {r.calculated === null ? (
+                            <span className="muted tiny">n/a</span>
+                          ) : (
+                            formatMoney(r.calculated, r.display_currency)
+                          )}
+                        </td>
+                        <td
+                          key={`${r.account_id}-variance`}
+                          className={`num ${varianceClass(r.variance)}`}
+                        >
+                          {r.calculated === null
+                            ? '—'
+                            : fmtVariance(r.variance, r.display_currency)}
+                        </td>
+                      </>
                     );
                   })}
                   <td className="num muted">
@@ -405,7 +428,7 @@ export default function Balances() {
               ))}
             {visibleHistory.length === 0 && (
               <tr>
-                <td colSpan={data.accounts.length + 2} className="muted">
+                <td colSpan={data.accounts.length * 3 + 2} className="muted">
                   No observed months yet — enter your first real balance above.
                 </td>
               </tr>

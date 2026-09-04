@@ -10,12 +10,12 @@ import readline from 'node:readline';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE = JSON.parse(fs.readFileSync(path.join(ROOT, '..', 'package.json'), 'utf8'));
-const DEFAULTS_FILE = process.env.BP_DEFAULTS_FILE || '/etc/default/budget-planner';
-const DEFAULT_DATA_DIR = '/var/lib/budget-planner';
-const DEFAULT_BACKUP_DIR = '/var/backups/budget-planner';
+const DEFAULTS_FILE = process.env.BP_DEFAULTS_FILE || '/etc/default/gulden';
+const DEFAULT_DATA_DIR = '/var/lib/gulden';
+const DEFAULT_BACKUP_DIR = '/var/backups/gulden';
 
 function usage() {
-  console.log(`Usage: budget-planner <command> [options]
+  console.log(`Usage: gulden <command> [options]
 
 Read-only:
   status                         Show service, version, URL, and data directory
@@ -85,13 +85,12 @@ function publicConfig() {
 }
 
 function serviceActive() {
-  return spawnSync('systemctl', ['is-active', '--quiet', 'budget-planner']).status === 0;
+  return spawnSync('systemctl', ['is-active', '--quiet', 'gulden']).status === 0;
 }
 
 function service(action) {
-  const result = spawnSync('systemctl', ['--quiet', action, 'budget-planner']);
-  if (result.error || result.status !== 0)
-    throw new Error(`systemctl ${action} budget-planner failed`);
+  const result = spawnSync('systemctl', ['--quiet', action, 'gulden']);
+  if (result.error || result.status !== 0) throw new Error(`systemctl ${action} gulden failed`);
 }
 
 function status(asJson) {
@@ -300,8 +299,8 @@ function logsCommand(args) {
   const index = args.indexOf('--lines');
   const lines = index >= 0 ? positivePort(args[index + 1], 'lines') : '100';
   const command = follow
-    ? ['-fu', 'budget-planner', '-n', lines, '--no-pager']
-    : ['-u', 'budget-planner', '-n', lines, '--no-pager'];
+    ? ['-fu', 'gulden', '-n', lines, '--no-pager']
+    : ['-u', 'gulden', '-n', lines, '--no-pager'];
   const result = spawnSync('journalctl', command, { stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error('journalctl failed');

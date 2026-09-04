@@ -18,7 +18,7 @@ export default function Shared() {
   return (
     <div className="login-wrap">
       <main className="card" style={{ width: 'min(760px, 100%)' }}>
-        <p className="eyebrow">Budget Planner</p>
+        <p className="eyebrow">Gulden</p>
         <h1>{monthLabel(data.month)} budget</h1>
         <p className="muted">Read-only view · {data.currency}</p>
         <div className="stat-value" style={{ margin: '18px 0' }}>

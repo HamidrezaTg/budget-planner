@@ -16,6 +16,11 @@ const MAX_TRANSACTION_LIMIT = 1000;
 // Hard ceiling for `limit=all` (the single-page Transactions table). Bounds
 // memory even if a user has imported tens of thousands of rows.
 const MAX_ALL_ROWS = 10000;
+const PENDING_TRANSFER_PREFIX = 'pending-transfer|';
+
+function isPendingTransfer(group) {
+  return typeof group === 'string' && group.startsWith(PENDING_TRANSFER_PREFIX);
+}
 
 function paginationParams(query, res) {
   const parse = (name, fallback, minimum, maximum) => {
@@ -168,10 +173,34 @@ router.patch('/:id', (req, res) => {
   let fundId = tx.fund_id;
   let commitmentId = tx.commitment_id;
 
+  if (b.awaiting_pair !== undefined) {
+    if (typeof b.awaiting_pair !== 'boolean')
+      return res.status(400).json({ error: 'awaiting_pair must be boolean' });
+    if (b.awaiting_pair) {
+      if (tx.transfer_group && !isPendingTransfer(tx.transfer_group))
+        return res.status(400).json({ error: 'Unpair a transfer before marking it as awaiting' });
+      sets.push(
+        'transfer_group = ?',
+        'category_id = NULL',
+        'fund_id = NULL',
+        'commitment_id = NULL',
+        'needs_review = 0',
+        'review_reason = ?',
+      );
+      args.push(`${PENDING_TRANSFER_PREFIX}${tx.id}`, 'awaiting_transfer');
+    } else {
+      if (!isPendingTransfer(tx.transfer_group))
+        return res
+          .status(400)
+          .json({ error: 'Transaction is not awaiting a transfer counterpart' });
+      sets.push('transfer_group = NULL', 'needs_review = 1', 'review_reason = NULL');
+    }
+  }
+
   if (b.account_id !== undefined) {
     const value = lookupId(b.account_id, 'accounts', 'account');
     if (value?.error) return res.status(400).json(value);
-    if (tx.transfer_group && value !== tx.account_id)
+    if (tx.transfer_group && !isPendingTransfer(tx.transfer_group) && value !== tx.account_id)
       return res.status(400).json({ error: 'Unpair a transfer before changing its account' });
     sets.push('account_id = ?');
     args.push(value);
@@ -510,7 +539,11 @@ function transferPairError(a, b) {
   if (a.currency !== b.currency) return 'Transfer transactions must use the same currency';
   if (a.split_of || a.split_group || b.split_of || b.split_group)
     return 'Split transactions cannot be paired';
-  if (a.transfer_group || b.transfer_group) return 'A transaction is already paired';
+  if (
+    (a.transfer_group && !isPendingTransfer(a.transfer_group)) ||
+    (b.transfer_group && !isPendingTransfer(b.transfer_group))
+  )
+    return 'A transaction is already paired';
   return null;
 }
 
@@ -544,13 +577,16 @@ function pairExisting(req, res) {
   if (error) return res.status(400).json({ error });
 
   const transferGroup = `transfer-${crypto.randomUUID()}`;
+  const cameFromPending =
+    isPendingTransfer(a.transfer_group) || isPendingTransfer(b.transfer_group);
   db.exec('BEGIN');
   try {
     db.prepare(
       `UPDATE transactions
-       SET transfer_group = ?, category_id = NULL, fund_id = NULL, commitment_id = NULL, needs_review = 0
-       WHERE id IN (?, ?)`,
-    ).run(transferGroup, a.id, b.id);
+        SET transfer_group = ?, category_id = NULL, fund_id = NULL, commitment_id = NULL,
+            needs_review = 0, review_reason = ?
+        WHERE id IN (?, ?)`,
+    ).run(transferGroup, cameFromPending ? 'paired_from_waiting' : null, a.id, b.id);
     db.exec('COMMIT');
   } catch (e) {
     db.exec('ROLLBACK');
@@ -574,7 +610,8 @@ router.get('/transfer/candidates', (_req, res) => {
        LEFT JOIN funds f ON f.id = t.fund_id
        LEFT JOIN commitments cm ON cm.id = t.commitment_id
        LEFT JOIN accounts a ON a.id = t.account_id
-       WHERE t.transfer_group IS NULL AND t.account_id IS NOT NULL
+        WHERE (t.transfer_group IS NULL OR t.transfer_group LIKE 'pending-transfer|%')
+          AND t.account_id IS NOT NULL
          AND t.amount != 0 AND t.split_of IS NULL AND t.split_group IS NULL
        ORDER BY t.date DESC, t.id DESC
        LIMIT 2000`,
@@ -689,12 +726,24 @@ function unpair(req, res) {
     return res.status(400).json({ error: 'transaction_id is required' });
   const tx = db.prepare('SELECT id, transfer_group FROM transactions WHERE id = ?').get(id);
   if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+  if (isPendingTransfer(tx.transfer_group)) return res.json({ ok: true, unpaired: 0 });
   if (!tx.transfer_group) return res.json({ ok: true, unpaired: 0 });
-  const result = db
+  const wasPending = db
     .prepare(
-      'UPDATE transactions SET transfer_group = NULL, needs_review = CASE WHEN category_id IS NULL THEN 1 ELSE needs_review END WHERE transfer_group = ?',
+      "SELECT 1 FROM transactions WHERE transfer_group = ? AND review_reason = 'paired_from_waiting' LIMIT 1",
     )
-    .run(tx.transfer_group);
+    .get(tx.transfer_group);
+  const result = wasPending
+    ? db
+        .prepare(
+          'UPDATE transactions SET transfer_group = ?, category_id = NULL, fund_id = NULL, commitment_id = NULL, needs_review = 0, review_reason = ? WHERE transfer_group = ?',
+        )
+        .run(`${PENDING_TRANSFER_PREFIX}${tx.id}`, 'awaiting_transfer', tx.transfer_group)
+    : db
+        .prepare(
+          'UPDATE transactions SET transfer_group = NULL, review_reason = NULL, needs_review = CASE WHEN category_id IS NULL THEN 1 ELSE needs_review END WHERE transfer_group = ?',
+        )
+        .run(tx.transfer_group);
   res.json({ ok: true, unpaired: result.changes });
 }
 

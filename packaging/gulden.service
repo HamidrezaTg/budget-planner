@@ -1,15 +1,15 @@
 [Unit]
-Description=Budget Planner (self-hosted, per-user SQLite)
+Description=Gulden (self-hosted, per-user SQLite)
 After=network.target
 
 [Service]
 Type=simple
 User=budget
 Group=budget
-WorkingDirectory=/opt/budget-planner
+WorkingDirectory=/opt/gulden
 Environment=NODE_ENV=production
-Environment=DATA_DIR=/var/lib/budget-planner
-EnvironmentFile=-/etc/default/budget-planner
+Environment=DATA_DIR=/var/lib/gulden
+EnvironmentFile=-/etc/default/gulden
 ExecStart=/usr/bin/node server/index.js
 Restart=on-failure
 RestartSec=3
@@ -19,7 +19,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/lib/budget-planner
+ReadWritePaths=/var/lib/gulden
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes

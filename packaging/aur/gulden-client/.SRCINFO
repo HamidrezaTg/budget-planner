@@ -1,0 +1,22 @@
+pkgbase = gulden-client
+	pkgdesc = Desktop client for a self-hosted Gulden server (Tauri v2, no backend)
+	pkgver = 3.23.0
+	pkgrel = 1
+	url = https://github.com/HamidrezaTg/gulden
+	install = gulden-client.install
+	arch = x86_64
+	license = MIT
+	makedepends = binutils
+	depends = gtk3
+	depends = libsoup3
+	depends = webkit2gtk-4.1
+	depends = libappindicator
+	depends = librsvg
+	depends = hicolor-icon-theme
+	depends = desktop-file-utils
+	depends = xdg-utils
+	options = !strip
+	source = https://github.com/HamidrezaTg/gulden/releases/download/v3.22.0/gulden-client_3.22.0_amd64.deb
+	sha256sums = 352da062a9146ddbeb92f96d55946cbdfd9f33650a1471f256bc8e2a377a9735
+
+pkgname = gulden-client

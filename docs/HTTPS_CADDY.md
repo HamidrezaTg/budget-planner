@@ -1,6 +1,6 @@
 # HTTPS With Caddy
 
-The Budget Planner server speaks HTTP directly. Put Caddy in front of it when
+The Gulden server speaks HTTP directly. Put Caddy in front of it when
 the server will be reachable from the public internet or an untrusted network.
 Caddy obtains and renews a TLS certificate automatically for a domain that
 resolves to the server.
@@ -11,9 +11,9 @@ Create an `A` or `AAAA` record for a hostname such as `budget.example.com`.
 Allow inbound TCP ports `80` and `443` through the firewall. Caddy uses port
 `80` for the ACME challenge and redirects HTTP traffic to HTTPS.
 
-## 2. Bind Budget Planner locally
+## 2. Bind Gulden locally
 
-Edit `/etc/default/budget-planner`:
+Edit `/etc/default/gulden`:
 
 ```ini
 BIND_IP=127.0.0.1
@@ -29,7 +29,7 @@ loads this file automatically.
 Restart the server after changing the settings:
 
 ```bash
-sudo systemctl restart budget-planner
+sudo systemctl restart gulden
 ```
 
 ## 3. Configure Caddy
@@ -49,7 +49,7 @@ sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 ```
 
-Open `https://budget.example.com` and create or use your Budget Planner
+Open `https://budget.example.com` and create or use your Gulden
 account. Verify the health endpoint with:
 
 ```bash
@@ -64,14 +64,14 @@ record, configure Caddy's internal CA deliberately and install that CA on each
 client; otherwise browsers and native clients will reject the certificate.
 
 Do not expose port `2026` directly once Caddy is serving the site. Back up the
-Budget Planner data directory separately; Caddy only handles transport and
+Gulden data directory separately; Caddy only handles transport and
 does not protect or store budget data.
 
 ## Tailscale HTTPS on Port 2026
 
 If port `443` is already used by another service, Tailscale Serve can terminate
-HTTPS on Budget Planner's existing port instead. First make Budget Planner listen
-only on localhost in `/etc/default/budget-planner`:
+HTTPS on Gulden's existing port instead. First make Gulden listen
+only on localhost in `/etc/default/gulden`:
 
 ```ini
 PORT=2026
@@ -80,10 +80,10 @@ SECURE_COOKIE=1
 TRUST_PROXY=1
 ```
 
-Restart Budget Planner, then configure Tailscale Serve:
+Restart Gulden, then configure Tailscale Serve:
 
 ```bash
-sudo systemctl restart budget-planner
+sudo systemctl restart gulden
 sudo tailscale serve --https=2026 --bg http://127.0.0.1:2026
 tailscale serve status
 ```

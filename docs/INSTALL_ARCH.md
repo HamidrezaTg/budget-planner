@@ -1,7 +1,7 @@
-# Install Budget Planner on Arch Linux
+# Install Gulden on Arch Linux
 
 The desktop client is a Tauri application. It contains no server or budget data;
-run the Budget Planner server separately and connect to its LAN, Tailscale, or
+run the Gulden server separately and connect to its LAN, Tailscale, or
 HTTPS address on first launch.
 
 ## AUR with yay
@@ -9,7 +9,7 @@ HTTPS address on first launch.
 After the package has been published to the AUR, install or update it with:
 
 ```bash
-yay -S budget-planner-client
+yay -S gulden-client
 ```
 
 The AUR package installs the native desktop entry and icons. Upgrade it with
@@ -20,18 +20,18 @@ the usual `yay -Syu` command.
 Use this option when the AUR package is not yet available or when you prefer a
 portable download:
 
-1. Download `budget-planner-client_<version>_amd64.AppImage` from the
-   [GitHub Releases](https://github.com/HamidrezaTg/budget-planner/releases).
+1. Download `gulden-client_<version>_amd64.AppImage` from the
+   [GitHub Releases](https://github.com/HamidrezaTg/gulden/releases).
 2. Make it executable:
 
    ```bash
-   chmod +x budget-planner-client_<version>_amd64.AppImage
+   chmod +x gulden-client_<version>_amd64.AppImage
    ```
 
 3. Launch it:
 
    ```bash
-   ./budget-planner-client_<version>_amd64.AppImage
+   ./gulden-client_<version>_amd64.AppImage
    ```
 
 The AppImage does not install the server or automatically create a menu entry.

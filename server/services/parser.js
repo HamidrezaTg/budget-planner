@@ -306,7 +306,7 @@ function pdfPageCount(filePath) {
 }
 
 function ocrPdf(filePath, pages) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'budget-planner-pdf-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gulden-pdf-'));
   const prefix = path.join(dir, 'page');
   try {
     runPdfCommand(

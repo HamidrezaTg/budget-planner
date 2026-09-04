@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>Budget Planner</string>
+	<string>Gulden</string>
 	<key>CFBundleName</key>
-	<string>Budget Planner</string>
+	<string>Gulden</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.finance</string>
 	<key>NSHumanReadableCopyright</key>

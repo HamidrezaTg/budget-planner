@@ -91,7 +91,7 @@ test('sync-version stamps every shipped metadata source', () => {
     assert.match(openapi, new RegExp(`"version": "${newVersion}"`));
 
     const pkgbuild = readFileSync(
-      path.join(staging, 'packaging/aur/budget-planner-client/PKGBUILD'),
+      path.join(staging, 'packaging/aur/gulden-client/PKGBUILD'),
       'utf8',
     );
     assert.match(pkgbuild, new RegExp(`^pkgver=${newVersion}$`, 'm'));

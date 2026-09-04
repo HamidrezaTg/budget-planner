@@ -31,6 +31,7 @@ const groups = [
       { to: '/commitments', label: 'Commitments', glyph: '¶' },
       { to: '/balances', label: 'Balances', glyph: '◍' },
       { to: '/categories', label: 'Categories', glyph: '⊞' },
+      { to: '/rules', label: 'Rules', glyph: '≔' },
     ],
   },
   {
@@ -176,7 +177,7 @@ function LayoutContent({ me }) {
             <i></i>
             <i></i>
           </span>
-          <span className="brand-name">Budget Planner</span>
+          <span className="brand-name">Gulden</span>
         </button>
 
         <div className="working-month">
