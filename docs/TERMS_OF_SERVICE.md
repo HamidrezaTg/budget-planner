@@ -3,10 +3,11 @@
 **Status: Draft - complete the bracketed details and obtain legal review before
 accepting paid subscriptions.**
 
-**Effective date:** [insert date]
+**Effective date:** [set on launch]
 
 These Hosted Service Terms (the "Terms") govern access to the hosted Gulden
-service (the "Service") operated by **[legal name of service provider]**
+service at [gulden.app](https://gulden.app) (the "Service") operated by
+**Hamidreza Nateghi** ("Gulden", "we", "us", or "our").
 ("Gulden", "we", "us", or "our"). By creating an account or using the
 Service, you agree to these Terms. If you do not agree, do not use the Service.
 
@@ -120,7 +121,7 @@ UNINTERRUPTED, OR THAT DATA WILL NEVER BE LOST.
 
 ## 10. Limitation of Liability
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, **[legal name]** AND ITS SERVICE
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, **Hamidreza Nateghi** AND ITS SERVICE
 PROVIDERS WILL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL,
 EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR LOSS OF PROFITS, DATA, GOODWILL, OR
 BUSINESS OPPORTUNITY ARISING FROM THE SERVICE.
@@ -146,6 +147,6 @@ These Terms are governed by the laws of **[country/state]**, excluding its
 conflict-of-law rules. Courts located in **[venue]** have exclusive jurisdiction
 unless applicable law provides otherwise.
 
-Contact: **[legal entity and postal address]**
+Contact: **Hamidreza Nateghi, [postal address]**
 
-Support and legal notices: **[support/legal email address]**
+Support and legal notices: **hr.nateghi@gmail.com**

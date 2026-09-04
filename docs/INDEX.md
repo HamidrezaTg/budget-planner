@@ -25,6 +25,8 @@ phones, and desktop applications connect to it as clients.
   subscription service; complete the marked business details before launch.
 - [Privacy Policy](PRIVACY_POLICY.md) - draft hosted-service privacy policy;
   complete the marked provider and contact details before launch.
+- [Hosted Service Launch Plan](HOSTED_SERVICE_LAUNCH_PLAN.md) - required
+  decisions and launch checklist.
 
 ## Connect Clients
 

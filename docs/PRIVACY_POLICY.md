@@ -3,11 +3,11 @@
 **Status: Draft - complete the bracketed details and obtain legal review before
 launching the hosted service.**
 
-**Effective date:** [insert date]
+**Effective date:** [set on launch]
 
-This Privacy Policy explains how **[legal name of service provider]** ("Gulden",
-"we", "us", or "our") collects, uses, shares, and protects information when
-you use the hosted Gulden service (the "Service").
+This Privacy Policy explains how **Hamidreza Nateghi** ("Gulden", "we", "us",
+or "our") collects, uses, shares, and protects information when you use the
+hosted Gulden service at [gulden.app](https://gulden.app) (the "Service").
 
 The self-hosted Gulden software is different: the operator of a self-hosted
 instance controls that instance's data and is responsible for its privacy
@@ -127,6 +127,6 @@ Contact us if you believe a child provided information to us.
 We may update this Policy when our practices or legal obligations change. We
 will post the updated version and effective date.
 
-Controller or service provider: **[legal entity and postal address]**
+Controller or service provider: **Hamidreza Nateghi, [postal address]**
 
-Privacy contact: **[privacy email address]**
+Privacy contact: **hr.nateghi@gmail.com**

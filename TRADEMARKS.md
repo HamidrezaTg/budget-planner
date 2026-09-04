@@ -48,7 +48,7 @@ service identity.
 
 Requests for permission should include the proposed mark, the product or
 service, the intended audience, and the exact context of use. Send requests to
-**[trademark contact email or official contact URL]**.
+**hr.nateghi@gmail.com**.
 
 This policy does not claim that every Gulden Mark is registered in every
 jurisdiction. Rights and limitations may vary by jurisdiction.
