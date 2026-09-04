@@ -160,7 +160,7 @@ jobs:
             local directory="$1"
             local attempt
             for attempt in 1 2 3; do
-              if (cd "$directory" && npm audit --omit=dev --audit-level=high --package-lock-only --fetch-retries=0 --fetch-timeout=30000); then
+              if (cd "$directory" && npm audit --omit=dev --audit-level=high --package-lock-only --fetch-retries=0 --fetch-timeout=60000); then
                 return 0
               fi
               if [ "$attempt" -lt 3 ]; then
